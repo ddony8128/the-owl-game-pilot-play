@@ -66,8 +66,9 @@ export async function GET() {
   const questions = (questionsRes.data || []) as QuizQuestion[];
   const subs = (subsRes.data || []) as QuizSubmission[];
 
+  type PlayerName = Pick<Player, "id" | "nickname">;
   const map: Record<string, string> = {};
-  (namesRes.data || []).forEach((p: Player) => {
+  ((namesRes.data || []) as PlayerName[]).forEach((p) => {
     map[p.id] = p.nickname;
   });
 
