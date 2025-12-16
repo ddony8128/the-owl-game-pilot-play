@@ -24,7 +24,7 @@ export function IntroNicknameModal({
       <div className="w-full max-w-sm rounded-2xl bg-zinc-950 p-6 text-zinc-50 shadow-xl">
         <h2 className="mb-2 text-lg font-semibold">닉네임 확인</h2>
         <p className="mb-4 text-xs text-zinc-300">
-          GM이 미리 등록한 닉네임만 입장할 수 있습니다.
+          미리 등록된 닉네임만 입장할 수 있습니다.
         </p>
         <input
           className="mb-2 h-10 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-400"

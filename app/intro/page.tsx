@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { useGameState } from "@/lib/hooks/useGameState";
-import { HiddenPieceModal } from "@/components/HiddenPieceModal";
+import { HiddenPieceModal } from "@/app/intro/HiddenPieceModal";
 import { IntroHeader } from "./IntroHeader";
 import { IntroOwlScene } from "./IntroOwlScene";
 import { IntroActions } from "./IntroActions";
@@ -77,6 +77,9 @@ export default function IntroPage() {
       case "quiz":
         router.push("/quizshow");
         break;
+      case "survey":
+        window.open("https://forms.gle/hMm8jEXt2RwF2UYG9", "_blank");
+        break;
       default:
         // ready 또는 알 수 없음
         break;
@@ -84,13 +87,28 @@ export default function IntroPage() {
   };
 
   const resetIntroState = () => {
-    setSunLevel(50);
+    setSunLevel(65);
     setOwlLeftWing(false);
     setOwlRightWing(false);
   };
 
+  const bright4BgColor = "from-sky-500 via-sky-600 to-sky-500";
+  const bright3BgColor = "from-sky-600 via-sky-700 to-sky-600";
+  const bright2BgColor = "from-sky-650 via-sky-700 to-sky-650";
+  const bright1BgColor = "from-purple-650 via-amber-700 to-purple-650";
+  const backgroundClass =
+    sunLevel > 75
+      ? bright4BgColor
+      : sunLevel > 50
+      ? bright3BgColor
+      : sunLevel > 25
+      ? bright2BgColor
+      : bright1BgColor;
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-between bg-linear-to-b from-zinc-950 to-zinc-900 px-4 py-8 text-zinc-50">
+    <div
+      className={`flex min-h-screen flex-col items-center justify-between bg-linear-to-b px-4 py-8 text-zinc-50 ${backgroundClass}`}
+    >
       <IntroHeader player={player} onClearNickname={clearNickname} />
 
       <main className="flex w-full max-w-md flex-1 flex-col items-center justify-center gap-8">

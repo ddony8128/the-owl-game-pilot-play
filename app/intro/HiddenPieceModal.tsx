@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 
 type Props = {
   open: boolean;
@@ -8,13 +9,12 @@ type Props = {
   onResetIntro: () => void;
 };
 
-const ANSWER_CODE = "OWL-SECRET"; // 임시 정답 코드
-
 export function HiddenPieceModal({ open, onClose, onResetIntro }: Props) {
   const [step, setStep] = useState<"images" | "input" | "result">("images");
   const [index, setIndex] = useState(0);
   const [code, setCode] = useState("");
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [resultMessage, setResultMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -27,6 +27,7 @@ export function HiddenPieceModal({ open, onClose, onResetIntro }: Props) {
       setIndex(0);
       setCode("");
       setIsCorrect(null);
+      setResultMessage(null);
 
       intervalId = setInterval(() => {
         setIndex((prev) => {
@@ -52,11 +53,41 @@ export function HiddenPieceModal({ open, onClose, onResetIntro }: Props) {
 
   if (!open) return null;
 
-  const handleSubmit = () => {
-    if (code.trim() === ANSWER_CODE) {
-      setIsCorrect(true);
-      setStep("result");
-    } else {
+  const handleSubmit = async () => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+
+    try {
+      const res = await fetch("/api/hidden-piece", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code: trimmed }),
+      });
+
+      if (!res.ok) {
+        setIsCorrect(false);
+        setStep("result");
+        onResetIntro();
+        return;
+      }
+
+      const data = (await res.json().catch(() => null)) as {
+        correct?: boolean;
+        message?: string;
+      } | null;
+
+      if (data?.correct) {
+        setIsCorrect(true);
+        setResultMessage(data.message ?? null);
+        setStep("result");
+      } else {
+        setIsCorrect(false);
+        setStep("result");
+        onResetIntro();
+      }
+    } catch {
       setIsCorrect(false);
       setStep("result");
       onResetIntro();
@@ -72,27 +103,50 @@ export function HiddenPieceModal({ open, onClose, onResetIntro }: Props) {
       <div className="w-full max-w-sm rounded-2xl bg-zinc-950 p-6 text-zinc-50 shadow-xl">
         {step === "images" && (
           <div className="flex flex-col items-center gap-4">
-            <p className="text-sm text-zinc-300">
-              부엉이를 잘 지켜봐 주세요...
-            </p>
-            <div className="flex gap-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`h-12 w-12 rounded-full bg-zinc-800 transition-opacity ${
-                    i <= index ? "opacity-100" : "opacity-20"
-                  }`}
-                />
-              ))}
+            {/** 부엉이 5마리를 3개 / 2개 두 줄로 배치 */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex gap-3">
+                {Array.from({ length: 5 })
+                  .slice(0, 3)
+                  .map((_, i) => (
+                    <Image
+                      key={i}
+                      src={`/hidden/vari_owl_${i + 1}.png`}
+                      alt={`지나가는 부엉이 ${i + 1}`}
+                      width={64}
+                      height={64}
+                      className={`h-22 w-22 rounded-full transition-opacity ${
+                        i <= index ? "opacity-100" : "opacity-20"
+                      }`}
+                    />
+                  ))}
+              </div>
+              <div className="flex gap-3">
+                {Array.from({ length: 5 })
+                  .slice(3)
+                  .map((_, offset) => {
+                    const i = offset + 3;
+                    return (
+                      <Image
+                        key={i}
+                        src={`/hidden/vari_owl_${i + 1}.png`}
+                        alt={`지나가는 부엉이 ${i + 1}`}
+                        width={64}
+                        height={64}
+                        className={`h-22 w-22 rounded-full transition-opacity ${
+                          i <= index ? "opacity-100" : "opacity-20"
+                        }`}
+                      />
+                    );
+                  })}
+              </div>
             </div>
           </div>
         )}
 
         {step === "input" && (
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-zinc-200">
-              힌트를 모두 보았습니다. 번호를 입력해 주세요.
-            </p>
+            <p className="text-sm text-zinc-200">번호를 입력해 주세요.</p>
             <textarea
               className="h-24 w-full rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-sm outline-none focus:border-zinc-400"
               value={code}
@@ -114,11 +168,9 @@ export function HiddenPieceModal({ open, onClose, onResetIntro }: Props) {
                 <p className="text-base font-semibold text-emerald-300">
                   정답입니다!
                 </p>
-                <p className="text-sm text-zinc-200">
-                  지금 바로 GM에게 이렇게 외쳐 주세요: <br />
-                  <span className="mt-2 inline-block rounded bg-zinc-800 px-2 py-1 text-xs font-bold text-amber-300">
-                    &quot;부엉이는 모든 것을 보고 있다!&quot;
-                  </span>
+                <p className="whitespace-pre-line text-sm text-zinc-200">
+                  {resultMessage ??
+                    "게임 마스터에게 가서 다음 주문을 외치세요.\n'빛나는 눈의 지혜를 찬미하부엉!\n그 편린의 깃털을 하사해주시부엉!'"}
                 </p>
                 <button
                   className="h-10 rounded-lg bg-zinc-100 text-sm font-semibold text-zinc-900 hover:bg-white"
@@ -132,9 +184,7 @@ export function HiddenPieceModal({ open, onClose, onResetIntro }: Props) {
                 <p className="text-base font-semibold text-red-300">
                   틀렸습니다.
                 </p>
-                <p className="text-sm text-zinc-200">
-                  인트로 화면이 리셋되었습니다. 다시 도전해 보세요.
-                </p>
+                <p className="text-sm text-zinc-200">다시 도전해 보세요.</p>
                 <button
                   className="h-10 rounded-lg bg-zinc-100 text-sm font-semibold text-zinc-900 hover:bg-white"
                   onClick={handleClose}

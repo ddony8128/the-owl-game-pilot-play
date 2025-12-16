@@ -1,4 +1,6 @@
+import { useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import Image from "next/image";
 
 type Props = {
   sunLevel: number;
@@ -19,17 +21,43 @@ export function IntroOwlScene({
   setOwlRightWing,
   onRevealHidden,
 }: Props) {
-  const handleSunChange = (value: number) => {
-    setSunLevel(value);
-    if (value === 0 && owlLeftWing && owlRightWing) {
-      onRevealHidden();
-    }
+  const [isDraggingSun, setIsDraggingSun] = useState(false);
+  const sunTrackRef = useRef<HTMLDivElement | null>(null);
+
+  const updateSunFromClientY = (clientY: number) => {
+    const track = sunTrackRef.current;
+    if (!track) return;
+
+    const rect = track.getBoundingClientRect();
+    const ratio = (rect.bottom - clientY) / rect.height; // 0: 맨 아래, 1: 맨 위
+    const clamped = Math.min(1, Math.max(0, ratio));
+    const nextLevel = Math.round(clamped * 100);
+    setSunLevel(nextLevel);
+  };
+
+  const handleSunPointerDown: React.PointerEventHandler<HTMLDivElement> = (
+    e
+  ) => {
+    e.preventDefault();
+    setIsDraggingSun(true);
+    updateSunFromClientY(e.clientY);
+  };
+
+  const handleSunPointerMove: React.PointerEventHandler<HTMLDivElement> = (
+    e
+  ) => {
+    if (!isDraggingSun) return;
+    updateSunFromClientY(e.clientY);
+  };
+
+  const handleSunPointerUp: React.PointerEventHandler<HTMLDivElement> = () => {
+    setIsDraggingSun(false);
   };
 
   const toggleLeftWing = () => {
     setOwlLeftWing((v) => {
       const next = !v;
-      if (sunLevel === 0 && next && owlRightWing) {
+      if (sunLevel < 25 && next && owlRightWing) {
         onRevealHidden();
       }
       return next;
@@ -39,7 +67,7 @@ export function IntroOwlScene({
   const toggleRightWing = () => {
     setOwlRightWing((v) => {
       const next = !v;
-      if (sunLevel === 0 && owlLeftWing && next) {
+      if (sunLevel < 25 && owlLeftWing && next) {
         onRevealHidden();
       }
       return next;
@@ -49,37 +77,66 @@ export function IntroOwlScene({
   return (
     <div className="flex flex-col items-center gap-6">
       {/* 태양 */}
-      <div className="flex flex-col items-center gap-2">
-        <div className="h-24 w-24 rounded-full bg-linear-to-br from-amber-300 to-amber-500 shadow-[0_0_40px_rgba(251,191,36,0.6)]" />
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={sunLevel}
-          onChange={(e) => handleSunChange(Number(e.target.value))}
-          className="w-40"
-        />
-        <span className="text-xs text-zinc-400">태양 밝기: {sunLevel}</span>
+      <div className="flex flex-col items-center gap-3">
+        <div
+          ref={sunTrackRef}
+          className="relative flex h-56 w-32 items-start justify-center"
+          onPointerMove={handleSunPointerMove}
+          onPointerUp={handleSunPointerUp}
+          onPointerLeave={handleSunPointerUp}
+        >
+          <div
+            className="absolute left-1/2 h-24 w-24 -translate-x-1/2 cursor-pointer drop-shadow-[0_0_40px_rgba(251,191,36,0.6)]"
+            style={{ bottom: `${sunLevel}%` }}
+            onPointerDown={handleSunPointerDown}
+          >
+            <Image
+              src="/hidden/sun.png"
+              alt="태양"
+              width={96}
+              height={96}
+              className="h-full w-full"
+              priority
+            />
+          </div>
+        </div>
       </div>
 
       {/* 부엉이 */}
       <div className="flex flex-col items-center gap-2">
-        <div className="relative flex h-32 w-32 items-center justify-center rounded-full bg-zinc-800">
-          <div
-            className={`absolute left-4 top-10 h-6 w-8 cursor-pointer rounded-full bg-zinc-700 transition-transform ${
-              owlLeftWing ? "-rotate-12 -translate-y-2" : "rotate-6"
-            }`}
-            onClick={toggleLeftWing}
+        <div className="relative flex h-32 w-32 items-center justify-center">
+          <Image
+            src={
+              owlLeftWing && owlRightWing
+                ? "/hidden/sitting_owl_both.png"
+                : owlLeftWing
+                ? "/hidden/sitting_owl_left.png"
+                : owlRightWing
+                ? "/hidden/sitting_owl_right.png"
+                : "/hidden/sitting_owl.png"
+            }
+            alt="앉아 있는 부엉이"
+            width={128}
+            height={128}
+            className="h-28 w-28 select-none"
+            draggable={false}
+            priority
           />
-          <div className="h-16 w-16 rounded-full bg-zinc-600" />
-          <div
-            className={`absolute right-4 top-10 h-6 w-8 cursor-pointer rounded-full bg-zinc-700 transition-transform ${
-              owlRightWing ? "rotate-12 -translate-y-2" : "-rotate-6"
-            }`}
+          {/* 왼쪽 날개 클릭 영역 */}
+          <button
+            type="button"
+            className="absolute left-0 top-0 h-full w-1/2 cursor-pointer bg-transparent"
+            onClick={toggleLeftWing}
+            aria-label="왼쪽 날개 토글"
+          />
+          {/* 오른쪽 날개 클릭 영역 */}
+          <button
+            type="button"
+            className="absolute right-0 top-0 h-full w-1/2 cursor-pointer bg-transparent"
             onClick={toggleRightWing}
+            aria-label="오른쪽 날개 토글"
           />
         </div>
-        <p className="text-xs text-zinc-400">부엉이 날개를 톡톡 눌러 보세요.</p>
       </div>
     </div>
   );
