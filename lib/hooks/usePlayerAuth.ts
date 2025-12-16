@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PostgrestSingleResponse } from "@supabase/supabase-js";
-import { createServerSupabaseClient } from "../supabase/server";
 import type { Player } from "@/lib/types";
 
 const NICKNAME_KEY = "owlgame:nickname";
@@ -30,28 +28,48 @@ export function usePlayerAuth() {
   useEffect(() => {
     if (!nickname) return;
     let cancelled = false;
-    const supabase = createServerSupabaseClient();
 
     const timeoutId = setTimeout(() => {
       const load = async () => {
         setIsLoading(true);
-        const response: PostgrestSingleResponse<Player | null> = await supabase
-          .from("players")
-          .select("id, nickname, is_finalist, created_at")
-          .eq("nickname", nickname)
-          .maybeSingle();
+        try {
+          const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ nickname }),
+          });
+          const json = (await res.json().catch(() => null)) as
+            | { player: Player; error?: undefined }
+            | { error: string }
+            | null;
 
-        if (cancelled) return;
-        if (response.error) {
-          setError(response.error.message);
-          setPlayer(null);
-        } else {
-          setError(null);
-          setPlayer(response.data ?? null);
-        }
+          if (cancelled) return;
 
-        if (!cancelled) {
-          setIsLoading(false);
+          if (!res.ok || !json || "error" in json || !("player" in json)) {
+            setError(
+              (json as { error?: string } | null)?.error ??
+                "플레이어 정보를 불러오지 못했습니다."
+            );
+            setPlayer(null);
+          } else {
+            setError(null);
+            setPlayer(json.player ?? null);
+          }
+        } catch (e: unknown) {
+          if (!cancelled) {
+            const message =
+              e instanceof Error
+                ? e.message
+                : "플레이어 정보를 불러오지 못했습니다.";
+            setError(message);
+            setPlayer(null);
+          }
+        } finally {
+          if (!cancelled) {
+            setIsLoading(false);
+          }
         }
       };
 
