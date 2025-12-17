@@ -55,11 +55,25 @@ export type SubwayReport = {
 };
 
 // 2게임 – 자본주의 마피아
+export type MafiaPhase =
+  | "prepare"
+  | "auction"
+  | "trade"
+  | "apply"
+  | "vote"
+  | "end";
+
 export type MafiaPhaseState = {
   id: number;
   round_number: number;
-  phase: string; // 'auction' | 'trade' | 'apply' | 'vote' | 'end'
+  phase: MafiaPhase;
   updated_at: string;
+};
+
+export type MafiaStocksHolding = {
+  [stockKey: string]: {
+    amount: number;
+  };
 };
 
 export type MafiaAction = {
@@ -93,6 +107,7 @@ export type MafiaPlayerState = {
   cash: number;
   is_mafia: boolean;
   job: string | null;
+  stocks: MafiaStocksHolding | null;
   updated_at: string;
 };
 

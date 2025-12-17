@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { MafiaPhaseState, Player } from "@/lib/types";
+import type { MafiaPhaseState, MafiaPlayerState, Player } from "@/lib/types";
 
 type VoteBody = {
   nickname?: string;
@@ -78,13 +78,69 @@ export async function POST(request: Request) {
   }
 
   const player = playerRow as Player;
+  const roundNumber = phaseState.round_number;
+
+  // 시장 능력에서 표 가격 결정: apply 페이즈 ability 중 job='mayor'의 ticket_price 사용, 없으면 1원
+  let ticketPrice = 1;
+  const { data: abilityRows, error: abilityError } = await supabase
+    .from("mafia_actions")
+    .select("payload")
+    .eq("round_number", roundNumber)
+    .eq("phase", "apply")
+    .eq("action_type", "ability");
+
+  if (!abilityError && abilityRows) {
+    for (const row of abilityRows) {
+      const payload = row.payload as {
+        job?: string;
+        ticket_price?: number;
+      } | null;
+      if (payload?.job === "mayor") {
+        const tp = payload.ticket_price;
+        if (tp === 1 || tp === 2 || tp === 3) {
+          ticketPrice = tp;
+        }
+      }
+    }
+  }
+
+  // 표 비용 차감
+  const totalCost = ticketPrice * vote_count;
+  const { data: voterStateRow, error: voterStateError } = await supabase
+    .from("mafia_player_state")
+    .select("player_id, cash, is_mafia, job, stocks, updated_at")
+    .eq("player_id", player.id)
+    .maybeSingle();
+
+  if (voterStateError) {
+    return NextResponse.json(
+      { error: voterStateError.message } as VoteResponse,
+      { status: 500 }
+    );
+  }
+
+  if (voterStateRow) {
+    const voterState = voterStateRow as MafiaPlayerState;
+    const nextCash = voterState.cash - totalCost;
+    const { error: updateCashError } = await supabase
+      .from("mafia_player_state")
+      .update({ cash: nextCash })
+      .eq("player_id", player.id);
+
+    if (updateCashError) {
+      return NextResponse.json(
+        { error: updateCashError.message } as VoteResponse,
+        { status: 500 }
+      );
+    }
+  }
 
   const { error: insertError } = await supabase.from("mafia_votes").insert({
-    round_number: phaseState.round_number,
+    round_number: roundNumber,
     voter_id: player.id,
     target_id: body.target_id,
     vote_count,
-    unit_price: null,
+    unit_price: ticketPrice,
   });
 
   if (insertError) {

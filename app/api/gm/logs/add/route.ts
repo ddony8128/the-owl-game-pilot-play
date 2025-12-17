@@ -13,14 +13,13 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as Body | null;
 
   if (!body || typeof body.content !== "string" || !body.content.trim()) {
-    return NextResponse.json(
-      { error: "content is required" } as ResponseBody,
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "content is required" } as ResponseBody, {
+      status: 400,
+    });
   }
 
   const { data, error } = await supabase
-    .from("mafia_logs")
+    .from("mafia_public_logs")
     .insert({ content: body.content.trim() })
     .select("id, content, created_at")
     .maybeSingle();
@@ -39,4 +38,3 @@ export async function POST(request: Request) {
     { status: 200 }
   );
 }
-

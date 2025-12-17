@@ -4,28 +4,35 @@ type Props = {
   phase: MafiaPhaseState | null;
   minutes: number | null;
   seconds: number | null;
+  roundLabel: string;
+  phaseLabel: string;
 };
 
-export function MafiaHeader({ phase, minutes, seconds }: Props) {
+export function MafiaHeader({
+  phase,
+  minutes,
+  seconds,
+  roundLabel,
+  phaseLabel,
+}: Props) {
   return (
-    <header className="flex w-full max-w-md items-center justify-between">
-      <div>
-        <h1 className="text-lg font-semibold">자본주의 마피아</h1>
-        <p className="text-xs text-zinc-400">
-          라운드와 페이즈에 맞춰 행동해 주세요.
-        </p>
+    <header className="flex w-full max-w-md flex-col items-center gap-2 text-center">
+      <h1 className="text-2xl font-semibold">자본주의 마피아</h1>
+      <div className="text-sm text-zinc-300">
+        <span className="font-medium">{roundLabel}</span>{" "}
+        <span className="mx-1">/</span>
+        <span>{phaseLabel}</span>
       </div>
-      <div className="text-right text-[10px] text-zinc-400">
-        <div>
-          라운드 {phase?.round_number ?? "-"} / 페이즈 {phase?.phase ?? "-"}
-        </div>
-        <div>
-          남은 시간{" "}
-          {minutes != null && seconds != null
-            ? `${minutes}:${seconds.toString().padStart(2, "0")}`
-            : "--:--"}
-        </div>
+      <div className="mt-1 rounded-full bg-zinc-900 px-4 py-1 text-lg font-mono text-zinc-50">
+        {minutes != null && seconds != null
+          ? `${minutes.toString().padStart(2, "0")}:${seconds
+              .toString()
+              .padStart(2, "0")}`
+          : "--:--"}
       </div>
+      <p className="text-xs text-zinc-400">
+        라운드와 페이즈, 남은 시간을 잘 확인하고 행동해 주세요.
+      </p>
     </header>
   );
 }

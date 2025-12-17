@@ -34,7 +34,7 @@ export function MafiaVoteTab() {
         },
         body: JSON.stringify({
           nickname: player.nickname,
-          target_id: null,
+          target_id: targetNickname.trim(),
           vote_count: voteCount,
         }),
       });

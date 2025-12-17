@@ -12,7 +12,7 @@ import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { TabLayout, type TabKey } from "@/components/TabLayout";
-import { useCountdown } from "@/lib/hooks/useCountdown";
+import { getMafiaPhaseLabel } from "@/lib/labels/mafia";
 import { MafiaHeader } from "./MafiaHeader";
 import { MafiaInfoTab } from "./MafiaInfoTab";
 import { MafiaRulesTab } from "./MafiaRulesTab";
@@ -97,8 +97,56 @@ function MafiaInner() {
     };
   }, [player?.nickname]);
 
-  const targetTime = null;
-  const { minutes, seconds } = useCountdown(targetTime);
+  const [timerState, setTimerState] = useState<{
+    remainingSeconds: number;
+    isRunning: boolean;
+  } | null>(null);
+
+  // 서버 타이머 폴링 + 로컬 1초 틱 (Subway와 유사 패턴)
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTimer = async () => {
+      try {
+        const res = await fetch("/api/gm/timers/mafia");
+        const json = (await res.json().catch(() => null)) as {
+          remainingSeconds: number;
+          isRunning: boolean;
+        } | null;
+        if (!res.ok || !json || cancelled) return;
+
+        setTimerState({
+          remainingSeconds: json.remainingSeconds,
+          isRunning: json.isRunning,
+        });
+      } catch {
+        // 타이머 오류는 게임 진행을 막지 않음
+      }
+    };
+
+    void loadTimer();
+    const pollId = setInterval(() => {
+      void loadTimer();
+    }, 2000);
+
+    const tickId = setInterval(() => {
+      setTimerState((prev) => {
+        if (!prev) return prev;
+        if (!prev.isRunning || prev.remainingSeconds <= 0) return prev;
+        const next = prev.remainingSeconds - 1;
+        if (next <= 0) {
+          return { ...prev, remainingSeconds: 0 };
+        }
+        return { ...prev, remainingSeconds: next };
+      });
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollId);
+      clearInterval(tickId);
+    };
+  }, []);
 
   const availableTabs = useMemo(() => {
     const base: TabKey[] = ["info", "rules", "stocks"];
@@ -144,9 +192,28 @@ function MafiaInner() {
     );
   }
 
+  const totalSeconds = timerState?.remainingSeconds ?? null;
+  const minutes =
+    totalSeconds != null ? Math.floor(totalSeconds / 60) % 60 : null;
+  const seconds = totalSeconds != null ? totalSeconds % 60 : null;
+
+  const roundLabel =
+    typeof phase?.round_number === "number"
+      ? phase.round_number === 0
+        ? "튜토리얼"
+        : `${phase.round_number}라운드`
+      : "-";
+  const phaseLabel = getMafiaPhaseLabel(phase?.phase ?? null);
+
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
-      <MafiaHeader phase={phase} minutes={minutes} seconds={seconds} />
+      <MafiaHeader
+        phase={phase}
+        minutes={minutes}
+        seconds={seconds}
+        roundLabel={roundLabel}
+        phaseLabel={phaseLabel}
+      />
 
       <p className="mt-2 text-xs text-red-300">
         이 화면은 다른 플레이어에게 보여주면 안 됩니다.

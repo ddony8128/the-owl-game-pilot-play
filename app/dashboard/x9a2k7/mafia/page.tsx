@@ -3,6 +3,7 @@
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { useMafiaAdminState } from "./useMafiaAdminState";
+import { MafiaCountdownSection } from "./MafiaCountdownSection";
 import { MafiaPhaseSection } from "./MafiaPhaseSection";
 import { MafiaAssetsSection } from "./MafiaAssetsSection";
 import { MafiaStocksSection } from "./MafiaStocksSection";
@@ -10,7 +11,8 @@ import { MafiaLogsSection } from "./MafiaLogsSection";
 import type { MafiaLog } from "@/lib/types";
 
 export default function DashboardMafiaPage() {
-  const { phase, stocks, players, logs, loading, error } = useMafiaAdminState();
+  const { phase, stocks, players, logs, loading, error, reload } =
+    useMafiaAdminState();
 
   const changePhase = async (to: string) => {
     try {
@@ -56,7 +58,38 @@ export default function DashboardMafiaPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 text-sm">
-      <MafiaPhaseSection phase={phase} onChangePhase={changePhase} />
+      <MafiaCountdownSection phase={phase} />
+
+      <MafiaPhaseSection
+        phase={phase}
+        onChangePhase={changePhase}
+        onChangeRound={async (round) => {
+          try {
+            const res = await fetch("/api/gm/mafia/phase", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ round }),
+            });
+            const json = (await res.json().catch(() => null)) as {
+              ok?: true;
+              error?: string;
+            } | null;
+            if (!res.ok || !json?.ok) {
+              // eslint-disable-next-line no-console
+              console.error(
+                json?.error ?? "라운드 변경 중 오류가 발생했습니다."
+              );
+            } else {
+              reload();
+            }
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error(e);
+          }
+        }}
+      />
 
       <MafiaAssetsSection players={players} />
 

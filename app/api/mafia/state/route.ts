@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 
   // logs (공개 로그)
   const { data: logRows, error: logError } = await supabase
-    .from("mafia_logs")
+    .from("mafia_public_logs")
     .select("id, content, created_at")
     .order("created_at", { ascending: false })
     .limit(50);
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     // GM용 전체 플레이어 상태
     const { data: playerStateRows, error: playerStateError } = await supabase
       .from("mafia_player_state")
-      .select("player_id, cash, is_mafia, job, updated_at");
+      .select("player_id, cash, is_mafia, job, stocks, updated_at");
 
     if (playerStateError) {
       return NextResponse.json(
@@ -96,7 +96,7 @@ export async function GET(request: Request) {
 
     const { data: stateRow, error: stateError } = await supabase
       .from("mafia_player_state")
-      .select("player_id, cash, is_mafia, job, updated_at")
+      .select("player_id, cash, is_mafia, job, stocks, updated_at")
       .eq("player_id", player.id)
       .maybeSingle();
 
