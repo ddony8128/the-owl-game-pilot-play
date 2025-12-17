@@ -113,7 +113,16 @@ export default function ReportClient() {
   }
 
   if (submitted) {
-    return <ReportSubmittedScreen status={status} />;
+    return (
+      <ReportSubmittedScreen
+        status={status}
+        onBack={() => {
+          setSubmitted(false);
+          setReportId(null);
+          setStatus("pending");
+        }}
+      />
+    );
   }
 
   return (

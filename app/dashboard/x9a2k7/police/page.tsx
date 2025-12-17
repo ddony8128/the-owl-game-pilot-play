@@ -96,13 +96,15 @@ export default function DashboardPolicePage() {
             className="flex flex-col gap-1 rounded bg-zinc-950 px-3 py-2"
           >
             <div className="flex items-center justify-between">
-              <span className="font-medium">
+              <span className="text-base font-medium">
                 신고자: {r.reporter_name} ({r.player_id ?? "익명"})
               </span>
-              <span className="text-[10px] text-zinc-400">{r.status}</span>
+              <span className="text-base text-zinc-400">{r.status}</span>
             </div>
-            <p className="whitespace-pre-wrap text-zinc-100">{r.content}</p>
-            <div className="mt-1 flex gap-2 text-[11px]">
+            <p className="whitespace-pre-wrap text-sm text-zinc-100">
+              {r.content}
+            </p>
+            <div className="mt-1 flex gap-2 text-base">
               <button
                 className="h-7 rounded bg-emerald-500 px-3 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
                 onClick={() => updateStatus(r.id, "approved")}

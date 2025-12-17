@@ -1,8 +1,9 @@
 type Props = {
   status: "pending" | "approved" | "rejected";
+  onBack?: () => void;
 };
 
-export function ReportSubmittedScreen({ status }: Props) {
+export function ReportSubmittedScreen({ status, onBack }: Props) {
   let title = "신고 내용 확인 중입니다.";
   let body = "잠시 기다려 주십시오.\n귀하의 신고 사항을 검토 중입니다.";
 
@@ -22,24 +23,15 @@ export function ReportSubmittedScreen({ status }: Props) {
           {body}
         </p>
       )}
-      {status === "approved" && (
+      {(status === "rejected" || status === "approved") && (
         <button
           type="button"
           className="mt-4 h-10 w-40 rounded-full bg-zinc-800 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
           onClick={() => {
-            if (typeof window !== "undefined") {
-              window.history.back();
+            if (onBack) {
+              onBack();
+              return;
             }
-          }}
-        >
-          닫기
-        </button>
-      )}
-      {status === "rejected" && (
-        <button
-          type="button"
-          className="mt-4 h-10 w-40 rounded-full bg-zinc-800 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
-          onClick={() => {
             if (typeof window !== "undefined") {
               window.history.back();
             }
