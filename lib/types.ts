@@ -30,6 +30,7 @@ export type SubwayPlayerState = {
   is_finished: boolean;
   finished_rank: number | null;
   updated_at: string;
+  nickname?: string | null; // GM 대시보드 등에서 보여주기 위한 용도
 };
 
 // 기존 코드와의 호환용 별칭

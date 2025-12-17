@@ -152,28 +152,6 @@ export default function DashboardMainPage() {
           ))}
         </div>
       </section>
-
-      <section className="space-y-2 text-xs">
-        <h2 className="text-base font-semibold">게임 링크</h2>
-        <div className="flex flex-wrap gap-2">
-          {[
-            ["/dashboard/x9a2k7/memo", "메모 페이지"],
-            ["/dashboard/x9a2k7/bgm", "BGM 페이지"],
-            ["/dashboard/x9a2k7/subway", "1게임: subway"],
-            ["/dashboard/x9a2k7/mafia", "2게임: mafia"],
-            ["/dashboard/x9a2k7/quiz", "3게임: quiz"],
-            ["/dashboard/x9a2k7/show", "3게임: show"],
-          ].map(([href, label]) => (
-            <a
-              key={href}
-              href={href}
-              className="rounded-full bg-zinc-900 px-3 py-1 text-[11px] text-zinc-100 hover:bg-zinc-800"
-            >
-              {label}
-            </a>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

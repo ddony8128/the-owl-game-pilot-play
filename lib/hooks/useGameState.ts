@@ -13,7 +13,6 @@ export function useGameState() {
     let cancelled = false;
 
     const load = async () => {
-      setIsLoading(true);
       try {
         const res = await fetch("/api/state/game");
         if (!res.ok) {
@@ -48,9 +47,17 @@ export function useGameState() {
       }
     };
 
+    // 최초 1회 즉시 호출
     void load();
+
+    // 5초마다 주기적으로 갱신 (폴링)
+    const id = setInterval(() => {
+      void load();
+    }, 5000);
+
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, []);
 

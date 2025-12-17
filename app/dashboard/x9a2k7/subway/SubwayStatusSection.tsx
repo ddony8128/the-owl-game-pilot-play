@@ -12,7 +12,7 @@ export function SubwayStatusSection({ players }: Props) {
         <table className="min-w-full border-collapse">
           <thead className="bg-zinc-800">
             <tr>
-              <th className="px-2 py-1 text-left">player_id</th>
+              <th className="px-2 py-1 text-left">닉네임</th>
               <th className="px-2 py-1 text-left">exit</th>
               <th className="px-2 py-1 text-left">location</th>
               <th className="px-2 py-1 text-left">reset</th>
@@ -23,7 +23,7 @@ export function SubwayStatusSection({ players }: Props) {
           <tbody>
             {players.map((r) => (
               <tr key={r.player_id} className="border-t border-zinc-800">
-                <td className="px-2 py-1">{r.player_id}</td>
+                <td className="px-2 py-1">{r.nickname ?? r.player_id}</td>
                 <td className="px-2 py-1">{r.exit_number}</td>
                 <td className="px-2 py-1">{r.current_location ?? "-"}</td>
                 <td className="px-2 py-1">{r.reset_count}</td>

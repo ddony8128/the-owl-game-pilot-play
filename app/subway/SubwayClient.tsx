@@ -1,15 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import type { SubwayPlayerState } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { SubwayHeader } from "./SubwayHeader";
+import { SubwayLocationSection } from "./SubwayLocationSection";
+import { SubwayControlsSection } from "./SubwayControlsSection";
+import { SubwayGuideModal } from "./SubwayGuideModal";
 
 type MoveResult = "correct" | "wrong" | "reset" | "noop" | null;
+
+export type SubwayRuleClient = {
+  id: number;
+  title: string;
+  body: string;
+  conditionDescription: string;
+};
 
 export default function SubwayClient() {
   return (
@@ -22,48 +32,165 @@ export default function SubwayClient() {
 function SubwayInner() {
   const router = useRouter();
   const { nickname } = usePlayerAuth();
+
   const [subwayPlayer, setSubwayPlayer] = useState<SubwayPlayerState | null>(
     null
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [rules, setRules] = useState<SubwayRuleClient[]>([]);
+  const [hasNewRule, setHasNewRule] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(true);
+
   const [animState, setAnimState] = useState<"normal" | "shock1" | "shock2">(
     "normal"
   );
+  const [isScareActive, setIsScareActive] = useState(false);
+  const [scareVariant, setScareVariant] = useState<1 | 2 | null>(null);
+  const [scareStep, setScareStep] = useState<0 | 1 | 2>(0);
   const [lastResult, setLastResult] = useState<MoveResult>(null);
 
+  const [timerState, setTimerState] = useState<{
+    remainingSeconds: number;
+    isRunning: boolean;
+  } | null>(null);
+
+  // 서버 타이머 폴링 + 로컬 1초 틱
   useEffect(() => {
     if (!nickname) return;
 
     let cancelled = false;
+
+    const loadTimer = async () => {
+      try {
+        const res = await fetch("/api/gm/timers/subway");
+        const json = (await res.json().catch(() => null)) as {
+          remainingSeconds: number;
+          isRunning: boolean;
+        } | null;
+        if (!res.ok || !json || cancelled) return;
+
+        if (json.remainingSeconds <= 0) {
+          router.replace("/subway/end");
+          return;
+        }
+
+        setTimerState({
+          remainingSeconds: json.remainingSeconds,
+          isRunning: json.isRunning,
+        });
+      } catch {
+        // 타이머 오류는 게임 진행을 막지 않음
+      }
+    };
+
+    void loadTimer();
+    const pollId = setInterval(() => {
+      void loadTimer();
+    }, 5000);
+
+    const tickId = setInterval(() => {
+      setTimerState((prev) => {
+        if (!prev) return prev;
+        if (!prev.isRunning || prev.remainingSeconds <= 0) return prev;
+        const next = prev.remainingSeconds - 1;
+        if (next <= 0) {
+          router.replace("/subway/end");
+          return { ...prev, remainingSeconds: 0 };
+        }
+        return { ...prev, remainingSeconds: next };
+      });
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollId);
+      clearInterval(tickId);
+    };
+  }, [nickname, router]);
+
+  const triggerShock = useCallback(() => {
+    // 이미 연출 중이면 중복으로 켜지지 않게 무시
+    if (isScareActive) return;
+
+    const variant = Math.random() < 0.5 ? 1 : 2;
+    setIsScareActive(true);
+    setScareVariant(variant);
+    setScareStep(1);
+    setAnimState("shock1");
+
+    setTimeout(() => {
+      setScareStep(2);
+      setAnimState("shock2");
+    }, 1000);
+
+    setTimeout(() => {
+      setIsScareActive(false);
+      setScareVariant(null);
+      setScareStep(0);
+      setAnimState("normal");
+    }, 2000);
+  }, [isScareActive]);
+
+  // 플레이어 상태 + 규칙 + 놀래키기 플래그 폴링
+  useEffect(() => {
+    if (!nickname) return;
+
+    let cancelled = false;
+
     const load = async () => {
-      setLoading(true);
       try {
         const res = await fetch(
           `/api/subway/state?nickname=${encodeURIComponent(nickname)}`
         );
-        if (!res.ok) {
-          const data = (await res.json().catch(() => null)) as {
-            error?: string;
-          } | null;
+        const json = (await res.json().catch(() => null)) as
+          | {
+              state: SubwayPlayerState | null;
+              rules?: SubwayRuleClient[];
+              scare?: boolean;
+              error?: string;
+            }
+          | { error: string }
+          | null;
+
+        if (!res.ok || !json || "error" in json) {
           throw new Error(
-            data?.error ?? "플레이어 상태를 불러오지 못했습니다."
+            (json as { error?: string })?.error ??
+              "플레이어 상태를 불러오지 못했습니다."
           );
         }
-        const json = (await res.json()) as {
-          state: SubwayPlayerState | null;
-        };
+
         if (cancelled) return;
-        if (!json.state) {
-          // 아직 시작하지 않은 경우, 첫 move에서 초기화
-          setSubwayPlayer(null);
-        } else if (json.state.is_finished) {
+
+        const state = json.state ?? null;
+        if (state?.is_finished) {
           router.replace("/subway/end");
           return;
-        } else {
-          setSubwayPlayer(json.state);
         }
+        setSubwayPlayer(state);
+
+        const serverRules = json.rules ?? [];
+        setRules((prev) => {
+          const prevIds = new Set(prev.map((r) => r.id));
+          let triggered = false;
+          for (const r of serverRules) {
+            if (!prevIds.has(r.id) && r.id !== 0 && r.id !== 8) {
+              triggered = true;
+            }
+          }
+          if (triggered) {
+            setHasNewRule(true);
+          }
+          return serverRules;
+        });
+
+        if (json.scare) {
+          triggerShock();
+        }
+
         setError(null);
+        setLoading(false);
       } catch (e: unknown) {
         if (!cancelled) {
           const message =
@@ -71,23 +198,25 @@ function SubwayInner() {
               ? e.message
               : "플레이어 상태를 불러오지 못했습니다.";
           setError(message);
-        }
-      } finally {
-        if (!cancelled) {
           setLoading(false);
         }
       }
     };
 
     void load();
+    const id = setInterval(() => {
+      void load();
+    }, 2000);
 
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
-  }, [nickname, router]);
+  }, [nickname, router, triggerShock]);
 
-  const handleMove = async (direction: "forward" | "back" | "reset") => {
+  const handleMove = async (direction: "forward" | "back") => {
     if (!nickname) return;
+    if (!timerState?.isRunning || isScareActive) return;
     setError(null);
     setLastResult(null);
     try {
@@ -128,15 +257,6 @@ function SubwayInner() {
     }
   };
 
-  const handleMoveNextExit = () => handleMove("forward");
-  const handleReset = () => handleMove("reset");
-
-  const triggerShock = () => {
-    setAnimState("shock1");
-    setTimeout(() => setAnimState("shock2"), 500);
-    setTimeout(() => setAnimState("normal"), 1000);
-  };
-
   if (loading || !nickname) return <LoadingScreen />;
 
   if (error) {
@@ -150,98 +270,76 @@ function SubwayInner() {
   const exitNumber = subwayPlayer?.exit_number ?? 0;
   const locationKey = subwayPlayer?.current_location ?? null;
 
+  const totalSeconds = timerState?.remainingSeconds ?? null;
+  const minutes =
+    totalSeconds != null ? Math.floor(totalSeconds / 60) % 60 : null;
+  const seconds = totalSeconds != null ? totalSeconds % 60 : null;
+  const timeLabel =
+    minutes != null && seconds != null
+      ? `${minutes.toString().padStart(2, "0")}:${seconds
+          .toString()
+          .padStart(2, "0")}`
+      : "--:--";
+
+  const exitLabel = isScareActive ? "엵칠 %#" : "현재 출구";
+  const exitValue = isScareActive ? "666 번" : `${exitNumber} 번`;
+
+  let imageSrc: string | null = null;
+  if (isScareActive && scareVariant) {
+    if (scareVariant === 1) {
+      imageSrc =
+        scareStep === 2
+          ? "/jump-scare/scare-1-2.png"
+          : "/jump-scare/scare-1-1.png";
+    } else {
+      imageSrc =
+        scareStep === 2
+          ? "/jump-scare/scare-2-2.png"
+          : "/jump-scare/scare-2-1.png";
+    }
+  } else if (locationKey) {
+    imageSrc = `/subway-location/${locationKey}`;
+  }
+
+  const interactionDisabled = isScareActive || !timerState?.isRunning;
+
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
-      <header className="flex w-full max-w-md items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">이상교통 8번출구</h1>
-          <p className="text-xs text-zinc-400">출구를 찾아 이동해 보세요.</p>
-        </div>
-        <button
-          className="text-xs text-zinc-400 underline"
-          onClick={() => router.push("/intro")}
-        >
-          인트로로
-        </button>
-      </header>
+      {/* 상단 타이머 + 안내문 버튼 + 출구 번호 */}
+      <SubwayHeader
+        timeLabel={timeLabel}
+        exitLabel={exitLabel}
+        exitValue={exitValue}
+        hasNewRule={hasNewRule}
+        interactionDisabled={interactionDisabled}
+        onOpenGuide={() => {
+          setIsGuideOpen(true);
+          setHasNewRule(false);
+        }}
+      />
 
+      {/* 장소 이미지 영역 */}
       <main className="mt-6 flex w-full max-w-md flex-1 flex-col gap-4">
-        {/* 상단 안내 + 피드백 */}
-        <section className="flex flex-col gap-2 rounded-xl bg-zinc-900 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-zinc-300">
-              <div>주변을 잘 관찰하고,</div>
-              <div>수상한 출구를 찾으세요.</div>
-            </div>
-            <div className="text-right text-xs text-zinc-400">
-              <div>현재 출구</div>
-              <div className="text-base font-semibold text-amber-300">
-                {exitNumber} 번
-              </div>
-            </div>
-          </div>
-          {lastResult === "correct" && (
-            <p className="text-[11px] text-emerald-300">
-              올바른 방향입니다! 출구 번호가 증가했습니다.
-            </p>
-          )}
-          {lastResult === "wrong" && (
-            <p className="text-[11px] text-red-300">
-              잘못된 방향입니다. 출구 번호가 0으로 돌아갔습니다.
-            </p>
-          )}
-        </section>
+        <SubwayLocationSection imageSrc={imageSrc} animState={animState} />
 
-        {/* 출구 / 이미지 영역 */}
-        <section className="flex flex-1 flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-300">현재 장소</p>
-          </div>
-
-          <div
-            className={`flex flex-1 items-center justify-center rounded-2xl bg-zinc-900 ${
-              animState !== "normal" ? "ring-2 ring-red-500/60" : ""
-            }`}
-          >
-            {locationKey ? (
-              <div className="relative h-full w-full max-h-80 overflow-hidden rounded-2xl">
-                <Image
-                  src={`/subway-location/${locationKey}`}
-                  alt="지하철 장소"
-                  fill
-                  className="object-cover"
-                />
-              </div>
-            ) : (
-              <p className="text-sm text-zinc-400">
-                GM이 장소를 설정하는 중입니다. 잠시만 기다려 주세요.
-              </p>
-            )}
-          </div>
-        </section>
-
-        {/* 하단 버튼 */}
-        <section className="mt-4 flex flex-col gap-3">
-          <button
-            className="h-11 w-full rounded-full bg-amber-400 text-sm font-semibold text-zinc-950 hover:bg-amber-300"
-            onClick={handleMoveNextExit}
-          >
-            다음 출구로 이동
-          </button>
-          <button
-            className="h-11 w-full rounded-full border border-zinc-700 bg-zinc-900 text-sm font-medium text-zinc-100 hover:bg-zinc-800"
-            onClick={handleReset}
-          >
-            처음부터 다시
-          </button>
-          <button
-            className="h-10 w-full rounded-full border border-zinc-700 text-xs text-zinc-300 hover:bg-zinc-900"
-            onClick={triggerShock}
-          >
-            (디버그) 놀래키기 연출 보기
-          </button>
-        </section>
+        {/* 하단 이동 버튼 + 최근 결과 */}
+        <SubwayControlsSection
+          interactionDisabled={interactionDisabled}
+          lastResult={lastResult}
+          onMoveForward={() => handleMove("forward")}
+          onMoveBack={() => handleMove("back")}
+        />
       </main>
+
+      {/* 안내문 모달 */}
+      <SubwayGuideModal
+        isOpen={isGuideOpen}
+        rules={rules}
+        onClose={() => {
+          setIsGuideOpen(false);
+          setHasNewRule(false);
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,14 @@
 import type { RulesState } from "@/lib/types";
 
+const RULE_LABELS: Record<string, string> = {
+  intro: "인트로 안내",
+  subway: "이상교통 8번출구 규칙",
+  hidden_piece: "히든 피스 힌트",
+  mafia: "자본주의 마피아 규칙",
+  quiz: "부엉퀴즈쇼 규칙",
+  quiz_questions: "퀴즈 문제 안내",
+};
+
 type Props = {
   rules: RulesState[];
   onToggleRule: (ruleKey: string, isOpen: boolean) => void;
@@ -17,7 +26,7 @@ export function RulesSection({ rules, onToggleRule }: Props) {
               checked={r.is_open}
               onChange={() => onToggleRule(r.rule_key, r.is_open)}
             />
-            <span>{r.rule_key}</span>
+            <span>{RULE_LABELS[r.rule_key] ?? r.rule_key}</span>
           </label>
         ))}
         {rules.length === 0 && (

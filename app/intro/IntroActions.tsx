@@ -17,8 +17,9 @@ export function IntroActions({ activeGame, onOpenRules, onMainAction }: Props) {
         <button
           className="h-12 rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
           onClick={onMainAction}
-          disabled={!activeGame}
+          disabled={!activeGame || activeGame === "ready"}
         >
+          {activeGame === "ready" && "준비 중"}
           {activeGame === "subway" && "이상교통 8번출구"}
           {activeGame === "mafia_tutorial" && "자본주의 마피아 튜토리얼"}
           {activeGame === "mafia" && "자본주의 마피아"}

@@ -1,8 +1,62 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { Player, SubwayPlayerState } from "@/lib/types";
+import type { Player, SubwayPlayerState, SubwayPlayerEvent } from "@/lib/types";
+import { SUBWAY_RULES } from "../rules";
 
-type StateResponse = { state: SubwayPlayerState | null } | { error: string };
+type PlayerStatePayload = {
+  state: SubwayPlayerState | null;
+  rules?: {
+    id: number;
+    title: string;
+    body: string;
+    conditionDescription: string;
+  }[];
+  scare?: boolean;
+};
+
+type StateResponse = PlayerStatePayload | { error: string };
+
+type SupabaseClient = ReturnType<typeof createServerSupabaseClient>;
+
+async function getOpenedRuleIdsForPlayer(
+  supabase: SupabaseClient,
+  playerId: string
+): Promise<Set<number>> {
+  const ids = new Set<number>();
+  const { data, error } = await supabase
+    .from("subway_player_events")
+    .select("event_value")
+    .eq("player_id", playerId)
+    .eq("event_type", "rule_opened");
+
+  if (error || !data) {
+    return ids;
+  }
+
+  for (const row of data as Pick<SubwayPlayerEvent, "event_value">[]) {
+    const value = row.event_value as { rule_id?: number } | null;
+    if (value && typeof value.rule_id === "number") {
+      ids.add(value.rule_id);
+    }
+  }
+
+  return ids;
+}
+
+async function getVisibleRulesForPlayer(
+  supabase: SupabaseClient,
+  playerId: string
+) {
+  const openedIds = await getOpenedRuleIdsForPlayer(supabase, playerId);
+  return SUBWAY_RULES.filter((r) => r.alwaysVisible || openedIds.has(r.id)).map(
+    (r) => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      conditionDescription: r.conditionDescription,
+    })
+  );
+}
 
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
@@ -14,7 +68,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("subway_player_state")
       .select(
-        "player_id, exit_number, current_location, reset_count, scare_status, is_finished, finished_rank, updated_at"
+        "player_id, exit_number, current_location, reset_count, scare_status, is_finished, finished_rank, updated_at, players(nickname)"
       );
 
     if (error) {
@@ -23,10 +77,19 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json(
-      { state: data as unknown as SubwayPlayerState[] } as unknown,
-      { status: 200 }
-    );
+    const rows = (data || []) as (SubwayPlayerState & {
+      players?: { nickname?: string | null } | null;
+    })[];
+
+    const mapped: SubwayPlayerState[] = rows.map((row) => {
+      const { players, ...rest } = row;
+      return {
+        ...rest,
+        nickname: players?.nickname ?? null,
+      };
+    });
+
+    return NextResponse.json({ state: mapped } as unknown, { status: 200 });
   }
 
   if (!nickname) {
@@ -72,13 +135,34 @@ export async function GET(request: Request) {
     });
   }
 
+  let scare = false;
+  let state: SubwayPlayerState | null = null;
+
   if (!stateRow) {
     // 최초 진입: state가 없으면 null을 반환하고, 클라이언트는 move를 통해 시작하도록 할 수 있음
-    return NextResponse.json({ state: null } as StateResponse, { status: 200 });
+    state = null;
+  } else {
+    const current = stateRow as SubwayPlayerState;
+    state = current;
+
+    if (current.scare_status) {
+      scare = true;
+      // 일회성 플래그로 소비
+      await supabase
+        .from("subway_player_state")
+        .update({ scare_status: false })
+        .eq("player_id", player.id);
+    }
   }
 
+  const rules = await getVisibleRulesForPlayer(supabase, player.id);
+
   return NextResponse.json(
-    { state: stateRow as SubwayPlayerState } as StateResponse,
+    {
+      state,
+      rules,
+      scare,
+    } as StateResponse,
     { status: 200 }
   );
 }

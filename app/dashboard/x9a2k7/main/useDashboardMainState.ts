@@ -74,12 +74,12 @@ export function useDashboardMainState(): MainState {
   const toggleRule = async (ruleKey: string, isOpen: boolean) => {
     setError(null);
     try {
-      const res = await fetch("/api/gm/rules/open", {
+      const res = await fetch("/api/gm/rules/toggle", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ rule_key: ruleKey, is_open: !isOpen }),
+        body: JSON.stringify({ rule_key: ruleKey, is_open: isOpen }),
       });
       const json = (await res.json().catch(() => null)) as {
         ok?: true;

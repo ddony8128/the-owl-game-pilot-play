@@ -34,6 +34,75 @@ const FORWARD_CORRECT_GROUPS = new Set([
 
 let cachedLocations: string[] | null = null;
 
+type SupabaseClient = ReturnType<typeof createServerSupabaseClient>;
+
+const locationVisitCounts = new Map<string, Map<string, number>>();
+
+function incrementLocationVisitCount(
+  playerId: string,
+  location: string
+): number {
+  let perPlayer = locationVisitCounts.get(playerId);
+  if (!perPlayer) {
+    perPlayer = new Map<string, number>();
+    locationVisitCounts.set(playerId, perPlayer);
+  }
+  const prev = perPlayer.get(location) ?? 0;
+  const next = prev + 1;
+  perPlayer.set(location, next);
+  return next;
+}
+
+async function getOpenedRuleIdsForPlayer(
+  supabase: SupabaseClient,
+  playerId: string
+): Promise<Set<number>> {
+  const ids = new Set<number>();
+  const { data, error } = await supabase
+    .from("subway_player_events")
+    .select("event_value")
+    .eq("player_id", playerId)
+    .eq("event_type", "rule_opened");
+
+  if (error || !data) {
+    return ids;
+  }
+
+  for (const row of data as Pick<SubwayPlayerEvent, "event_value">[]) {
+    const value = row.event_value as { rule_id?: number } | null;
+    if (value && typeof value.rule_id === "number") {
+      ids.add(value.rule_id);
+    }
+  }
+
+  return ids;
+}
+
+async function insertRuleOpenedEvent(
+  supabase: SupabaseClient,
+  playerId: string,
+  ruleId: number
+) {
+  await supabase.from("subway_player_events").insert({
+    player_id: playerId,
+    event_type: "rule_opened",
+    event_value: { rule_id: ruleId },
+  } as Partial<SubwayPlayerEvent>);
+}
+
+async function ensureRule7IfComplete(
+  supabase: SupabaseClient,
+  playerId: string,
+  openedIds: Set<number>
+) {
+  const required = [1, 2, 3, 4, 5, 6];
+  const hasAll = required.every((id) => openedIds.has(id));
+  if (hasAll && !openedIds.has(7)) {
+    await insertRuleOpenedEvent(supabase, playerId, 7);
+    openedIds.add(7);
+  }
+}
+
 async function getAllLocationKeys(): Promise<string[]> {
   if (cachedLocations) return cachedLocations;
 
@@ -82,10 +151,9 @@ export async function POST(request: Request) {
 
   const direction = body.direction ?? "forward";
   if (!["forward", "back", "reset"].includes(direction)) {
-    return NextResponse.json(
-      { error: "invalid direction" } as MoveResponse,
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "invalid direction" } as MoveResponse, {
+      status: 400,
+    });
   }
 
   const nickname = body.nickname.trim();
@@ -129,10 +197,9 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (stateError) {
-    return NextResponse.json(
-      { error: stateError.message } as MoveResponse,
-      { status: 500 }
-    );
+    return NextResponse.json({ error: stateError.message } as MoveResponse, {
+      status: 500,
+    });
   }
 
   if (!stateRow) {
@@ -171,6 +238,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // 같은 장소 방문 횟수 카운트 (규칙 5 조건용)
+    incrementLocationVisitCount(player.id, initialLocation);
+
     // 최초 위치 진입 이벤트
     await supabase.from("subway_player_events").insert({
       player_id: player.id,
@@ -178,16 +248,24 @@ export async function POST(request: Request) {
       event_value: { location: initialLocation },
     });
 
+    const initialState = {
+      ...(insertState.data as SubwayPlayerState),
+      nickname: player.nickname,
+    } as SubwayPlayerState;
+
     return NextResponse.json(
       {
-        state: insertState.data as SubwayPlayerState,
+        state: initialState,
         result: "noop",
       } as MoveResponse,
       { status: 200 }
     );
   }
 
-  let state = stateRow as SubwayPlayerState;
+  let state = { ...(stateRow as SubwayPlayerState), nickname: player.nickname };
+
+  // 이미 공개된 규칙 목록 조회 (플레이어별)
+  const openedRuleIds = await getOpenedRuleIdsForPlayer(supabase, player.id);
 
   if (direction === "reset") {
     const nextReset = state.reset_count + 1;
@@ -206,14 +284,13 @@ export async function POST(request: Request) {
     if (updateError || !updated) {
       return NextResponse.json(
         {
-          error:
-            updateError?.message ?? "리셋 중 오류가 발생했습니다.",
+          error: updateError?.message ?? "리셋 중 오류가 발생했습니다.",
         } as MoveResponse,
         { status: 500 }
       );
     }
 
-    state = updated as SubwayPlayerState;
+    state = { ...(updated as SubwayPlayerState), nickname: player.nickname };
 
     await supabase.from("subway_player_events").insert({
       player_id: player.id,
@@ -221,10 +298,9 @@ export async function POST(request: Request) {
       event_value: { from_exit: state.exit_number, to_exit: 0 },
     } as Partial<SubwayPlayerEvent>);
 
-    return NextResponse.json(
-      { state, result: "reset" } as MoveResponse,
-      { status: 200 }
-    );
+    return NextResponse.json({ state, result: "reset" } as MoveResponse, {
+      status: 200,
+    });
   }
 
   // 30초 이내 이동 여부 확인
@@ -250,10 +326,17 @@ export async function POST(request: Request) {
   const now = Date.now();
   if (lastEnter?.created_at) {
     const enteredAt = new Date(lastEnter.created_at).getTime();
-    if (!Number.isNaN(enteredAt) && now - enteredAt < 30_000) {
-      // 30초 이내에는 무조건 wrong
-      result = "wrong";
-      reason = "too_fast";
+    if (!Number.isNaN(enteredAt)) {
+      const diff = now - enteredAt;
+      if (diff < 30_000) {
+        // 30초 이내에는 무조건 wrong
+        result = "wrong";
+        reason = "too_fast";
+      } else if (diff >= 30_000 && !openedRuleIds.has(1)) {
+        // 규칙 1 공개 조건 충족 (한 장소에서 30초 이상 머무름)
+        await insertRuleOpenedEvent(supabase, player.id, 1);
+        openedRuleIds.add(1);
+      }
     }
   }
 
@@ -292,6 +375,12 @@ export async function POST(request: Request) {
 
   const finished = nextExit >= 8;
 
+  // 규칙 6: 6번 출구에서 0번 출구로 되돌아간 경우
+  if (state.exit_number === 6 && nextExit === 0 && !openedRuleIds.has(6)) {
+    await insertRuleOpenedEvent(supabase, player.id, 6);
+    openedRuleIds.add(6);
+  }
+
   // 다음 장소 이미지 선택
   const nextLocation = await getRandomLocation();
   if (!nextLocation) {
@@ -299,6 +388,13 @@ export async function POST(request: Request) {
       { error: "장소 이미지를 찾을 수 없습니다." } as MoveResponse,
       { status: 500 }
     );
+  }
+
+  // 같은 장소 3번 방문 시 규칙 5 공개
+  const visitCount = incrementLocationVisitCount(player.id, nextLocation);
+  if (visitCount === 3 && !openedRuleIds.has(5)) {
+    await insertRuleOpenedEvent(supabase, player.id, 5);
+    openedRuleIds.add(5);
   }
 
   const { data: updatedState, error: updateStateError } = await supabase
@@ -325,7 +421,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const finalState = updatedState as SubwayPlayerState;
+  const finalState: SubwayPlayerState = {
+    ...(updatedState as SubwayPlayerState),
+    nickname: player.nickname,
+  };
 
   // 이동 이벤트 기록
   await supabase.from("subway_player_events").insert([
@@ -348,6 +447,9 @@ export async function POST(request: Request) {
     } as Partial<SubwayPlayerEvent>,
   ]);
 
+  // 규칙 7: 1~6번 규칙이 모두 공개되었는지 확인 후 자동 공개
+  await ensureRule7IfComplete(supabase, player.id, openedRuleIds);
+
   return NextResponse.json(
     {
       state: finalState,
@@ -357,4 +459,3 @@ export async function POST(request: Request) {
     { status: 200 }
   );
 }
-
