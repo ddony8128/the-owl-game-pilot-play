@@ -22,9 +22,9 @@ export function SubwayHeader({
           {timeLabel}
         </span>
       </div>
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-sm">
         <button
-          className={`h-8 rounded-full border border-zinc-700 px-3 text-[11px] text-zinc-100 hover:bg-zinc-900 disabled:opacity-40 ${
+          className={`h-12 rounded-full border border-zinc-700 px-12 text-lg text-zinc-100 hover:bg-zinc-900 disabled:opacity-40 ${
             hasNewRule ? "animate-pulse" : ""
           }`}
           disabled={interactionDisabled}
@@ -33,8 +33,8 @@ export function SubwayHeader({
           안내문
         </button>
         <div className="text-right">
-          <div className="text-[11px] text-zinc-400">{exitLabel}</div>
-          <div className="text-base font-semibold text-amber-300">
+          <div className="text-base text-zinc-400">{exitLabel}</div>
+          <div className="text-lg font-semibold text-amber-300">
             {exitValue}
           </div>
         </div>

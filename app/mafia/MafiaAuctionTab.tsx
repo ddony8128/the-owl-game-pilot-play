@@ -4,14 +4,31 @@ import { useState } from "react";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { ErrorMessage } from "@/components/ErrorMessage";
 
+const JOBS: { id: string; label: string }[] = [
+  { id: "up_manipulator", label: "상승 주가조작범" },
+  { id: "down_manipulator", label: "하락 주가조작범" },
+  { id: "robber", label: "강도" },
+  { id: "police", label: "경찰" },
+  { id: "tax_auditor", label: "세무조사원" },
+  { id: "broker", label: "증권사 직원" },
+  { id: "ceo", label: "CEO" },
+];
+
+type Step = "pickJob" | "enterAmount" | "confirmGiveUp";
+
 export function MafiaAuctionTab() {
+  const [step, setStep] = useState<Step>("pickJob");
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const { player } = usePlayerAuth();
 
-  const handleSubmit = async () => {
+  const handleSubmitBet = async () => {
     if (!player?.nickname) return;
+    if (!selectedJobId) return;
+
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) {
       setError("양수를 입력해 주세요.");
@@ -29,7 +46,7 @@ export function MafiaAuctionTab() {
         body: JSON.stringify({
           nickname: player.nickname,
           type: "bet",
-          payload: { amount: value },
+          payload: { job: selectedJobId, amount: value },
         }),
       });
       const json = (await res.json().catch(() => null)) as {
@@ -48,28 +65,168 @@ export function MafiaAuctionTab() {
     }
 
     setSubmitting(false);
+    const jobLabel =
+      JOBS.find((j) => j.id === selectedJobId)?.label ?? "선택한 직업";
+    setInfo(`${jobLabel} 직업에 ${value}원을 베팅했습니다.`);
     setAmount("");
+    setSelectedJobId(null);
+    setStep("pickJob");
   };
 
+  const handleSubmitGiveUp = async () => {
+    if (!player?.nickname) return;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/mafia/action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nickname: player.nickname,
+          type: "bet",
+          payload: { job: null, give_up: true },
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        ok?: true;
+        error?: string;
+      } | null;
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? "베팅 포기를 기록하지 못했습니다.");
+      }
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "베팅 포기를 기록하지 못했습니다.";
+      setError(message);
+      setSubmitting(false);
+      return;
+    }
+
+    setSubmitting(false);
+    setInfo("이번 라운드 직업 경매에서 베팅을 포기했습니다.");
+    setSelectedJobId(null);
+    setAmount("");
+    setStep("pickJob");
+  };
+
+  const currentJobLabel =
+    (selectedJobId && JOBS.find((j) => j.id === selectedJobId)?.label) ?? "";
+
   return (
-    <div className="space-y-3 text-sm text-zinc-100">
+    <div className="space-y-4 text-sm text-zinc-100">
       {error && <ErrorMessage message={error} />}
-      <p className="text-xs text-zinc-400">
-        현재 라운드에 대한 경매 베팅 금액을 입력해 주세요.
-      </p>
-      <input
-        className="h-10 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-400"
-        placeholder="베팅 금액"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-      />
-      <button
-        className="h-10 w-full rounded-full bg-amber-400 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
-        onClick={handleSubmit}
-        disabled={submitting}
-      >
-        {submitting ? "제출 중..." : "베팅 제출"}
-      </button>
+      {info && (
+        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+          {info}
+        </p>
+      )}
+
+      {step === "pickJob" && (
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-400">
+            어떤 직업에 베팅하시겠습니까? 한 라운드에 하나의 직업만 선택할 수
+            있습니다.
+          </p>
+          <div className="space-y-2">
+            {JOBS.map((job) => (
+              <button
+                key={job.id}
+                type="button"
+                className="flex w-full items-center justify-between rounded-lg bg-zinc-900 px-3 py-2 text-sm hover:bg-zinc-800"
+                onClick={() => {
+                  setSelectedJobId(job.id);
+                  setAmount("");
+                  setStep("enterAmount");
+                  setError(null);
+                }}
+              >
+                <span>{job.label}</span>
+                <span className="text-[11px] text-zinc-400">선택</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-lg border border-red-500/60 bg-zinc-950 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+              onClick={() => {
+                setSelectedJobId("give_up");
+                setError(null);
+                setStep("confirmGiveUp");
+              }}
+            >
+              <span>베팅 포기</span>
+              <span className="text-[11px] text-red-300">선택</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === "enterAmount" &&
+        selectedJobId &&
+        selectedJobId !== "give_up" && (
+          <div className="space-y-3">
+            <p className="text-xs text-zinc-400">
+              {currentJobLabel} 직업에 얼마나 베팅하시겠습니까?
+            </p>
+            <input
+              className="h-10 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-400"
+              placeholder="베팅 금액"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <button
+                className="h-10 flex-1 rounded-full bg-zinc-800 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
+                type="button"
+                onClick={() => {
+                  setStep("pickJob");
+                  setSelectedJobId(null);
+                  setAmount("");
+                }}
+              >
+                취소
+              </button>
+              <button
+                className="h-10 flex-1 rounded-full bg-amber-400 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+                type="button"
+                onClick={handleSubmitBet}
+                disabled={submitting}
+              >
+                {submitting ? "제출 중..." : "베팅 제출"}
+              </button>
+            </div>
+          </div>
+        )}
+
+      {step === "confirmGiveUp" && (
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-400">
+            정말 이번 라운드에서 직업 경매 베팅을 포기하시겠습니까?
+          </p>
+          <div className="flex gap-2">
+            <button
+              className="h-10 flex-1 rounded-full bg-zinc-800 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
+              type="button"
+              onClick={() => {
+                setStep("pickJob");
+                setSelectedJobId(null);
+              }}
+            >
+              취소
+            </button>
+            <button
+              className="h-10 flex-1 rounded-full bg-red-500 text-xs font-semibold text-zinc-950 hover:bg-red-400 disabled:opacity-40"
+              type="button"
+              onClick={handleSubmitGiveUp}
+              disabled={submitting}
+            >
+              {submitting ? "제출 중..." : "베팅 포기"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

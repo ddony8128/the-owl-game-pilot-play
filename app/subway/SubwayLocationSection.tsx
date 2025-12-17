@@ -3,9 +3,10 @@ import Image from "next/image";
 type Props = {
   imageSrc: string | null;
   animState: "normal" | "shock1" | "shock2";
+  moving: boolean;
 };
 
-export function SubwayLocationSection({ imageSrc, animState }: Props) {
+export function SubwayLocationSection({ imageSrc, animState, moving }: Props) {
   return (
     <section className="flex flex-1 flex-col">
       <div
@@ -13,7 +14,7 @@ export function SubwayLocationSection({ imageSrc, animState }: Props) {
           animState !== "normal" ? "ring-2 ring-red-500/60" : ""
         }`}
       >
-        {imageSrc ? (
+        {imageSrc && !moving ? (
           <div className="relative h-full w-full aspect-square overflow-hidden rounded-2xl">
             <Image
               src={imageSrc}
@@ -24,7 +25,7 @@ export function SubwayLocationSection({ imageSrc, animState }: Props) {
             />
           </div>
         ) : (
-          <p className="text-sm text-zinc-400">지하통로를 지나가는 중...</p>
+          <p className="text-lg text-zinc-400">지하통로를 지나가는 중...</p>
         )}
       </div>
     </section>

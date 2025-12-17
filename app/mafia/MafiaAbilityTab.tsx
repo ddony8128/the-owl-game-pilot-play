@@ -4,7 +4,11 @@ import { useState } from "react";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { ErrorMessage } from "@/components/ErrorMessage";
 
-export function MafiaAbilityTab() {
+type Props = {
+  job: string | null;
+};
+
+export function MafiaAbilityTab({ job }: Props) {
   const [target, setTarget] = useState("");
   const [desc, setDesc] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -57,10 +61,18 @@ export function MafiaAbilityTab() {
   return (
     <div className="space-y-3 text-sm text-zinc-100">
       {error && <ErrorMessage message={error} />}
-      <p className="text-xs text-zinc-400">
-        능력을 사용할 대상(선택)과 내용을 적어 주세요. 최종 해석은 GM이
-        진행합니다.
-      </p>
+      {job ? (
+        <p className="text-xs text-zinc-400">
+          현재 직업: <span className="font-semibold text-zinc-100">{job}</span>
+          <br />이 직업의 능력을 사용할 대상(선택)과 내용을 적어 주세요. 최종
+          해석은 GM이 진행합니다.
+        </p>
+      ) : (
+        <p className="text-xs text-zinc-400">
+          현재 직업 정보가 없습니다. GM에게 직업을 확인한 뒤 능력 사용 내용을
+          적어 주세요.
+        </p>
+      )}
       <input
         className="h-10 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-400"
         placeholder="대상 플레이어 닉네임 (선택)"

@@ -107,9 +107,10 @@ function MafiaInner() {
     if (phaseKey === "trade" || phaseKey === "apply") {
       base.push("trade", "ability");
     }
-    if (phaseKey === "vote") {
-      base.push("result", "vote");
+    if (phaseKey === "apply" || phaseKey === "vote") {
+      base.push("result");
     }
+    if (phaseKey === "vote") base.push("vote");
     return base;
   }, [phase?.phase]);
 
@@ -147,14 +148,20 @@ function MafiaInner() {
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
       <MafiaHeader phase={phase} minutes={minutes} seconds={seconds} />
 
+      <p className="mt-2 text-xs text-red-300">
+        이 화면은 다른 플레이어에게 보여주면 안 됩니다.
+      </p>
+
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <TabLayout tabs={tabsDef} activeKey={activeTab} onChange={setActiveTab}>
           {activeTab === "info" && <MafiaInfoTab mafiaPlayer={mafiaPlayer} />}
           {activeTab === "rules" && <MafiaRulesTab />}
           {activeTab === "stocks" && <MafiaStocksTab stocks={stocks} />}
           {activeTab === "auction" && <MafiaAuctionTab />}
-          {activeTab === "trade" && <MafiaTradeTab />}
-          {activeTab === "ability" && <MafiaAbilityTab />}
+          {activeTab === "trade" && <MafiaTradeTab stocks={stocks} />}
+          {activeTab === "ability" && (
+            <MafiaAbilityTab job={mafiaPlayer?.job ?? null} />
+          )}
           {activeTab === "result" && <MafiaResultTab logs={logs} />}
           {activeTab === "vote" && <MafiaVoteTab />}
         </TabLayout>

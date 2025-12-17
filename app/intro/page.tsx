@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { useGameState } from "@/lib/hooks/useGameState";
@@ -29,6 +29,40 @@ export default function IntroPage() {
   const [nicknameError, setNicknameError] = useState<string | null>(null);
   const [showHiddenPiece, setShowHiddenPiece] = useState(false);
   const showNicknameModal = !authLoading && !nickname;
+  const [hasClearedSubway, setHasClearedSubway] = useState(false);
+
+  useEffect(() => {
+    if (!nickname) return;
+    let cancelled = false;
+
+    const loadSubwayState = async () => {
+      try {
+        const res = await fetch(
+          `/api/subway/state?nickname=${encodeURIComponent(nickname)}`
+        );
+        const json = (await res.json().catch(() => null)) as
+          | {
+              state: { finished_rank?: number | null } | null;
+              error?: string;
+            }
+          | { error: string }
+          | null;
+        if (!res.ok || !json || "error" in json) {
+          return;
+        }
+        if (cancelled) return;
+        const rank = json.state?.finished_rank ?? null;
+        setHasClearedSubway(typeof rank === "number");
+      } catch {
+        // 인트로 진입 시 subway 상태 조회 실패는 치명적이지 않으므로 무시
+      }
+    };
+
+    void loadSubwayState();
+    return () => {
+      cancelled = true;
+    };
+  }, [nickname]);
 
   const handleNicknameSubmit = async () => {
     if (!inputNickname.trim()) return;
@@ -126,6 +160,7 @@ export default function IntroPage() {
           activeGame={activeGame ?? null}
           onOpenRules={() => router.push("/rules")}
           onMainAction={handleMainAction}
+          subwayDisabled={hasClearedSubway}
         />
       </main>
 

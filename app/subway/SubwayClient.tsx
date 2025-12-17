@@ -12,8 +12,6 @@ import { SubwayLocationSection } from "./SubwayLocationSection";
 import { SubwayControlsSection } from "./SubwayControlsSection";
 import { SubwayGuideModal } from "./SubwayGuideModal";
 
-type MoveResult = "correct" | "wrong" | "reset" | "noop" | null;
-
 export type SubwayRuleClient = {
   id: number;
   title: string;
@@ -36,7 +34,8 @@ function SubwayInner() {
   const [subwayPlayer, setSubwayPlayer] = useState<SubwayPlayerState | null>(
     null
   );
-  const [loading, setLoading] = useState(true);
+  const [displayLocation, setDisplayLocation] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [rules, setRules] = useState<SubwayRuleClient[]>([]);
@@ -49,7 +48,6 @@ function SubwayInner() {
   const [isScareActive, setIsScareActive] = useState(false);
   const [scareVariant, setScareVariant] = useState<1 | 2 | null>(null);
   const [scareStep, setScareStep] = useState<0 | 1 | 2>(0);
-  const [lastResult, setLastResult] = useState<MoveResult>(null);
 
   const [timerState, setTimerState] = useState<{
     remainingSeconds: number;
@@ -88,7 +86,7 @@ function SubwayInner() {
     void loadTimer();
     const pollId = setInterval(() => {
       void loadTimer();
-    }, 5000);
+    }, 2000);
 
     const tickId = setInterval(() => {
       setTimerState((prev) => {
@@ -109,6 +107,12 @@ function SubwayInner() {
       clearInterval(tickId);
     };
   }, [nickname, router]);
+
+  useEffect(() => {
+    if (subwayPlayer?.current_location && !moving) {
+      setDisplayLocation(subwayPlayer.current_location);
+    }
+  }, [subwayPlayer?.current_location, moving]);
 
   const triggerShock = useCallback(() => {
     // 이미 연출 중이면 중복으로 켜지지 않게 무시
@@ -190,7 +194,6 @@ function SubwayInner() {
         }
 
         setError(null);
-        setLoading(false);
       } catch (e: unknown) {
         if (!cancelled) {
           const message =
@@ -198,7 +201,6 @@ function SubwayInner() {
               ? e.message
               : "플레이어 상태를 불러오지 못했습니다.";
           setError(message);
-          setLoading(false);
         }
       }
     };
@@ -218,7 +220,8 @@ function SubwayInner() {
     if (!nickname) return;
     if (!timerState?.isRunning || isScareActive) return;
     setError(null);
-    setLastResult(null);
+    setMoving(true);
+    setDisplayLocation(null);
     try {
       const res = await fetch("/api/subway/move", {
         method: "POST",
@@ -230,14 +233,13 @@ function SubwayInner() {
 
       const json = (await res.json().catch(() => null)) as {
         state?: SubwayPlayerState;
-        result?: MoveResult;
         reason?: string;
         error?: string;
       } | null;
 
       if (!res.ok || !json) {
         throw new Error(
-          json?.error ?? "이동 중 오류가 발생했습니다. GM에게 문의해 주세요."
+          json?.error ?? "이동 중 오류가 발생했습니다. 새로고침해주세요."
         );
       }
 
@@ -248,16 +250,21 @@ function SubwayInner() {
 
       if (json.state) {
         setSubwayPlayer(json.state);
+        setTimeout(() => {
+          setDisplayLocation(json.state!.current_location);
+          setMoving(false);
+        }, 3000);
       }
-      setLastResult(json.result ?? null);
     } catch (e: unknown) {
       const message =
-        e instanceof Error ? e.message : "이동 중 오류가 발생했습니다.";
+        e instanceof Error
+          ? e.message
+          : "이동 중 오류가 발생했습니다. 새로고침해주세요.";
       setError(message);
     }
   };
 
-  if (loading || !nickname) return <LoadingScreen />;
+  if (!nickname) return <LoadingScreen />;
 
   if (error) {
     return (
@@ -268,7 +275,7 @@ function SubwayInner() {
   }
 
   const exitNumber = subwayPlayer?.exit_number ?? 0;
-  const locationKey = subwayPlayer?.current_location ?? null;
+  const locationKey = displayLocation ?? null;
 
   const totalSeconds = timerState?.remainingSeconds ?? null;
   const minutes =
@@ -320,12 +327,15 @@ function SubwayInner() {
 
       {/* 장소 이미지 영역 */}
       <main className="mt-6 flex w-full max-w-md flex-1 flex-col gap-4">
-        <SubwayLocationSection imageSrc={imageSrc} animState={animState} />
+        <SubwayLocationSection
+          imageSrc={imageSrc}
+          animState={animState}
+          moving={moving}
+        />
 
-        {/* 하단 이동 버튼 + 최근 결과 */}
+        {/* 하단 이동 버튼 */}
         <SubwayControlsSection
-          interactionDisabled={interactionDisabled}
-          lastResult={lastResult}
+          interactionDisabled={interactionDisabled || moving}
           onMoveForward={() => handleMove("forward")}
           onMoveBack={() => handleMove("back")}
         />

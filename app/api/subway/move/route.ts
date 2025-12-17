@@ -264,6 +264,18 @@ export async function POST(request: Request) {
 
   let state = { ...(stateRow as SubwayPlayerState), nickname: player.nickname };
 
+  // 이미 게임을 마친 플레이어는 추가 이동을 허용하지 않음
+  if (state.is_finished) {
+    return NextResponse.json(
+      {
+        state,
+        result: "noop",
+        reason: "already_finished",
+      } as MoveResponse,
+      { status: 200 }
+    );
+  }
+
   // 이미 공개된 규칙 목록 조회 (플레이어별)
   const openedRuleIds = await getOpenedRuleIdsForPlayer(supabase, player.id);
 
@@ -375,6 +387,19 @@ export async function POST(request: Request) {
 
   const finished = nextExit >= 8;
 
+  // 8번 출구 도달 시 최초 1회만 finished_rank 부여
+  let nextRank: number | null = null;
+  if (finished && !state.is_finished && state.finished_rank == null) {
+    const { count, error: rankError } = await supabase
+      .from("subway_player_state")
+      .select("finished_rank", { count: "exact", head: true })
+      .not("finished_rank", "is", null);
+
+    if (!rankError && typeof count === "number") {
+      nextRank = count + 1;
+    }
+  }
+
   // 규칙 6: 6번 출구에서 0번 출구로 되돌아간 경우
   if (state.exit_number === 6 && nextExit === 0 && !openedRuleIds.has(6)) {
     await insertRuleOpenedEvent(supabase, player.id, 6);
@@ -397,13 +422,19 @@ export async function POST(request: Request) {
     openedRuleIds.add(5);
   }
 
+  const updatePayload: Partial<SubwayPlayerState> = {
+    exit_number: nextExit,
+    current_location: nextLocation,
+    is_finished: finished,
+  };
+
+  if (finished && nextRank != null && state.finished_rank == null) {
+    (updatePayload as { finished_rank: number }).finished_rank = nextRank;
+  }
+
   const { data: updatedState, error: updateStateError } = await supabase
     .from("subway_player_state")
-    .update({
-      exit_number: nextExit,
-      current_location: nextLocation,
-      is_finished: finished,
-    })
+    .update(updatePayload)
     .eq("player_id", player.id)
     .select(
       "player_id, exit_number, current_location, reset_count, scare_status, is_finished, finished_rank, updated_at"
