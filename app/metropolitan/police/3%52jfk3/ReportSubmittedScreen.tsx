@@ -1,16 +1,53 @@
 type Props = {
-  nickname: string | null;
+  status: "pending" | "approved" | "rejected";
 };
 
-export function ReportSubmittedScreen({ nickname }: Props) {
+export function ReportSubmittedScreen({ status }: Props) {
+  let title = "신고 내용 확인 중입니다.";
+  let body = "잠시 기다려 주십시오.\n귀하의 신고 사항을 검토 중입니다.";
+
+  if (status === "approved") {
+    title = "신고가 성공적으로 접수되었습니다.";
+    body = "";
+  } else if (status === "rejected") {
+    title = "비정상적인 신고 사항입니다.";
+    body = "";
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 px-4 text-center text-zinc-50">
-      <h1 className="mb-2 text-lg font-semibold">신고가 접수되었습니다</h1>
-      <p className="max-w-xs text-sm text-zinc-400">
-        GM이 내용을 확인할 때까지 이 화면을 유지해 주세요.
-        <br />
-        승인 또는 기각은 현장에서 GM이 안내합니다.
-      </p>
+      <h1 className="mb-2 text-lg font-semibold">{title}</h1>
+      {body && (
+        <p className="max-w-xs whitespace-pre-line text-base text-zinc-400">
+          {body}
+        </p>
+      )}
+      {status === "approved" && (
+        <button
+          type="button"
+          className="mt-4 h-10 w-40 rounded-full bg-zinc-800 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              window.history.back();
+            }
+          }}
+        >
+          닫기
+        </button>
+      )}
+      {status === "rejected" && (
+        <button
+          type="button"
+          className="mt-4 h-10 w-40 rounded-full bg-zinc-800 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              window.history.back();
+            }
+          }}
+        >
+          돌아가기
+        </button>
+      )}
     </div>
   );
 }

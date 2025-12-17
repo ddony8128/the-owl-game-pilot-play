@@ -1,23 +1,21 @@
 import { NextResponse } from "next/server";
-import path from "node:path";
-import { promises as fs } from "node:fs";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Player, SubwayPlayerState, SubwayPlayerEvent } from "@/lib/types";
 
 type MoveBody = {
   nickname?: string;
-  direction?: "forward" | "back" | "reset";
+  direction?: "forward" | "back";
 };
 
 type MoveResponse =
   | {
       state: SubwayPlayerState;
-      result: "correct" | "wrong" | "reset" | "noop";
+      result: "correct" | "wrong" | "noop";
       reason?: string;
     }
   | { error: string };
 
-const BASE_DIR = path.join(process.cwd(), "public", "subway-location");
+// const BASE_DIR = path.join(process.cwd(), "public", "subway-location");
 
 const BACK_CORRECT_GROUPS = new Set([
   "01_only_door",
@@ -27,12 +25,58 @@ const BACK_CORRECT_GROUPS = new Set([
 ]);
 
 const FORWARD_CORRECT_GROUPS = new Set([
-  "04_no_cap_monster",
+  "04_no_cap_mon",
   "06_similar_real",
   "07_just_go",
 ]);
 
-let cachedLocations: string[] | null = null;
+const ALL_LOCATION_KEYS: string[] = [
+  "01_only_door/01.png",
+  "01_only_door/02.png",
+  "01_only_door/03.png",
+  "01_only_door/04.png",
+  "01_only_door/05.png",
+  "02_food/01.png",
+  "02_food/02.png",
+  "02_food/03.png",
+  "02_food/04.png",
+  "02_food/05.png",
+  "03_capture_monster/01.png",
+  "03_capture_monster/02.png",
+  "03_capture_monster/03.png",
+  "03_capture_monster/04.png",
+  "03_capture_monster/05.png",
+  "04_no_cap_mon/01.png",
+  "04_no_cap_mon/02.png",
+  "04_no_cap_mon/03.png",
+  "04_no_cap_mon/04.png",
+  "04_no_cap_mon/05.png",
+  "05_real_world/01.png",
+  "05_real_world/02.png",
+  "05_real_world/03.png",
+  "05_real_world/04.png",
+  "05_real_world/05.png",
+  "05_real_world/06.png",
+  "05_real_world/07.png",
+  "05_real_world/08.png",
+  "06_similar_real/01.png",
+  "06_similar_real/02.png",
+  "06_similar_real/03.png",
+  "06_similar_real/04.png",
+  "06_similar_real/05.png",
+  "06_similar_real/06.png",
+  "06_similar_real/07.png",
+  "06_similar_real/08.png",
+  "07_just_go/01.png",
+  "07_just_go/02.png",
+  "07_just_go/03.png",
+  "07_just_go/04.png",
+  "07_just_go/05.png",
+  "07_just_go/06.png",
+  "07_just_go/07.png",
+  "07_just_go/08.png",
+  "07_just_go/09.png",
+];
 
 type SupabaseClient = ReturnType<typeof createServerSupabaseClient>;
 
@@ -103,26 +147,8 @@ async function ensureRule7IfComplete(
   }
 }
 
-async function getAllLocationKeys(): Promise<string[]> {
-  if (cachedLocations) return cachedLocations;
-
-  const dirEntries = await fs.readdir(BASE_DIR, { withFileTypes: true });
-  const all: string[] = [];
-
-  for (const dirent of dirEntries) {
-    if (!dirent.isDirectory()) continue;
-    const group = dirent.name;
-    const groupDir = path.join(BASE_DIR, group);
-    const files = await fs.readdir(groupDir, { withFileTypes: true });
-    for (const f of files) {
-      if (!f.isFile()) continue;
-      if (!/\.(png|jpg|jpeg|webp)$/i.test(f.name)) continue;
-      all.push(`${group}/${f.name}`);
-    }
-  }
-
-  cachedLocations = all;
-  return all;
+function getAllLocationKeys(): string[] {
+  return ALL_LOCATION_KEYS;
 }
 
 async function getRandomLocation(): Promise<string | null> {
@@ -150,7 +176,7 @@ export async function POST(request: Request) {
   }
 
   const direction = body.direction ?? "forward";
-  if (!["forward", "back", "reset"].includes(direction)) {
+  if (!["forward", "back"].includes(direction)) {
     return NextResponse.json({ error: "invalid direction" } as MoveResponse, {
       status: 400,
     });
@@ -262,7 +288,10 @@ export async function POST(request: Request) {
     );
   }
 
-  let state = { ...(stateRow as SubwayPlayerState), nickname: player.nickname };
+  const state = {
+    ...(stateRow as SubwayPlayerState),
+    nickname: player.nickname,
+  };
 
   // 이미 게임을 마친 플레이어는 추가 이동을 허용하지 않음
   if (state.is_finished) {
@@ -278,42 +307,6 @@ export async function POST(request: Request) {
 
   // 이미 공개된 규칙 목록 조회 (플레이어별)
   const openedRuleIds = await getOpenedRuleIdsForPlayer(supabase, player.id);
-
-  if (direction === "reset") {
-    const nextReset = state.reset_count + 1;
-    const { data: updated, error: updateError } = await supabase
-      .from("subway_player_state")
-      .update({
-        exit_number: 0,
-        reset_count: nextReset,
-      })
-      .eq("player_id", player.id)
-      .select(
-        "player_id, exit_number, current_location, reset_count, scare_status, is_finished, finished_rank, updated_at"
-      )
-      .maybeSingle();
-
-    if (updateError || !updated) {
-      return NextResponse.json(
-        {
-          error: updateError?.message ?? "리셋 중 오류가 발생했습니다.",
-        } as MoveResponse,
-        { status: 500 }
-      );
-    }
-
-    state = { ...(updated as SubwayPlayerState), nickname: player.nickname };
-
-    await supabase.from("subway_player_events").insert({
-      player_id: player.id,
-      event_type: "reset",
-      event_value: { from_exit: state.exit_number, to_exit: 0 },
-    } as Partial<SubwayPlayerEvent>);
-
-    return NextResponse.json({ state, result: "reset" } as MoveResponse, {
-      status: 200,
-    });
-  }
 
   // 30초 이내 이동 여부 확인
   const { data: lastEnter, error: lastEnterError } = await supabase
@@ -379,10 +372,12 @@ export async function POST(request: Request) {
   }
 
   let nextExit = state.exit_number;
+  let nextReset = state.reset_count;
   if (result === "correct") {
     nextExit = Math.min(state.exit_number + 1, 8);
   } else {
     nextExit = 0;
+    nextReset = state.reset_count + 1;
   }
 
   const finished = nextExit >= 8;
@@ -400,8 +395,12 @@ export async function POST(request: Request) {
     }
   }
 
-  // 규칙 6: 6번 출구에서 0번 출구로 되돌아간 경우
-  if (state.exit_number === 6 && nextExit === 0 && !openedRuleIds.has(6)) {
+  // 규칙 6: 6번 또는 7번 출구에서 0번 출구로 되돌아간 경우
+  if (
+    (state.exit_number === 6 || state.exit_number === 7) &&
+    nextExit === 0 &&
+    !openedRuleIds.has(6)
+  ) {
     await insertRuleOpenedEvent(supabase, player.id, 6);
     openedRuleIds.add(6);
   }
@@ -424,6 +423,7 @@ export async function POST(request: Request) {
 
   const updatePayload: Partial<SubwayPlayerState> = {
     exit_number: nextExit,
+    reset_count: nextReset,
     current_location: nextLocation,
     is_finished: finished,
   };

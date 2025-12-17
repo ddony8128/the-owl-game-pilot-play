@@ -25,7 +25,7 @@ export function SubwayHeader({
       <div className="flex items-center justify-between text-sm">
         <button
           className={`h-12 rounded-full border border-zinc-700 px-12 text-lg text-zinc-100 hover:bg-zinc-900 disabled:opacity-40 ${
-            hasNewRule ? "animate-pulse" : ""
+            hasNewRule ? "animate-alert-pulse border-red-500" : ""
           }`}
           disabled={interactionDisabled}
           onClick={onOpenGuide}

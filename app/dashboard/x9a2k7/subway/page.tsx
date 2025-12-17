@@ -25,7 +25,7 @@ export default function DashboardSubwayPage() {
 
       <SubwayInteractionSection players={players} onReload={reload} />
 
-      <SubwayStatusSection players={players} />
+      <SubwayStatusSection players={players} onReload={reload} />
     </div>
   );
 }

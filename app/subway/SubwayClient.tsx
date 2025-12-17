@@ -253,7 +253,7 @@ function SubwayInner() {
         setTimeout(() => {
           setDisplayLocation(json.state!.current_location);
           setMoving(false);
-        }, 3000);
+        }, 1500);
       }
     } catch (e: unknown) {
       const message =

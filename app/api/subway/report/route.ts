@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { Player } from "@/lib/types";
+import type { Player, SubwayReport } from "@/lib/types";
 
 type ReportBody = {
   nickname?: string;
@@ -8,15 +8,56 @@ type ReportBody = {
   content?: string;
 };
 
-type ReportResponse = { ok: true } | { error: string };
+type ReportPostResponse =
+  | { ok: true; id: number; status: SubwayReport["status"] }
+  | { error: string };
+
+type ReportGetResponse =
+  | { report: Pick<SubwayReport, "id" | "status"> | null }
+  | { error: string };
+
+export async function GET(request: Request) {
+  const supabase = createServerSupabaseClient();
+  const { searchParams } = new URL(request.url);
+  const idParam = searchParams.get("id");
+
+  if (!idParam) {
+    return NextResponse.json({ error: "id is required" } as ReportGetResponse, {
+      status: 400,
+    });
+  }
+
+  const { data, error } = await supabase
+    .from("subway_reports")
+    .select("id, status")
+    .eq("id", idParam)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message } as ReportGetResponse, {
+      status: 500,
+    });
+  }
+
+  return NextResponse.json(
+    {
+      report: (data as Pick<SubwayReport, "id" | "status"> | null) ?? null,
+    } as ReportGetResponse,
+    { status: 200 }
+  );
+}
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as ReportBody | null;
 
-  if (!body || typeof body.name !== "string" || typeof body.content !== "string") {
+  if (
+    !body ||
+    typeof body.name !== "string" ||
+    typeof body.content !== "string"
+  ) {
     return NextResponse.json(
-      { error: "name and content are required" } as ReportResponse,
+      { error: "name and content are required" } as ReportPostResponse,
       { status: 400 }
     );
   }
@@ -26,7 +67,9 @@ export async function POST(request: Request) {
 
   if (reporterName.length < 2 || content.length < 2) {
     return NextResponse.json(
-      { error: "닉네임과 내용을 2글자 이상 입력해 주세요." } as ReportResponse,
+      {
+        error: "닉네임과 내용을 2글자 이상 입력해 주세요.",
+      } as ReportPostResponse,
       { status: 400 }
     );
   }
@@ -45,19 +88,33 @@ export async function POST(request: Request) {
     }
   }
 
-  const { error: insertError } = await supabase.from("subway_reports").insert({
-    player_id: playerId,
-    reporter_name: reporterName,
-    content,
-  });
+  const { data, error: insertError } = await supabase
+    .from("subway_reports")
+    .insert({
+      player_id: playerId,
+      reporter_name: reporterName,
+      content,
+    })
+    .select("id, status")
+    .maybeSingle();
 
-  if (insertError) {
+  if (insertError || !data) {
     return NextResponse.json(
-      { error: insertError.message } as ReportResponse,
+      {
+        error:
+          insertError?.message ??
+          "신고를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      } as ReportPostResponse,
       { status: 500 }
     );
   }
 
-  return NextResponse.json({ ok: true } as ReportResponse, { status: 200 });
-}
+  const row = data as Pick<SubwayReport, "id" | "status">;
+  const numericId =
+    typeof row.id === "number" ? row.id : (row.id as unknown as number);
 
+  return NextResponse.json(
+    { ok: true, id: numericId, status: row.status } as ReportPostResponse,
+    { status: 200 }
+  );
+}

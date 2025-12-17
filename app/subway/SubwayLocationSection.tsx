@@ -20,7 +20,6 @@ export function SubwayLocationSection({ imageSrc, animState, moving }: Props) {
               src={imageSrc}
               alt="지하철 장소"
               fill
-              sizes="100vw"
               className="object-cover"
             />
           </div>

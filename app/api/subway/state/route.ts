@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import path from "node:path";
+import { promises as fs } from "node:fs";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Player, SubwayPlayerState, SubwayPlayerEvent } from "@/lib/types";
 import { SUBWAY_RULES } from "../rules";
@@ -17,6 +19,38 @@ type PlayerStatePayload = {
 type StateResponse = PlayerStatePayload | { error: string };
 
 type SupabaseClient = ReturnType<typeof createServerSupabaseClient>;
+
+const BASE_DIR = path.join(process.cwd(), "public", "subway-location");
+let cachedLocations: string[] | null = null;
+
+async function getAllLocationKeys(): Promise<string[]> {
+  if (cachedLocations) return cachedLocations;
+
+  const dirEntries = await fs.readdir(BASE_DIR, { withFileTypes: true });
+  const all: string[] = [];
+
+  for (const dirent of dirEntries) {
+    if (!dirent.isDirectory()) continue;
+    const group = dirent.name;
+    const groupDir = path.join(BASE_DIR, group);
+    const files = await fs.readdir(groupDir, { withFileTypes: true });
+    for (const f of files) {
+      if (!f.isFile()) continue;
+      if (!/\.(png|jpg|jpeg|webp)$/i.test(f.name)) continue;
+      all.push(`${group}/${f.name}`);
+    }
+  }
+
+  cachedLocations = all;
+  return all;
+}
+
+async function getRandomLocation(): Promise<string | null> {
+  const all = await getAllLocationKeys();
+  if (all.length === 0) return null;
+  const idx = Math.floor(Math.random() * all.length);
+  return all[idx] ?? null;
+}
 
 async function getOpenedRuleIdsForPlayer(
   supabase: SupabaseClient,
@@ -139,8 +173,49 @@ export async function GET(request: Request) {
   let state: SubwayPlayerState | null = null;
 
   if (!stateRow) {
-    // 최초 진입: state가 없으면 null을 반환하고, 클라이언트는 move를 통해 시작하도록 할 수 있음
-    state = null;
+    // 최초 진입: 랜덤 위치를 선택해 초기 상태를 생성
+    const initialLocation = await getRandomLocation();
+    if (!initialLocation) {
+      return NextResponse.json(
+        { error: "장소 이미지를 찾을 수 없습니다." } as StateResponse,
+        { status: 500 }
+      );
+    }
+
+    const insertState = await supabase
+      .from("subway_player_state")
+      .insert({
+        player_id: player.id,
+        exit_number: 0,
+        current_location: initialLocation,
+        reset_count: 0,
+        scare_status: false,
+        is_finished: false,
+      })
+      .select(
+        "player_id, exit_number, current_location, reset_count, scare_status, is_finished, finished_rank, updated_at"
+      )
+      .maybeSingle();
+
+    if (insertState.error || !insertState.data) {
+      return NextResponse.json(
+        {
+          error:
+            insertState.error?.message ??
+            "플레이어 상태를 초기화하지 못했습니다.",
+        } as StateResponse,
+        { status: 500 }
+      );
+    }
+
+    // 최초 위치 진입 이벤트 기록
+    await supabase.from("subway_player_events").insert({
+      player_id: player.id,
+      event_type: "enter_location",
+      event_value: { location: initialLocation },
+    } as Partial<SubwayPlayerEvent>);
+
+    state = insertState.data as SubwayPlayerState;
   } else {
     const current = stateRow as SubwayPlayerState;
     state = current;

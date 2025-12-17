@@ -5,7 +5,7 @@ import type { SubwayReport } from "@/lib/types";
 type GetResponse = { reports: SubwayReport[] } | { error: string };
 
 type PostBody = {
-  id?: string;
+  id?: string | number;
   status?: "approved" | "rejected";
 };
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as PostBody | null;
 
-  if (!body || typeof body.id !== "string") {
+  if (!body || (typeof body.id !== "string" && typeof body.id !== "number")) {
     return NextResponse.json({ error: "id is required" } as PostResponse, {
       status: 400,
     });

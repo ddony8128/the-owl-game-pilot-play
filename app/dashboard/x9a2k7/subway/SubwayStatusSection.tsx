@@ -2,12 +2,22 @@ import type { SubwayPlayerState } from "@/lib/types";
 
 type Props = {
   players: SubwayPlayerState[];
+  onReload: () => void;
 };
 
-export function SubwayStatusSection({ players }: Props) {
+export function SubwayStatusSection({ players, onReload }: Props) {
   return (
     <section className="flex flex-col gap-2 text-sm">
-      <h2 className="text-base font-semibold">이상교통 현재 현황</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold">이상교통 현재 현황</h2>
+        <button
+          type="button"
+          className="h-7 rounded-full bg-zinc-800 px-3 text-[11px] text-zinc-100 hover:bg-zinc-700"
+          onClick={onReload}
+        >
+          새로고침
+        </button>
+      </div>
       <div className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-900 text-xs">
         <table className="min-w-full border-collapse">
           <thead className="bg-zinc-800">

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type TimerState = {
   remainingSeconds: number;
@@ -12,19 +13,33 @@ let subwayTimer: TimerState = {
   targetEpochMs: null,
 };
 
-function recomputeRemaining(state: TimerState) {
-  if (!state.isRunning || state.targetEpochMs == null) return;
+function recomputeRemaining(state: TimerState): boolean {
+  if (!state.isRunning || state.targetEpochMs == null) return false;
   const now = Date.now();
   const diff = Math.max(0, Math.floor((state.targetEpochMs - now) / 1000));
   state.remainingSeconds = diff;
   if (diff === 0) {
     state.isRunning = false;
     state.targetEpochMs = null;
+    return true;
   }
+  return false;
+}
+
+async function markAllPlayersFinishedOnTimeout() {
+  const supabase = createServerSupabaseClient();
+  await supabase
+    .from("subway_player_state")
+    .update({ is_finished: true })
+    .eq("is_finished", false);
 }
 
 export async function GET() {
-  recomputeRemaining(subwayTimer);
+  const timedOut = recomputeRemaining(subwayTimer);
+  if (timedOut) {
+    await markAllPlayersFinishedOnTimeout();
+  }
+
   return NextResponse.json({
     remainingSeconds: subwayTimer.remainingSeconds,
     isRunning: subwayTimer.isRunning,
@@ -43,7 +58,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid action" }, { status: 400 });
   }
 
-  recomputeRemaining(subwayTimer);
+  const timedOutBefore = recomputeRemaining(subwayTimer);
+  if (timedOutBefore) {
+    await markAllPlayersFinishedOnTimeout();
+  }
 
   if (action === "reset") {
     subwayTimer = {
@@ -59,9 +77,12 @@ export async function POST(request: Request) {
     }
   } else if (action === "pause") {
     if (subwayTimer.isRunning && subwayTimer.targetEpochMs != null) {
-      recomputeRemaining(subwayTimer);
+      const timedOut = recomputeRemaining(subwayTimer);
       subwayTimer.isRunning = false;
       subwayTimer.targetEpochMs = null;
+      if (timedOut && !timedOutBefore) {
+        await markAllPlayersFinishedOnTimeout();
+      }
     }
   }
 

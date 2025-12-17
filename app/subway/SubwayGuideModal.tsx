@@ -19,7 +19,7 @@ export function SubwayGuideModal({ isOpen, rules, onClose }: Props) {
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70">
       <div className="w-full max-w-md rounded-2xl bg-zinc-950 p-5 text-left text-zinc-50 shadow-xl">
         <h2 className="mb-3 text-lg font-semibold">안내문</h2>
-        <div className="max-h-[60vh] space-y-4 overflow-y-auto text-sm leading-relaxed">
+        <div className="max-h-[60vh] space-y-4 px-4 overflow-y-auto text-sm leading-relaxed">
           {rule0 && (
             <div>
               <p className="mb-1 text-base font-semibold">{rule0.title}</p>
