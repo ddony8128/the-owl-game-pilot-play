@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type {
+  MafiaAbilityResult,
   MafiaPhaseState,
   MafiaPlayerState,
   MafiaStockState,
   MafiaLog,
   Player,
+  MafiaStockHistory,
 } from "@/lib/types";
 
 export async function GET(request: Request) {
@@ -38,6 +40,39 @@ export async function GET(request: Request) {
 
   const stocks = (stockRows || []) as MafiaStockState[];
 
+  // stock history
+  const { data: historyRows, error: historyError } = await supabase
+    .from("mafia_stock_history")
+    .select("stock_key, round_number, price_before, price_after, created_at")
+    .order("round_number", { ascending: true });
+
+  if (historyError) {
+    return NextResponse.json({ error: historyError.message }, { status: 500 });
+  }
+
+  const histories = (historyRows || []) as MafiaStockHistory[];
+  const stockHistory: Record<
+    string,
+    {
+      round_number: number;
+      price_before: number | null;
+      price_after: number | null;
+    }[]
+  > = {};
+
+  for (const h of histories) {
+    const key = h.stock_key;
+    if (!key) continue;
+    if (!stockHistory[key]) {
+      stockHistory[key] = [];
+    }
+    stockHistory[key].push({
+      round_number: h.round_number,
+      price_before: h.price_before,
+      price_after: h.price_after,
+    });
+  }
+
   // logs (공개 로그)
   const { data: logRows, error: logError } = await supabase
     .from("mafia_public_logs")
@@ -66,10 +101,20 @@ export async function GET(request: Request) {
 
     const players = (playerStateRows || []) as MafiaPlayerState[];
 
-    return NextResponse.json({ phase, stocks, players, logs });
+    return NextResponse.json({ phase, stocks, players, logs, stockHistory });
   }
 
   let playerState: MafiaPlayerState | null = null;
+  let players: Player[] = [];
+  let abilityResults: MafiaAbilityResult[] = [];
+  let ticketPrice: number | null = null;
+  let myVoteSummary:
+    | {
+        target: string;
+        vote_count: number;
+        total_spent: number;
+      }[]
+    | null = null;
 
   if (nickname) {
     const playerRes = await supabase
@@ -105,7 +150,123 @@ export async function GET(request: Request) {
     }
 
     playerState = (stateRow || null) as MafiaPlayerState | null;
+
+    // 전체 플레이어 리스트 (능력/투표 대상 선택용)
+    const { data: playersRows, error: playersError } = await supabase
+      .from("players")
+      .select("id, nickname, is_finalist, created_at");
+
+    if (playersError) {
+      return NextResponse.json(
+        { error: playersError.message },
+        { status: 500 }
+      );
+    }
+
+    players = (playersRows || []) as Player[];
+
+    // 현재 플레이어의 능력결과 (최신 라운드 우선, created_at 오름차순)
+    const { data: abilityRows, error: abilityError } = await supabase
+      .from("mafia_ability_results")
+      .select(
+        "id, player_id, round_number, phase, job, category, message, payload, created_at"
+      )
+      .eq("player_id", player.id)
+      .order("round_number", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (abilityError) {
+      return NextResponse.json(
+        { error: abilityError.message },
+        { status: 500 }
+      );
+    }
+
+    abilityResults = (abilityRows || []) as MafiaAbilityResult[];
+
+    // 시장 능력에서 표 가격 결정: apply 페이즈 ability 중 job='mayor'의 ticket_price 사용, 없으면 1원
+    if (phase && typeof phase.round_number === "number") {
+      let resolvedTicketPrice = 1;
+      const { data: abilityPriceRows, error: abilityPriceError } =
+        await supabase
+          .from("mafia_actions")
+          .select("payload")
+          .eq("round_number", phase.round_number)
+          .eq("phase", "apply")
+          .eq("action_type", "ability");
+
+      if (!abilityPriceError && abilityPriceRows) {
+        for (const row of abilityPriceRows) {
+          const payload = row.payload as {
+            job?: string;
+            ticket_price?: number;
+          } | null;
+          if (payload?.job === "mayor") {
+            const tp = payload.ticket_price;
+            if (tp === 1 || tp === 2 || tp === 3) {
+              resolvedTicketPrice = tp;
+            }
+          }
+        }
+      }
+
+      ticketPrice = resolvedTicketPrice;
+
+      // 현재 플레이어의 이번 라운드 투표 요약
+      const { data: myVotesRows, error: myVotesError } = await supabase
+        .from("mafia_votes")
+        .select("target_id, vote_count, unit_price")
+        .eq("round_number", phase.round_number)
+        .eq("voter_id", player.id);
+
+      if (!myVotesError && myVotesRows) {
+        const byTarget = new Map<
+          string,
+          { vote_count: number; total_spent: number }
+        >();
+
+        for (const v of myVotesRows) {
+          const rawTarget = v.target_id as string | null;
+          if (!rawTarget) continue;
+          const cnt =
+            typeof v.vote_count === "number" && v.vote_count > 0
+              ? v.vote_count
+              : 0;
+          if (cnt <= 0) continue;
+          const unit =
+            typeof v.unit_price === "number" && v.unit_price > 0
+              ? v.unit_price
+              : resolvedTicketPrice;
+
+          const prev = byTarget.get(rawTarget) ?? {
+            vote_count: 0,
+            total_spent: 0,
+          };
+          prev.vote_count += cnt;
+          prev.total_spent += cnt * unit;
+          byTarget.set(rawTarget, prev);
+        }
+
+        myVoteSummary = Array.from(byTarget.entries()).map(([target, agg]) => ({
+          target,
+          vote_count: agg.vote_count,
+          total_spent: agg.total_spent,
+        }));
+      } else {
+        myVoteSummary = [];
+      }
+    }
   }
 
-  return NextResponse.json({ phase, stocks, playerState, logs });
+  return NextResponse.json({
+    phase,
+    stocks,
+    playerState,
+    players,
+    logs,
+    stockHistory,
+    abilityResults,
+    ticketPrice,
+    myVoteSummary,
+  });
 }

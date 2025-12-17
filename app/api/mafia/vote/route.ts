@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // 표 비용 차감
+  // 표 비용 차감 (잔액 검증 포함)
   const totalCost = ticketPrice * vote_count;
   const { data: voterStateRow, error: voterStateError } = await supabase
     .from("mafia_player_state")
@@ -122,6 +122,14 @@ export async function POST(request: Request) {
   if (voterStateRow) {
     const voterState = voterStateRow as MafiaPlayerState;
     const nextCash = voterState.cash - totalCost;
+
+    if (nextCash < 0) {
+      return NextResponse.json(
+        { error: "현금이 부족합니다." } as VoteResponse,
+        { status: 400 }
+      );
+    }
+
     const { error: updateCashError } = await supabase
       .from("mafia_player_state")
       .update({ cash: nextCash })

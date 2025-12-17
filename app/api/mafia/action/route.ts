@@ -79,6 +79,34 @@ export async function POST(request: Request) {
 
   const player = playerRow as Player;
 
+  // 능력 사용은 라운드/페이즈당 1회만 허용
+  if (action_type === "ability") {
+    const { data: existingAbility, error: existingError } = await supabase
+      .from("mafia_actions")
+      .select("id")
+      .eq("player_id", player.id)
+      .eq("round_number", phaseState.round_number)
+      .eq("phase", phaseState.phase)
+      .eq("action_type", "ability")
+      .maybeSingle();
+
+    if (existingError) {
+      return NextResponse.json(
+        { error: existingError.message } as ActionResponse,
+        { status: 500 }
+      );
+    }
+
+    if (existingAbility) {
+      return NextResponse.json(
+        {
+          error: "이번 라운드에서는 이미 능력을 사용했습니다.",
+        } as ActionResponse,
+        { status: 400 }
+      );
+    }
+  }
+
   const { error: insertError } = await supabase.from("mafia_actions").insert({
     player_id: player.id,
     round_number: phaseState.round_number,

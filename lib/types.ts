@@ -141,6 +141,18 @@ export type MafiaLog = {
   created_at: string;
 };
 
+export type MafiaAbilityResult = {
+  id: string;
+  player_id: string;
+  round_number: number | null;
+  phase: string | null; // "apply" | "vote" 정도가 들어옴
+  job: string | null; // ceo | salaryman | broker | robber | police | tax_auditor | mayor ...
+  category: string | null; // "salary" | "broker_bonus" | ...
+  message: string;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+};
+
 // 3게임 – 퀴즈쇼
 export type QuizPhaseState = {
   id: number;

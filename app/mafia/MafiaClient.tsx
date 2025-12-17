@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type {
+  MafiaAbilityResult,
   MafiaLog,
   MafiaPhaseState,
   MafiaPlayerState,
   MafiaStockState,
+  Player,
 } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { PageGuard } from "@/components/PageGuard";
@@ -37,6 +39,22 @@ function MafiaInner() {
   const [stocks, setStocks] = useState<MafiaStockState[]>([]);
   const [phase, setPhase] = useState<MafiaPhaseState | null>(null);
   const [logs, setLogs] = useState<MafiaLog[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [stockHistory, setStockHistory] = useState<Record<
+    string,
+    {
+      round_number: number;
+      price_before: number | null;
+      price_after: number | null;
+    }[]
+  > | null>(null);
+  const [abilityResults, setAbilityResults] = useState<MafiaAbilityResult[]>(
+    []
+  );
+  const [ticketPrice, setTicketPrice] = useState<number | null>(null);
+  const [myVoteSummary, setMyVoteSummary] = useState<
+    { target: string; vote_count: number; total_spent: number }[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
@@ -55,7 +73,23 @@ function MafiaInner() {
               phase: MafiaPhaseState | null;
               stocks: MafiaStockState[];
               playerState: MafiaPlayerState | null;
+              players?: Player[];
               logs: MafiaLog[];
+              stockHistory?: Record<
+                string,
+                {
+                  round_number: number;
+                  price_before: number | null;
+                  price_after: number | null;
+                }[]
+              >;
+              abilityResults?: MafiaAbilityResult[];
+              ticketPrice?: number | null;
+              myVoteSummary?: {
+                target: string;
+                vote_count: number;
+                total_spent: number;
+              }[];
               error?: undefined;
             }
           | { error: string }
@@ -74,6 +108,13 @@ function MafiaInner() {
         setStocks(json.stocks ?? []);
         setPhase(json.phase ?? null);
         setLogs(json.logs ?? []);
+        setPlayers(json.players ?? []);
+        setStockHistory(json.stockHistory ?? null);
+        setAbilityResults(json.abilityResults ?? []);
+        setTicketPrice(
+          typeof json.ticketPrice === "number" ? json.ticketPrice : null
+        );
+        setMyVoteSummary(json.myVoteSummary ?? []);
         setError(null);
       } catch (e: unknown) {
         if (!cancelled) {
@@ -221,16 +262,37 @@ function MafiaInner() {
 
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <TabLayout tabs={tabsDef} activeKey={activeTab} onChange={setActiveTab}>
-          {activeTab === "info" && <MafiaInfoTab mafiaPlayer={mafiaPlayer} />}
+          {activeTab === "info" && (
+            <MafiaInfoTab
+              mafiaPlayer={mafiaPlayer}
+              stocks={stocks}
+              logs={logs}
+            />
+          )}
           {activeTab === "rules" && <MafiaRulesTab />}
-          {activeTab === "stocks" && <MafiaStocksTab stocks={stocks} />}
+          {activeTab === "stocks" && (
+            <MafiaStocksTab stocks={stocks} stockHistory={stockHistory} />
+          )}
           {activeTab === "auction" && <MafiaAuctionTab />}
           {activeTab === "trade" && <MafiaTradeTab stocks={stocks} />}
           {activeTab === "ability" && (
-            <MafiaAbilityTab job={mafiaPlayer?.job ?? null} />
+            <MafiaAbilityTab
+              job={mafiaPlayer?.job ?? null}
+              stocks={stocks}
+              players={players}
+            />
           )}
-          {activeTab === "result" && <MafiaResultTab logs={logs} />}
-          {activeTab === "vote" && <MafiaVoteTab />}
+          {activeTab === "result" && (
+            <MafiaResultTab logs={logs} abilityResults={abilityResults} />
+          )}
+          {activeTab === "vote" && (
+            <MafiaVoteTab
+              ticketPrice={ticketPrice}
+              playerCash={mafiaPlayer?.cash ?? null}
+              players={players}
+              myVoteSummary={myVoteSummary}
+            />
+          )}
         </TabLayout>
       </main>
     </div>
