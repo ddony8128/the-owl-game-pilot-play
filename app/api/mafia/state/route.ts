@@ -101,7 +101,29 @@ export async function GET(request: Request) {
 
     const players = (playerStateRows || []) as MafiaPlayerState[];
 
-    return NextResponse.json({ phase, stocks, players, logs, stockHistory });
+    // 플레이어 닉네임 매핑
+    const { data: nameRows, error: namesError } = await supabase
+      .from("players")
+      .select("id, nickname, is_finalist, created_at");
+
+    if (namesError) {
+      return NextResponse.json({ error: namesError.message }, { status: 500 });
+    }
+
+    type PlayerName = Pick<Player, "id" | "nickname">;
+    const playerNames: Record<string, string> = {};
+    ((nameRows || []) as PlayerName[]).forEach((p) => {
+      playerNames[p.id] = p.nickname;
+    });
+
+    return NextResponse.json({
+      phase,
+      stocks,
+      players,
+      logs,
+      stockHistory,
+      playerNames,
+    });
   }
 
   let playerState: MafiaPlayerState | null = null;

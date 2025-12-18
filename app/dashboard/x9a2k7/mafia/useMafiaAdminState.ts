@@ -10,6 +10,7 @@ type MafiaAdminState = {
   phase: MafiaPhaseState | null;
   stocks: MafiaStockState[];
   players: MafiaPlayerState[];
+  playerNames: Record<string, string>;
   logs: MafiaLog[];
   loading: boolean;
   error: string | null;
@@ -20,6 +21,7 @@ export function useMafiaAdminState(): MafiaAdminState {
   const [phase, setPhase] = useState<MafiaPhaseState | null>(null);
   const [stocks, setStocks] = useState<MafiaStockState[]>([]);
   const [players, setPlayers] = useState<MafiaPlayerState[]>([]);
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
   const [logs, setLogs] = useState<MafiaLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +40,7 @@ export function useMafiaAdminState(): MafiaAdminState {
               stocks: MafiaStockState[];
               players: MafiaPlayerState[];
               logs: MafiaLog[];
+              playerNames?: Record<string, string>;
               error?: undefined;
             }
           | { error: string }
@@ -53,6 +56,7 @@ export function useMafiaAdminState(): MafiaAdminState {
         setStocks(json.stocks ?? []);
         setPlayers(json.players ?? []);
         setLogs(json.logs ?? []);
+        setPlayerNames(json.playerNames ?? {});
         setError(null);
       } catch (e: unknown) {
         if (!cancelled) {
@@ -75,5 +79,5 @@ export function useMafiaAdminState(): MafiaAdminState {
 
   const reload = () => setReloadToken((v) => v + 1);
 
-  return { phase, stocks, players, logs, loading, error, reload };
+  return { phase, stocks, players, playerNames, logs, loading, error, reload };
 }

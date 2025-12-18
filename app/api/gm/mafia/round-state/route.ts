@@ -1,0 +1,408 @@
+import { NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type {
+  MafiaAction,
+  MafiaPlayerSnapshot,
+  MafiaStockHistory,
+  MafiaVote,
+  Player,
+} from "@/lib/types";
+
+type RoundStateResponse =
+  | {
+      round: number;
+      players: {
+        player_id: string;
+        nickname: string | null;
+        job: string | null;
+        is_mafia: boolean;
+        cash: number | null;
+        stocks: Record<string, { amount: number }> | null;
+        auction_bets: {
+          job: string | null;
+          amount: number;
+          give_up: boolean;
+        }[];
+        abilities: {
+          job: string | null;
+          payload: Record<string, unknown>;
+        }[];
+        trades: {
+          stock_key: string;
+          buy: number;
+          sell: number;
+        }[];
+        votes: {
+          target_id: string | null;
+          target_nickname: string | null;
+          vote_count: number;
+          unit_price: number;
+        }[];
+      }[];
+      stockSummary: {
+        stock_key: string;
+        price_before: number | null;
+        price_after: number | null;
+        buy_volume: number;
+        sell_volume: number;
+        up_manipulators: { player_id: string; nickname: string | null }[];
+        down_manipulators: { player_id: string; nickname: string | null }[];
+      }[];
+      voteTally: {
+        target_id: string | null;
+        target_nickname: string | null;
+        total_votes: number;
+      }[];
+    }
+  | { error: string };
+
+const phaseRank: Record<string, number> = {
+  prepare: 0,
+  auction: 1,
+  trade: 2,
+  apply: 3,
+  vote: 4,
+  end: 5,
+};
+
+export async function GET(request: Request) {
+  const supabase = createServerSupabaseClient();
+  const { searchParams } = new URL(request.url);
+  const roundParam = searchParams.get("round");
+  const round = roundParam ? Number(roundParam) : NaN;
+
+  if (!Number.isInteger(round) || round < 0 || round > 5) {
+    return NextResponse.json(
+      {
+        error: "round must be an integer between 0 and 5",
+      } as RoundStateResponse,
+      { status: 400 }
+    );
+  }
+
+  // 플레이어 기본 정보(닉네임)
+  const { data: playerRows, error: playersError } = await supabase
+    .from("players")
+    .select("id, nickname, is_finalist, created_at");
+
+  if (playersError) {
+    return NextResponse.json(
+      { error: playersError.message } as RoundStateResponse,
+      { status: 500 }
+    );
+  }
+
+  type PlayerName = Pick<Player, "id" | "nickname">;
+  const nicknameById = new Map<string, string>();
+  for (const p of (playerRows || []) as PlayerName[]) {
+    nicknameById.set(p.id, p.nickname);
+  }
+
+  // 해당 라운드의 플레이어 스냅샷
+  const { data: snapshotRows, error: snapshotError } = await supabase
+    .from("mafia_player_snapshots")
+    .select("player_id, round_number, phase, cash, stocks, job, created_at")
+    .eq("round_number", round);
+
+  if (snapshotError) {
+    return NextResponse.json(
+      { error: snapshotError.message } as RoundStateResponse,
+      { status: 500 }
+    );
+  }
+
+  const snapshots = (snapshotRows || []) as MafiaPlayerSnapshot[];
+  const bestSnapshotByPlayer = new Map<string, MafiaPlayerSnapshot>();
+
+  for (const snap of snapshots) {
+    const pid = snap.player_id;
+    if (!pid) continue;
+    const prev = bestSnapshotByPlayer.get(pid);
+    if (!prev) {
+      bestSnapshotByPlayer.set(pid, snap);
+      continue;
+    }
+    const prevRank = phaseRank[prev.phase ?? "prepare"] ?? 0;
+    const currRank = phaseRank[snap.phase ?? "prepare"] ?? 0;
+    if (currRank >= prevRank) {
+      bestSnapshotByPlayer.set(pid, snap);
+    }
+  }
+
+  // 해당 라운드의 모든 액션
+  const { data: actionRows, error: actionsError } = await supabase
+    .from("mafia_actions")
+    .select("player_id, round_number, phase, action_type, payload, created_at")
+    .eq("round_number", round);
+
+  if (actionsError) {
+    return NextResponse.json(
+      { error: actionsError.message } as RoundStateResponse,
+      { status: 500 }
+    );
+  }
+
+  const actions = (actionRows || []) as MafiaAction[];
+
+  // 해당 라운드의 투표
+  const { data: voteRows, error: votesError } = await supabase
+    .from("mafia_votes")
+    .select("voter_id, target_id, vote_count, unit_price")
+    .eq("round_number", round);
+
+  if (votesError) {
+    return NextResponse.json(
+      { error: votesError.message } as RoundStateResponse,
+      { status: 500 }
+    );
+  }
+
+  const votes = (voteRows || []) as MafiaVote[];
+
+  // 해당 라운드의 주가 히스토리
+  const { data: historyRows, error: historyError } = await supabase
+    .from("mafia_stock_history")
+    .select(
+      "stock_key, round_number, price_before, price_after, meta, created_at"
+    )
+    .eq("round_number", round);
+
+  if (historyError) {
+    return NextResponse.json(
+      { error: historyError.message } as RoundStateResponse,
+      { status: 500 }
+    );
+  }
+
+  const histories = (historyRows || []) as MafiaStockHistory[];
+
+  // 플레이어별 요약 구조
+  type PlayerSummary = {
+    player_id: string;
+    nickname: string | null;
+    job: string | null;
+    is_mafia: boolean;
+    cash: number | null;
+    stocks: Record<string, { amount: number }> | null;
+    auction_bets: {
+      job: string | null;
+      amount: number;
+      give_up: boolean;
+    }[];
+    abilities: {
+      job: string | null;
+      payload: Record<string, unknown>;
+    }[];
+    trades: {
+      stock_key: string;
+      buy: number;
+      sell: number;
+    }[];
+    votes: {
+      target_id: string | null;
+      target_nickname: string | null;
+      vote_count: number;
+      unit_price: number;
+    }[];
+  };
+
+  const byPlayer = new Map<string, PlayerSummary>();
+
+  const ensurePlayer = (playerId: string): PlayerSummary => {
+    let summary = byPlayer.get(playerId);
+    if (summary) return summary;
+    const snap = bestSnapshotByPlayer.get(playerId) ?? null;
+    const rawStocks = (snap as unknown as { stocks?: unknown })?.stocks;
+    const stocks: Record<string, { amount: number }> | null =
+      rawStocks && typeof rawStocks === "object"
+        ? { ...(rawStocks as Record<string, { amount: number }>) }
+        : null;
+
+    summary = {
+      player_id: playerId,
+      nickname: nicknameById.get(playerId) ?? null,
+      job: (snap as unknown as { job?: string | null })?.job ?? null,
+      is_mafia: (snap as unknown as { is_mafia?: boolean })?.is_mafia ?? false,
+      cash:
+        typeof (snap as unknown as { cash?: number | null })?.cash === "number"
+          ? ((snap as unknown as { cash?: number | null }).cash as number)
+          : null,
+      stocks,
+      auction_bets: [],
+      abilities: [],
+      trades: [],
+      votes: [],
+    };
+    byPlayer.set(playerId, summary);
+    return summary;
+  };
+
+  // 주가 변동 요소 집계
+  const buyVolumeByStock = new Map<string, number>();
+  const sellVolumeByStock = new Map<string, number>();
+  const upManipulatorsByStock = new Map<
+    string,
+    { player_id: string; nickname: string | null }[]
+  >();
+  const downManipulatorsByStock = new Map<
+    string,
+    { player_id: string; nickname: string | null }[]
+  >();
+
+  // 액션을 순회하면서 플레이어별 경매/능력/거래 요약 및 주가 변동 요소를 동시에 집계
+  for (const a of actions) {
+    if (!a.player_id) continue;
+    const pid = a.player_id;
+    const phase = a.phase;
+    const type = a.action_type;
+
+    const playerSummary = ensurePlayer(pid);
+
+    if (phase === "auction" && type === "bet") {
+      const payload = (a.payload ?? {}) as {
+        job?: string | null;
+        amount?: number;
+        give_up?: boolean;
+      };
+      const job = payload.job ?? null;
+      const amount =
+        typeof payload.amount === "number" && payload.amount > 0
+          ? payload.amount
+          : 0;
+      const give_up = payload.give_up === true;
+      playerSummary.auction_bets.push({ job, amount, give_up });
+      continue;
+    }
+
+    if (phase === "apply" && type === "ability") {
+      const payload = (a.payload ?? {}) as Record<string, unknown>;
+      const job =
+        typeof payload.job === "string" ? (payload.job as string) : null;
+      playerSummary.abilities.push({
+        job,
+        payload,
+      });
+
+      // 주가조작 능력(상승/하락 조작자)의 경우 주가 변동 요소에도 반영
+      const stockKey =
+        typeof payload.stock_key === "string"
+          ? (payload.stock_key as string)
+          : null;
+      if (stockKey) {
+        if (job === "up_manipulator") {
+          const list =
+            upManipulatorsByStock.get(stockKey) ??
+            ([] as { player_id: string; nickname: string | null }[]);
+          if (!upManipulatorsByStock.has(stockKey)) {
+            upManipulatorsByStock.set(stockKey, list);
+          }
+          list.push({ player_id: pid, nickname: playerSummary.nickname });
+        } else if (job === "down_manipulator") {
+          const list =
+            downManipulatorsByStock.get(stockKey) ??
+            ([] as { player_id: string; nickname: string | null }[]);
+          if (!downManipulatorsByStock.has(stockKey)) {
+            downManipulatorsByStock.set(stockKey, list);
+          }
+          list.push({ player_id: pid, nickname: playerSummary.nickname });
+        }
+      }
+      continue;
+    }
+
+    if (phase === "trade" && (type === "buy" || type === "sell")) {
+      const payload = (a.payload ?? {}) as {
+        stock_key?: string;
+        amount?: number;
+      };
+      const stockKey = payload.stock_key;
+      const amount =
+        typeof payload.amount === "number" && payload.amount > 0
+          ? payload.amount
+          : 0;
+      if (!stockKey || amount <= 0) continue;
+
+      let tradeEntry = playerSummary.trades.find(
+        (t) => t.stock_key === stockKey
+      );
+      if (!tradeEntry) {
+        tradeEntry = { stock_key: stockKey, buy: 0, sell: 0 };
+        playerSummary.trades.push(tradeEntry);
+      }
+
+      if (type === "buy") {
+        tradeEntry.buy += amount;
+        buyVolumeByStock.set(
+          stockKey,
+          (buyVolumeByStock.get(stockKey) ?? 0) + amount
+        );
+      } else if (type === "sell") {
+        tradeEntry.sell += amount;
+        sellVolumeByStock.set(
+          stockKey,
+          (sellVolumeByStock.get(stockKey) ?? 0) + amount
+        );
+      }
+      continue;
+    }
+  }
+
+  // 투표 요약 및 집계
+  const tally = new Map<string, number>();
+
+  for (const v of votes) {
+    const voterId = v.voter_id as string | null;
+    if (voterId) {
+      const ps = ensurePlayer(voterId);
+      const targetId = v.target_id as string | null;
+      const cnt =
+        typeof v.vote_count === "number" && v.vote_count > 0 ? v.vote_count : 0;
+      const unit =
+        typeof v.unit_price === "number" && v.unit_price > 0 ? v.unit_price : 0;
+      ps.votes.push({
+        target_id: targetId,
+        target_nickname: targetId ? nicknameById.get(targetId) ?? null : null,
+        vote_count: cnt,
+        unit_price: unit,
+      });
+    }
+
+    const targetId = v.target_id as string | null;
+    const cnt =
+      typeof v.vote_count === "number" && v.vote_count > 0 ? v.vote_count : 0;
+    if (!targetId || cnt <= 0) continue;
+
+    tally.set(targetId, (tally.get(targetId) ?? 0) + cnt);
+  }
+
+  const voteTally = Array.from(tally.entries()).map(
+    ([targetId, total_votes]) => ({
+      target_id: targetId,
+      target_nickname: nicknameById.get(targetId) ?? null,
+      total_votes,
+    })
+  );
+
+  // 주가 요약: 히스토리 + 집계된 거래/능력 요인
+  const stockSummary = histories.map((h) => {
+    const key = h.stock_key ?? "";
+    return {
+      stock_key: key,
+      price_before: h.price_before ?? null,
+      price_after: h.price_after ?? null,
+      buy_volume: buyVolumeByStock.get(key) ?? 0,
+      sell_volume: sellVolumeByStock.get(key) ?? 0,
+      up_manipulators: upManipulatorsByStock.get(key) ?? [],
+      down_manipulators: downManipulatorsByStock.get(key) ?? [],
+    };
+  });
+
+  const playersSummary = Array.from(byPlayer.values());
+
+  return NextResponse.json({
+    round,
+    players: playersSummary,
+    stockSummary,
+    voteTally,
+  } as RoundStateResponse);
+}

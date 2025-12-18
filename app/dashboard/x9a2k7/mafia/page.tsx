@@ -8,10 +8,11 @@ import { MafiaPhaseSection } from "./MafiaPhaseSection";
 import { MafiaAssetsSection } from "./MafiaAssetsSection";
 import { MafiaStocksSection } from "./MafiaStocksSection";
 import { MafiaLogsSection } from "./MafiaLogsSection";
+import { MafiaRoundSummarySection } from "./MafiaRoundSummarySection";
 import type { MafiaLog } from "@/lib/types";
 
 export default function DashboardMafiaPage() {
-  const { phase, stocks, players, logs, loading, error, reload } =
+  const { phase, stocks, players, playerNames, logs, loading, error, reload } =
     useMafiaAdminState();
 
   const changePhase = async (to: string) => {
@@ -28,10 +29,11 @@ export default function DashboardMafiaPage() {
         error?: string;
       } | null;
       if (!res.ok || !json?.ok) {
-        // 에러는 상단 에러 배너 대신 브라우저 콘솔에만 남김
-        // (phase 상태는 useMafiaAdminState의 다음 폴링에서 반영)
         // eslint-disable-next-line no-console
         console.error(json?.error ?? "페이즈 전환 중 오류가 발생했습니다.");
+      } else {
+        // 성공 시 즉시 상태를 다시 로딩해 반영
+        reload();
       }
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -91,9 +93,15 @@ export default function DashboardMafiaPage() {
         }}
       />
 
-      <MafiaAssetsSection players={players} />
+      <MafiaAssetsSection
+        players={players}
+        playerNames={playerNames}
+        stocks={stocks}
+      />
 
       <MafiaStocksSection stocks={stocks} />
+
+      <MafiaRoundSummarySection currentRound={phase?.round_number} />
 
       <MafiaLogsSection logs={logs} onLogAdded={handleLogAdded} />
     </div>

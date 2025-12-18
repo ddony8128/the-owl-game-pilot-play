@@ -59,6 +59,7 @@ function MafiaInner() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
 
+  // 초기 로딩 + 에러 처리는 한 번만 수행
   useEffect(() => {
     if (!player?.nickname) return;
     let cancelled = false;
@@ -135,6 +136,72 @@ function MafiaInner() {
 
     return () => {
       cancelled = true;
+    };
+  }, [player?.nickname]);
+
+  // 페이즈/현금/능력결과 등을 주기적으로 갱신하기 위한 폴링
+  useEffect(() => {
+    if (!player?.nickname) return;
+    let cancelled = false;
+
+    const poll = async (nickname: string) => {
+      try {
+        const params = new URLSearchParams({ nickname });
+        const res = await fetch(`/api/mafia/state?${params.toString()}`);
+        const json = (await res.json().catch(() => null)) as
+          | {
+              phase: MafiaPhaseState | null;
+              stocks: MafiaStockState[];
+              playerState: MafiaPlayerState | null;
+              players?: Player[];
+              logs: MafiaLog[];
+              stockHistory?: Record<
+                string,
+                {
+                  round_number: number;
+                  price_before: number | null;
+                  price_after: number | null;
+                }[]
+              >;
+              abilityResults?: MafiaAbilityResult[];
+              ticketPrice?: number | null;
+              myVoteSummary?: {
+                target: string;
+                vote_count: number;
+                total_spent: number;
+              }[];
+              error?: undefined;
+            }
+          | { error: string }
+          | null;
+
+        if (!res.ok || !json || "error" in json || cancelled) {
+          return;
+        }
+
+        setMafiaPlayer(json.playerState ?? null);
+        setStocks(json.stocks ?? []);
+        setPhase(json.phase ?? null);
+        setLogs(json.logs ?? []);
+        setPlayers(json.players ?? []);
+        setStockHistory(json.stockHistory ?? null);
+        setAbilityResults(json.abilityResults ?? []);
+        setTicketPrice(
+          typeof json.ticketPrice === "number" ? json.ticketPrice : null
+        );
+        setMyVoteSummary(json.myVoteSummary ?? []);
+      } catch {
+        // 폴링 에러는 조용히 무시 (초기 로딩 에러는 위 effect에서 처리)
+      }
+    };
+
+    const intervalId = setInterval(() => {
+      void poll(player.nickname);
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
     };
   }, [player?.nickname]);
 
