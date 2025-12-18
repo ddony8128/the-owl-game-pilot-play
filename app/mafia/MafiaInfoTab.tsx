@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type {
   MafiaLog,
   MafiaPlayerState,
@@ -11,6 +12,36 @@ type Props = {
   mafiaPlayer: MafiaPlayerState | null;
   stocks: MafiaStockState[];
   logs: MafiaLog[];
+};
+
+const JOB_META: Record<
+  string,
+  {
+    label: string;
+    icon: string | null;
+  }
+> = {
+  ceo: { label: "CEO", icon: "/mafia/job/ceo.png" },
+  salaryman: { label: "월급쟁이", icon: "/mafia/job/salaryman.png" },
+  police: { label: "경찰", icon: "/mafia/job/police.png" },
+  robber: { label: "강도", icon: "/mafia/job/robber.png" },
+  mayor: { label: "시장", icon: "/mafia/job/mayor.png" },
+  up_manipulator: {
+    label: "상승 주가조작범",
+    icon: "/mafia/job/up_manip.png",
+  },
+  down_manipulator: {
+    label: "하락 주가조작범",
+    icon: "/mafia/job/down_manip.png",
+  },
+  tax_auditor: {
+    label: "세무조사원",
+    icon: "/mafia/job/financial.png",
+  },
+  broker: {
+    label: "증권사 직원",
+    icon: "/mafia/job/investor.png",
+  },
 };
 
 export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
@@ -38,6 +69,13 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
 
   const cash = mafiaPlayer?.cash ?? 0;
   const totalAsset = cash + totalStockValue;
+  const jobId = mafiaPlayer?.job ?? null;
+  const jobMeta =
+    jobId && JOB_META[jobId]
+      ? JOB_META[jobId]
+      : jobId
+      ? { label: jobId, icon: null }
+      : null;
 
   return (
     <div className="flex flex-col gap-4 text-sm text-zinc-100">
@@ -48,15 +86,30 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
             <span className="text-zinc-300">보유 현금</span>
             <span className="font-semibold text-amber-300">{cash} 코인</span>
           </div>
-          <div className="mt-2 flex items-center justify-between text-xs text-zinc-400">
-            <span>직업</span>
-            <span>{mafiaPlayer?.job ?? "(비공개)"}</span>
-          </div>
-          <div className="mt-2 flex items-center justify-between text-xs text-zinc-400">
+          <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
             <span>총 자산(현금 + 주식 평가액)</span>
             <span className="font-semibold text-emerald-300">
               {totalAsset} 코인
             </span>
+          </div>
+          <div className="mt-3 h-px w-full bg-zinc-800" />
+          <div className="mt-3 flex items-center gap-3">
+            {jobMeta?.icon && (
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-zinc-800">
+                <Image
+                  src={jobMeta.icon}
+                  alt={jobMeta.label}
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            )}
+            <div className="flex flex-col text-xs">
+              <span className="text-[11px] text-zinc-400">나의 직업</span>
+              <span className="mt-1 text-sm font-semibold text-zinc-100">
+                {jobMeta?.label ?? "(비공개)"}
+              </span>
+            </div>
           </div>
         </div>
       </section>

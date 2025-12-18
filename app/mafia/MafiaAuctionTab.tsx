@@ -1,17 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { ErrorMessage } from "@/components/ErrorMessage";
 
-const JOBS: { id: string; label: string }[] = [
-  { id: "up_manipulator", label: "상승 주가조작범" },
-  { id: "down_manipulator", label: "하락 주가조작범" },
-  { id: "robber", label: "강도" },
-  { id: "police", label: "경찰" },
-  { id: "tax_auditor", label: "세무조사원" },
-  { id: "broker", label: "증권사 직원" },
-  { id: "ceo", label: "CEO" },
+const JOBS: { id: string; label: string; icon: string | null }[] = [
+  {
+    id: "up_manipulator",
+    label: "상승 주가조작범",
+    icon: "/mafia/job/up_manip.png",
+  },
+  {
+    id: "down_manipulator",
+    label: "하락 주가조작범",
+    icon: "/mafia/job/down_manip.png",
+  },
+  { id: "robber", label: "강도", icon: "/mafia/job/robber.png" },
+  { id: "police", label: "경찰", icon: "/mafia/job/police.png" },
+  { id: "tax_auditor", label: "세무조사원", icon: "/mafia/job/financial.png" },
+  { id: "broker", label: "증권사 직원", icon: "/mafia/job/investor.png" },
+  { id: "ceo", label: "CEO", icon: "/mafia/job/ceo.png" },
 ];
 
 type Step = "pickJob" | "enterAmount" | "confirmGiveUp";
@@ -130,12 +139,12 @@ export function MafiaAuctionTab() {
             어떤 직업에 베팅하시겠습니까? 한 라운드에 하나의 직업만 선택할 수
             있습니다.
           </p>
-          <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-3">
             {JOBS.map((job) => (
               <button
                 key={job.id}
                 type="button"
-                className="flex w-full items-center justify-between rounded-lg bg-zinc-900 px-3 py-2 text-sm hover:bg-zinc-800"
+                className="flex flex-col items-center justify-between rounded-xl bg-zinc-900 px-3 py-3 text-xs hover:bg-zinc-800"
                 onClick={() => {
                   setSelectedJobId(job.id);
                   setAmount("");
@@ -143,10 +152,23 @@ export function MafiaAuctionTab() {
                   setError(null);
                 }}
               >
-                <span>{job.label}</span>
-                <span className="text-[11px] text-zinc-400">선택</span>
+                {job.icon && (
+                  <div className="relative h-16 w-16 overflow-hidden rounded-full bg-zinc-800 md:h-20 md:w-20">
+                    <Image
+                      src={job.icon}
+                      alt={job.label}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                )}
+                <span className="mt-2 text-[11px] text-zinc-200">
+                  {job.label}
+                </span>
               </button>
             ))}
+          </div>
+          <div className="pt-1">
             <button
               type="button"
               className="flex w-full items-center justify-between rounded-lg border border-red-500/60 bg-zinc-950 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"

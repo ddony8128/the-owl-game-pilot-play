@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import type { MafiaStockState } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { ErrorMessage } from "@/components/ErrorMessage";
@@ -10,6 +11,21 @@ type Props = {
 };
 
 type TradeStep = "pickStock" | "enterAmount";
+
+const getStockLogoSrc = (key: string): string | null => {
+  switch (key) {
+    case "부엉교육":
+      return "/mafia/company/edu.png";
+    case "번쩍전기":
+      return "/mafia/company/electricity.png";
+    case "국채":
+      return "/mafia/company/owl_flag.png";
+    case "이상교통":
+      return "/mafia/company/vehicle.png";
+    default:
+      return null;
+  }
+};
 
 export function MafiaTradeTab({ stocks }: Props) {
   const [step, setStep] = useState<TradeStep>("pickStock");
@@ -112,11 +128,25 @@ export function MafiaTradeTab({ stocks }: Props) {
                   key={s.stock_key}
                   className="flex items-center justify-between rounded-lg bg-zinc-900 px-3 py-2"
                 >
-                  <div className="flex flex-col">
-                    <span className="text-sm text-zinc-100">{s.stock_key}</span>
-                    <span className="text-[11px] text-zinc-400">
-                      현재 가격: {s.price}원
-                    </span>
+                  <div className="flex items-center gap-2">
+                    {getStockLogoSrc(s.stock_key) && (
+                      <div className="relative h-7 w-7 overflow-hidden rounded-md bg-zinc-800">
+                        <Image
+                          src={getStockLogoSrc(s.stock_key)!}
+                          alt={s.stock_key}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <span className="text-sm text-zinc-100">
+                        {s.stock_key}
+                      </span>
+                      <span className="text-[11px] text-zinc-400">
+                        현재 가격: {s.price}원
+                      </span>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button

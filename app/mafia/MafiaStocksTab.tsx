@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { MafiaStockState } from "@/lib/types";
 
 type StockHistoryEntry = {
@@ -13,6 +14,21 @@ type Props = {
   stockHistory: Record<string, StockHistoryEntry[]> | null;
 };
 
+const getStockLogoSrc = (key: string): string | null => {
+  switch (key) {
+    case "부엉교육":
+      return "/mafia/company/edu.png";
+    case "번쩍전기":
+      return "/mafia/company/electricity.png";
+    case "국채":
+      return "/mafia/company/owl_flag.png";
+    case "이상교통":
+      return "/mafia/company/vehicle.png";
+    default:
+      return null;
+  }
+};
+
 export function MafiaStocksTab({ stocks, stockHistory }: Props) {
   return (
     <div className="space-y-4 text-sm text-zinc-100">
@@ -24,7 +40,19 @@ export function MafiaStocksTab({ stocks, stockHistory }: Props) {
               key={s.stock_key}
               className="flex items-center justify-between px-3 py-2 text-sm"
             >
-              <span className="capitalize text-zinc-200">{s.stock_key}</span>
+              <div className="flex items-center gap-2">
+                {getStockLogoSrc(s.stock_key) && (
+                  <div className="relative h-7 w-7 overflow-hidden rounded-md bg-zinc-800">
+                    <Image
+                      src={getStockLogoSrc(s.stock_key)!}
+                      alt={s.stock_key}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                )}
+                <span className="text-zinc-200">{s.stock_key}</span>
+              </div>
               <span className="font-semibold text-emerald-300">
                 {s.price} 코인
               </span>
