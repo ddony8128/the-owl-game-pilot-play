@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   }
 
   const { data: row, error: fetchError } = await supabase
-    .from("quiz_players")
+    .from("quiz_player_state")
     .select("player_id, score, chances, updated_at")
     .eq("player_id", body.player_id)
     .maybeSingle();
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   const nextScore = currentScore + body.delta;
 
   const { error: updateError } = await supabase
-    .from("quiz_players")
+    .from("quiz_player_state")
     .update({ score: nextScore })
     .eq("player_id", body.player_id);
 

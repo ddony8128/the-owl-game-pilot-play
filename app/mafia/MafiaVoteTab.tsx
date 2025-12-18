@@ -23,6 +23,8 @@ export function MafiaVoteTab({
   myVoteSummary,
 }: Props) {
   const { player } = usePlayerAuth();
+  // 선택된 대상은 players.id (uuid)를 들고 있고,
+  // 화면에는 nickname을 표시한다.
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [count, setCount] = useState("1");
   const [submitting, setSubmitting] = useState(false);
@@ -143,9 +145,9 @@ export function MafiaVoteTab({
             <button
               key={p.id}
               type="button"
-              onClick={() => setSelectedTarget(p.nickname)}
+              onClick={() => setSelectedTarget(p.id)}
               className={`h-9 rounded-lg border text-xs ${
-                selectedTarget === p.nickname
+                selectedTarget === p.id
                   ? "border-amber-400 bg-amber-400/10 text-amber-300"
                   : "border-zinc-700 bg-zinc-900 text-zinc-100"
               }`}
@@ -164,7 +166,11 @@ export function MafiaVoteTab({
       {selectedTarget && (
         <div className="space-y-2 rounded-lg bg-zinc-900 px-3 py-2 text-xs">
           <p className="font-semibold text-zinc-100">
-            대상: <span className="text-amber-300">{selectedTarget}</span>
+            대상:{" "}
+            <span className="text-amber-300">
+              {otherPlayers.find((p) => p.id === selectedTarget)?.nickname ??
+                "선택된 플레이어"}
+            </span>
           </p>
           <label className="block space-y-1">
             <span className="text-[11px] text-zinc-400">표 수 입력</span>

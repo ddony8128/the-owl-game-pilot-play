@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   // 스냅샷 생성 (현재 phase 종료 시점)
   const { data: playerStates, error: playerStatesError } = await supabase
     .from("mafia_player_state")
-    .select("player_id, cash, is_mafia, job, updated_at");
+    .select("player_id, cash, is_mafia, job, stocks, updated_at");
 
   if (playerStatesError) {
     return NextResponse.json(
@@ -93,7 +93,9 @@ export async function POST(request: Request) {
         round_number: current.round_number,
         phase: current.phase,
         cash: p.cash,
-        stocks: {},
+        stocks:
+          (p as unknown as { stocks?: Record<string, unknown> | null })
+            .stocks ?? null,
         job: p.job,
       })) as Partial<MafiaPlayerSnapshot>[]
     );

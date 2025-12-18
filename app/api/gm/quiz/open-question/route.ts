@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type Body = {
-  id?: number;
+  id?: number | null;
 };
 
 type ResponseBody = { ok: true } | { error: string };
@@ -11,13 +11,29 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as Body | null;
 
-  if (!body || typeof body.id !== "number") {
+  if (!body || (typeof body.id !== "number" && body.id !== null)) {
     return NextResponse.json({ error: "id is required" } as ResponseBody, {
       status: 400,
     });
   }
 
   const targetId = body.id;
+
+  if (targetId === null || targetId === 0) {
+    // 대기 상태: 모든 문제를 비공개로 전환
+    const { error: closeAllError } = await supabase
+      .from("quiz_questions")
+      .update({ is_open: false });
+
+    if (closeAllError) {
+      return NextResponse.json(
+        { error: closeAllError.message } as ResponseBody,
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ok: true } as ResponseBody);
+  }
 
   // 먼저 모든 문제를 is_open = false 로 닫고, 해당 id만 true로 연다.
   const { error: closeError } = await supabase

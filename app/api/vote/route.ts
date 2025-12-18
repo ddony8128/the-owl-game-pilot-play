@@ -4,11 +4,12 @@ import type { Player } from "@/lib/types";
 
 type Body = {
   nickname?: string;
-  set1A?: string;
-  set1B?: string;
-  set2A?: string;
-  set2B?: string;
-  reason?: string;
+  cunning1?: string;
+  cunning2?: string;
+  strategic1?: string;
+  strategic2?: string;
+  reason_cunning?: string;
+  reason_strategic?: string;
 };
 
 type VoteResponse = { ok: true } | { error: string };
@@ -24,16 +25,27 @@ export async function POST(request: Request) {
     );
   }
 
-  const { set1A, set1B, set2A, set2B, reason } = body;
+  const { cunning1, cunning2, strategic1, strategic2 } = body;
+  const reasonCunning = body.reason_cunning?.trim() ?? "";
+  const reasonStrategic = body.reason_strategic?.trim() ?? "";
 
-  if (!reason || reason.trim().length < 5) {
+  if (reasonCunning.length < 5) {
     return NextResponse.json(
-      { error: "reason must be at least 5 characters" } as VoteResponse,
+      { error: "reason_cunning must be at least 5 characters" } as VoteResponse,
       { status: 400 }
     );
   }
 
-  if (!set1A || !set1B || !set2A || !set2B) {
+  if (reasonStrategic.length < 5) {
+    return NextResponse.json(
+      {
+        error: "reason_strategic must be at least 5 characters",
+      } as VoteResponse,
+      { status: 400 }
+    );
+  }
+
+  if (!cunning1 || !cunning2 || !strategic1 || !strategic2) {
     return NextResponse.json(
       { error: "all four target ids are required" } as VoteResponse,
       { status: 400 }
@@ -65,28 +77,28 @@ export async function POST(request: Request) {
 
   const inserts = [
     {
-      topic: "set1",
+      topic: "most_cunning",
       voter_id: voter.id,
-      target_id: set1A,
-      reason: reason.trim(),
+      target_id: cunning1,
+      reason: reasonCunning,
     },
     {
-      topic: "set1",
+      topic: "most_cunning",
       voter_id: voter.id,
-      target_id: set1B,
-      reason: reason.trim(),
+      target_id: cunning2,
+      reason: reasonCunning,
     },
     {
-      topic: "set2",
+      topic: "most_strategic",
       voter_id: voter.id,
-      target_id: set2A,
-      reason: reason.trim(),
+      target_id: strategic1,
+      reason: reasonStrategic,
     },
     {
-      topic: "set2",
+      topic: "most_strategic",
       voter_id: voter.id,
-      target_id: set2B,
-      reason: reason.trim(),
+      target_id: strategic2,
+      reason: reasonStrategic,
     },
   ];
 
@@ -100,9 +112,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const summary = `vote: ${
-    voter.nickname
-  } -> [${set1A}, ${set1B}] & [${set2A}, ${set2B}] / reason: ${reason.trim()}`;
+  const summary = `vote: ${voter.nickname} -> cunning[${cunning1}, ${cunning2}] strategic[${strategic1}, ${strategic2}] / reason_cunning: ${reasonCunning} / reason_strategic: ${reasonStrategic}`;
 
   await supabase.from("gm_memo").insert({ content: summary });
 

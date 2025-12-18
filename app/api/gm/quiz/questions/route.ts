@@ -9,6 +9,8 @@ type QuestionsResponse = { questions: QuizQuestion[] } | { error: string };
 type UpdateBody = {
   id?: number;
   question?: string;
+  options?: string;
+  correct_answer?: string;
   is_open?: boolean;
 };
 
@@ -20,7 +22,6 @@ export async function GET() {
   const { data, error } = await supabase
     .from("quiz_questions")
     .select("id, question, options, correct_answer, is_open, updated_at")
-    .in("id", TARGET_IDS)
     .order("id", { ascending: true });
 
   if (error) {
@@ -42,7 +43,9 @@ export async function POST(request: Request) {
     });
   }
 
-  const patch: Partial<Pick<QuizQuestion, "question" | "is_open">> = {};
+  const patch: Partial<
+    Pick<QuizQuestion, "question" | "is_open" | "options" | "correct_answer">
+  > = {};
 
   if (typeof body.question === "string") {
     patch.question = body.question;
@@ -50,6 +53,18 @@ export async function POST(request: Request) {
 
   if (typeof body.is_open === "boolean") {
     patch.is_open = body.is_open;
+  }
+
+  if (typeof body.options === "string") {
+    const lines = body.options
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    patch.options = lines.length > 0 ? lines : null;
+  }
+
+  if (typeof body.correct_answer === "string") {
+    patch.correct_answer = body.correct_answer;
   }
 
   if (Object.keys(patch).length === 0) {

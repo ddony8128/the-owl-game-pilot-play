@@ -10,7 +10,7 @@ import { ShowSubmissionSection } from "./ShowSubmissionSection";
 export default function DashboardShowPage() {
   const [players, setPlayers] = useState<QuizPlayer[]>([]);
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
-  const [, setQuestions] = useState<QuizQuestion[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [subs, setSubs] = useState<QuizSubmission[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,11 +133,39 @@ export default function DashboardShowPage() {
         players={players}
         playerNames={playerNames}
         onChangeScore={updateScore}
+        onHiddenBonus={async (playerId) => {
+          setError(null);
+          try {
+            const res = await fetch("/api/gm/quiz/hidden-bonus", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ player_id: playerId }),
+            });
+            const json = (await res.json().catch(() => null)) as {
+              ok?: true;
+              error?: string;
+            } | null;
+            if (!res.ok || !json?.ok) {
+              throw new Error(
+                json?.error ?? "히든 피스 보너스를 적용하지 못했습니다."
+              );
+            }
+          } catch (e: unknown) {
+            const message =
+              e instanceof Error
+                ? e.message
+                : "히든 피스 보너스를 적용하지 못했습니다.";
+            setError(message);
+          }
+        }}
       />
 
       <ShowSubmissionSection
         subs={subs}
         playerNames={playerNames}
+        questions={questions}
         onUpdateResult={updateResult}
       />
     </div>

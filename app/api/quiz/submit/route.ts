@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { Player, QuizPlayerState } from "@/lib/types";
+import type { Player, QuizPlayerState, QuizEvent } from "@/lib/types";
 
 type Body = {
   nickname?: string;
   question_id?: number;
-  answer?: string;
+  answer?: string | null;
   used_chance?: string | null;
 };
 
 type SubmitResponse = { ok: true } | { error: string };
+
+const CHANCE_KEYS = new Set(["peek", "bet", "safe"]);
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
@@ -29,15 +31,8 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!body.answer || !body.answer.trim()) {
-    return NextResponse.json(
-      { error: "answer is required" } as SubmitResponse,
-      { status: 400 }
-    );
-  }
-
   const nickname = body.nickname.trim();
-  const answer = body.answer.trim();
+  const rawAnswer = typeof body.answer === "string" ? body.answer.trim() : "";
   const used = body.used_chance ?? null;
 
   const { data: playerRow, error: playerError } = await supabase
@@ -60,16 +55,42 @@ export async function POST(request: Request) {
   }
 
   const player = playerRow as Player;
+  const questionId = body.question_id;
+
+  const events: Omit<QuizEvent, "id" | "created_at">[] = [];
+
+  if (rawAnswer) {
+    events.push({
+      player_id: player.id,
+      question_id: questionId,
+      event_type: "answer_submitted",
+      payload: { answer: rawAnswer },
+    });
+  } else {
+    // 무응답
+    events.push({
+      player_id: player.id,
+      question_id: questionId,
+      event_type: "skip",
+      payload: {},
+    });
+  }
+
+  if (used && CHANCE_KEYS.has(used)) {
+    const eventType =
+      used === "peek" ? "use_peek" : used === "bet" ? "use_bet" : "use_safe";
+
+    events.push({
+      player_id: player.id,
+      question_id: questionId,
+      event_type: eventType,
+      payload: { question_id: questionId },
+    });
+  }
 
   const { error: insertError } = await supabase
-    .from("quiz_submissions")
-    .insert({
-      player_id: player.id,
-      question_id: body.question_id,
-      answer,
-      used_chance: used,
-      result: null,
-    });
+    .from("quiz_events")
+    .insert(events);
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message } as SubmitResponse, {
@@ -77,9 +98,9 @@ export async function POST(request: Request) {
     });
   }
 
-  if (used) {
+  if (used && CHANCE_KEYS.has(used)) {
     const { data: stateRow, error: stateError } = await supabase
-      .from("quiz_players")
+      .from("quiz_player_state")
       .select("player_id, score, chances, updated_at")
       .eq("player_id", player.id)
       .maybeSingle();
@@ -96,9 +117,15 @@ export async function POST(request: Request) {
     const nextChances = { ...chances, [used]: false };
 
     const { error: updateError } = await supabase
-      .from("quiz_players")
-      .update({ chances: nextChances })
-      .eq("player_id", player.id);
+      .from("quiz_player_state")
+      .upsert(
+        {
+          player_id: player.id,
+          score: current?.score ?? 0,
+          chances: nextChances,
+        },
+        { onConflict: "player_id" }
+      );
 
     if (updateError) {
       return NextResponse.json(

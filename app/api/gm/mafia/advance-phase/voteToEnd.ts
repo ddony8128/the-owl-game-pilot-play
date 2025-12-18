@@ -27,6 +27,7 @@ export async function handleVoteToEnd(
 
   const tally = new Map<string, number>();
   for (const v of votes) {
+    // target_id는 players.id (uuid)를 담고 있다.
     const target = v.target_id as string | null;
     const count = typeof v.vote_count === "number" ? v.vote_count : 0;
     if (!target || count <= 0) continue;
@@ -53,13 +54,13 @@ export async function handleVoteToEnd(
     return;
   }
 
-  const econTargetNickname = topTargets[0]!;
+  const econTargetId = topTargets[0]!;
 
-  // 경제사범 플레이어 찾기
+  // 경제사범 플레이어 찾기 (target_id = players.id)
   const { data: econPlayerRow, error: econPlayerError } = await supabase
     .from("players")
     .select("id, nickname, is_finalist, created_at")
-    .eq("nickname", econTargetNickname)
+    .eq("id", econTargetId)
     .maybeSingle();
 
   if (econPlayerError) {

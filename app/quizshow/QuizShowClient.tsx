@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { QuizPlayer, QuizQuestion, QuizSubmission } from "@/lib/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { QuizPlayer, QuizQuestion, QuizEvent } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
@@ -20,8 +20,10 @@ export default function QuizShowClient() {
 function QuizInner() {
   const { player } = usePlayerAuth();
   const [quizPlayer, setQuizPlayer] = useState<QuizPlayer | null>(null);
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [submissions, setSubmissions] = useState<QuizSubmission[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(
+    null
+  );
+  const [events, setEvents] = useState<QuizEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,20 +32,21 @@ function QuizInner() {
   const [submitting, setSubmitting] = useState(false);
   const [waitingNext, setWaitingNext] = useState(false);
 
+  const lastQuestionIdRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!player?.nickname) return;
     let cancelled = false;
 
     const load = async (nickname: string) => {
-      setLoading(true);
       try {
         const params = new URLSearchParams({ nickname });
         const res = await fetch(`/api/quiz/state?${params.toString()}`);
         const json = (await res.json().catch(() => null)) as
           | {
               player: QuizPlayer | null;
-              questions: QuizQuestion[];
-              submissions: QuizSubmission[];
+              openQuestions: QuizQuestion[];
+              events: QuizEvent[];
               error?: undefined;
             }
           | { error: string }
@@ -59,8 +62,36 @@ function QuizInner() {
         if (cancelled) return;
 
         setQuizPlayer(json.player ?? null);
-        setQuestions(json.questions ?? []);
-        setSubmissions(json.submissions ?? []);
+
+        const openQuestions = json.openQuestions ?? [];
+        const nextQuestion = openQuestions[0] ?? null;
+
+        // 문제가 바뀌면 로컬 상태 초기화
+        const prevId = lastQuestionIdRef.current;
+        const nextId = nextQuestion?.id ?? null;
+        if (prevId !== nextId) {
+          lastQuestionIdRef.current = nextId;
+          setAnswer("");
+          setUsedChance(null);
+          setWaitingNext(false);
+        }
+
+        setCurrentQuestion(nextQuestion);
+        const evts = json.events ?? [];
+        setEvents(evts);
+
+        // 현재 열린 문제에 대해 이미 답변/무응답 이벤트가 있으면 대기 화면으로 전환
+        if (nextQuestion) {
+          const hasAnswered = evts.some(
+            (e) =>
+              e.question_id === nextQuestion.id &&
+              (e.event_type === "answer_submitted" || e.event_type === "skip")
+          );
+          setWaitingNext(hasAnswered);
+        } else {
+          setWaitingNext(false);
+        }
+
         setError(null);
       } catch (e: unknown) {
         if (!cancelled) {
@@ -74,8 +105,13 @@ function QuizInner() {
     };
 
     void load(player.nickname);
+    const intervalId = setInterval(() => {
+      void load(player.nickname);
+    }, 2000);
+
     return () => {
       cancelled = true;
+      clearInterval(intervalId);
     };
   }, [player?.nickname]);
 
@@ -89,19 +125,8 @@ function QuizInner() {
     };
   }, [quizPlayer?.chances]);
 
-  const currentQuestion = useMemo(() => {
-    const answeredIds = new Set(
-      submissions.map((s) => s.question_id).filter((id): id is number => !!id)
-    );
-    return questions.find((q) => !answeredIds.has(q.id)) ?? null;
-  }, [questions, submissions]);
-
   const handleSubmit = async () => {
     if (!player?.nickname || !currentQuestion) return;
-    if (!answer.trim()) {
-      setError("답안을 입력해 주세요.");
-      return;
-    }
 
     setSubmitting(true);
     setError(null);
@@ -115,7 +140,7 @@ function QuizInner() {
         body: JSON.stringify({
           nickname: player.nickname,
           question_id: currentQuestion.id,
-          answer: answer.trim(),
+          answer: answer.trim() || null,
           used_chance: usedChance,
         }),
       });

@@ -3,13 +3,10 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { QuizEvent, QuizPlayerState } from "@/lib/types";
 
 type Body = {
-  id?: number;
-  result?: string;
+  player_id?: string;
 };
 
-type ResultResponse = { ok: true } | { error: string };
-
-const ALLOWED_RESULTS = new Set(["correct", "wrong", "skip"]);
+type HiddenBonusResponse = { ok: true } | { error: string };
 
 async function recalcScoreForPlayer(
   supabase: ReturnType<typeof createServerSupabaseClient>,
@@ -131,74 +128,59 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as Body | null;
 
-  if (!body || typeof body.id !== "number") {
-    return NextResponse.json({ error: "id is required" } as ResultResponse, {
-      status: 400,
-    });
-  }
-
-  if (typeof body.result !== "string" || !ALLOWED_RESULTS.has(body.result)) {
-    return NextResponse.json({ error: "invalid result" } as ResultResponse, {
-      status: 400,
-    });
-  }
-
-  const submissionId = body.id;
-
-  const { data: submitRow, error: fetchError } = await supabase
-    .from("quiz_events")
-    .select("id, player_id, question_id, event_type, payload, created_at")
-    .eq("id", submissionId)
-    .maybeSingle();
-
-  if (fetchError) {
-    return NextResponse.json({ error: fetchError.message } as ResultResponse, {
-      status: 500,
-    });
-  }
-
-  if (!submitRow) {
+  if (!body || typeof body.player_id !== "string") {
     return NextResponse.json(
-      { error: "submission event not found" } as ResultResponse,
-      { status: 404 }
-    );
-  }
-
-  const submission = submitRow as QuizEvent;
-  if (
-    submission.event_type !== "answer_submitted" &&
-    submission.event_type !== "skip"
-  ) {
-    return NextResponse.json(
-      { error: "submission event is not answer/skip" } as ResultResponse,
+      { error: "player_id is required" } as HiddenBonusResponse,
       { status: 400 }
     );
   }
 
+  const playerId = body.player_id;
+
+  const { data: existingRows, error: checkError } = await supabase
+    .from("quiz_events")
+    .select("id, player_id, question_id, event_type, payload, created_at")
+    .eq("player_id", playerId)
+    .eq("event_type", "hidden_bonus");
+
+  if (checkError) {
+    return NextResponse.json(
+      { error: checkError.message } as HiddenBonusResponse,
+      { status: 500 }
+    );
+  }
+
+  if (existingRows && existingRows.length > 0) {
+    return NextResponse.json({ ok: true } as HiddenBonusResponse, {
+      status: 200,
+    });
+  }
+
   const { error: insertError } = await supabase.from("quiz_events").insert({
-    player_id: submission.player_id,
-    question_id: submission.question_id,
-    event_type: "judge",
-    payload: { submission_id: submissionId, result: body.result },
+    player_id: playerId,
+    question_id: null,
+    event_type: "hidden_bonus",
+    payload: {},
   });
 
   if (insertError) {
-    return NextResponse.json({ error: insertError.message } as ResultResponse, {
-      status: 500,
-    });
+    return NextResponse.json(
+      { error: insertError.message } as HiddenBonusResponse,
+      { status: 500 }
+    );
   }
 
   try {
-    if (submission.player_id) {
-      await recalcScoreForPlayer(supabase, submission.player_id);
-    }
+    await recalcScoreForPlayer(supabase, playerId);
   } catch (e: unknown) {
     const message =
       e instanceof Error ? e.message : "점수 재계산에 실패했습니다.";
-    return NextResponse.json({ error: message } as ResultResponse, {
+    return NextResponse.json({ error: message } as HiddenBonusResponse, {
       status: 500,
     });
   }
 
-  return NextResponse.json({ ok: true } as ResultResponse, { status: 200 });
+  return NextResponse.json({ ok: true } as HiddenBonusResponse, {
+    status: 200,
+  });
 }

@@ -220,14 +220,14 @@ export async function GET(request: Request) {
         .eq("voter_id", player.id);
 
       if (!myVotesError && myVotesRows) {
-        const byTarget = new Map<
+        const byTargetId = new Map<
           string,
           { vote_count: number; total_spent: number }
         >();
 
         for (const v of myVotesRows) {
-          const rawTarget = v.target_id as string | null;
-          if (!rawTarget) continue;
+          const rawTargetId = v.target_id as string | null; // players.id (uuid)
+          if (!rawTargetId) continue;
           const cnt =
             typeof v.vote_count === "number" && v.vote_count > 0
               ? v.vote_count
@@ -238,20 +238,30 @@ export async function GET(request: Request) {
               ? v.unit_price
               : resolvedTicketPrice;
 
-          const prev = byTarget.get(rawTarget) ?? {
+          const prev = byTargetId.get(rawTargetId) ?? {
             vote_count: 0,
             total_spent: 0,
           };
           prev.vote_count += cnt;
           prev.total_spent += cnt * unit;
-          byTarget.set(rawTarget, prev);
+          byTargetId.set(rawTargetId, prev);
         }
 
-        myVoteSummary = Array.from(byTarget.entries()).map(([target, agg]) => ({
-          target,
-          vote_count: agg.vote_count,
-          total_spent: agg.total_spent,
-        }));
+        // players 테이블에서 닉네임을 찾아서 UI에는 닉네임을 노출
+        const nicknameById = new Map<string, string>();
+        for (const p of players) {
+          if (p.id) {
+            nicknameById.set(p.id, p.nickname);
+          }
+        }
+
+        myVoteSummary = Array.from(byTargetId.entries()).map(
+          ([targetId, agg]) => ({
+            target: nicknameById.get(targetId) ?? targetId,
+            vote_count: agg.vote_count,
+            total_spent: agg.total_spent,
+          })
+        );
       } else {
         myVoteSummary = [];
       }

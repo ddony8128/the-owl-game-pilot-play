@@ -5,6 +5,7 @@ import type {
   QuizPlayerState,
   QuizQuestion,
   QuizSubmission,
+  QuizEvent,
 } from "@/lib/types";
 
 type ShowStateResponse =
@@ -19,18 +20,16 @@ type ShowStateResponse =
 export async function GET() {
   const supabase = createServerSupabaseClient();
 
-  const [playersRes, questionsRes, subsRes, namesRes] = await Promise.all([
+  const [playersRes, questionsRes, eventsRes, namesRes] = await Promise.all([
     supabase
-      .from("quiz_players")
+      .from("quiz_player_state")
       .select("player_id, score, chances, updated_at"),
     supabase
       .from("quiz_questions")
       .select("id, question, options, correct_answer, is_open, updated_at"),
     supabase
-      .from("quiz_submissions")
-      .select(
-        "id, player_id, question_id, answer, used_chance, result, created_at"
-      ),
+      .from("quiz_events")
+      .select("id, player_id, question_id, event_type, payload, created_at"),
     supabase.from("players").select("id, nickname"),
   ]);
 
@@ -48,9 +47,9 @@ export async function GET() {
     );
   }
 
-  if (subsRes.error) {
+  if (eventsRes.error) {
     return NextResponse.json(
-      { error: subsRes.error.message } as ShowStateResponse,
+      { error: eventsRes.error.message } as ShowStateResponse,
       { status: 500 }
     );
   }
@@ -64,7 +63,73 @@ export async function GET() {
 
   const players = (playersRes.data || []) as QuizPlayerState[];
   const questions = (questionsRes.data || []) as QuizQuestion[];
-  const subs = (subsRes.data || []) as QuizSubmission[];
+  const events = (eventsRes.data || []) as QuizEvent[];
+
+  // quiz_events로부터 제출/찬스/채점 정보를 합성해 QuizSubmission 형태로 만든다.
+  const subsMap = new Map<number, QuizSubmission>();
+
+  for (const e of events) {
+    if (e.event_type === "answer_submitted" || e.event_type === "skip") {
+      const payload = (e.payload || {}) as { answer?: string | null };
+      const answer = e.event_type === "skip" ? "" : payload.answer ?? "";
+
+      subsMap.set(e.id as unknown as number, {
+        id: e.id as unknown as number,
+        player_id: e.player_id,
+        question_id: e.question_id,
+        answer,
+        used_chance: null,
+        result: null,
+        created_at: e.created_at,
+      });
+    }
+  }
+
+  // 사용 찬스(use_peek/use_bet/use_safe)를 제출에 매핑
+  for (const e of events) {
+    if (
+      e.event_type === "use_peek" ||
+      e.event_type === "use_bet" ||
+      e.event_type === "use_safe"
+    ) {
+      const used =
+        e.event_type === "use_peek"
+          ? "peek"
+          : e.event_type === "use_bet"
+          ? "bet"
+          : "safe";
+
+      // 같은 플레이어/문제의 제출을 찾아 used_chance 설정
+      for (const sub of subsMap.values()) {
+        if (
+          sub.player_id === e.player_id &&
+          sub.question_id === e.question_id &&
+          !sub.used_chance
+        ) {
+          sub.used_chance = used;
+          break;
+        }
+      }
+    }
+  }
+
+  // 채점 결과(judge) 반영
+  for (const e of events) {
+    if (e.event_type === "judge") {
+      const payload = (e.payload || {}) as {
+        submission_id?: number;
+        result?: string;
+      };
+      const sid = payload.submission_id;
+      if (!sid) continue;
+      const sub = subsMap.get(sid);
+      if (sub && typeof payload.result === "string") {
+        sub.result = payload.result;
+      }
+    }
+  }
+
+  const subs = Array.from(subsMap.values());
 
   type PlayerName = Pick<Player, "id" | "nickname">;
   const map: Record<string, string> = {};

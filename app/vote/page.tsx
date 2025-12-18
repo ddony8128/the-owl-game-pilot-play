@@ -24,11 +24,12 @@ function VoteInner() {
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  const [set1A, setSet1A] = useState<string>("");
-  const [set1B, setSet1B] = useState<string>("");
-  const [set2A, setSet2A] = useState<string>("");
-  const [set2B, setSet2B] = useState<string>("");
-  const [reason, setReason] = useState("");
+  const [cunning1, setCunning1] = useState<string>("");
+  const [cunning2, setCunning2] = useState<string>("");
+  const [strategic1, setStrategic1] = useState<string>("");
+  const [strategic2, setStrategic2] = useState<string>("");
+  const [reasonCunning, setReasonCunning] = useState("");
+  const [reasonStrategic, setReasonStrategic] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -90,12 +91,17 @@ function VoteInner() {
 
   const handleSubmit = async () => {
     if (!player?.nickname) return;
-    if (reason.trim().length < 5) {
-      setError("이유를 5글자 이상 입력해 주세요.");
+
+    if (reasonCunning.trim().length < 5) {
+      setError("가장 비열한 플레이어에 대한 이유를 5글자 이상 적어 주세요.");
       return;
     }
-    if (!set1A || !set1B || !set2A || !set2B) {
-      setError("두 세트 모두 플레이어 2명을 선택해 주세요.");
+    if (reasonStrategic.trim().length < 5) {
+      setError("가장 전략적인 플레이어에 대한 이유를 5글자 이상 적어 주세요.");
+      return;
+    }
+    if (!cunning1 || !cunning2 || !strategic1 || !strategic2) {
+      setError("각 항목마다 플레이어 2명을 모두 선택해 주세요.");
       return;
     }
 
@@ -110,11 +116,12 @@ function VoteInner() {
         },
         body: JSON.stringify({
           nickname: player.nickname,
-          set1A,
-          set1B,
-          set2A,
-          set2B,
-          reason,
+          cunning1,
+          cunning2,
+          strategic1,
+          strategic2,
+          reason_cunning: reasonCunning,
+          reason_strategic: reasonStrategic,
         }),
       });
       const json = (await res.json().catch(() => null)) as {
@@ -159,7 +166,8 @@ function VoteInner() {
       <header className="w-full max-w-md text-center">
         <h1 className="text-lg font-semibold">부엉이 투표</h1>
         <p className="mt-1 text-xs text-zinc-400">
-          플레이어 2명씩 두 세트를 선택하고, 그 이유를 적어 주세요.
+          가장 비열한 플레이어 2명, 가장 전략적인 플레이어 2명을 고르고, 각자에
+          대한 이유를 적어 주세요.
         </p>
       </header>
 
@@ -167,50 +175,63 @@ function VoteInner() {
         {error && <ErrorMessage message={error} />}
 
         <section className="rounded-xl bg-zinc-900 p-3">
-          <h2 className="mb-2 text-xs font-semibold text-zinc-300">1세트</h2>
+          <h2 className="mb-2 text-xs font-semibold text-zinc-300">
+            가장 비열한 플레이어 2명
+          </h2>
           <div className="flex gap-2">
             <SelectPlayer
-              value={set1A}
-              onChange={setSet1A}
+              value={cunning1}
+              onChange={setCunning1}
               players={selectablePlayers}
               placeholder="플레이어 1"
             />
             <SelectPlayer
-              value={set1B}
-              onChange={setSet1B}
+              value={cunning2}
+              onChange={setCunning2}
               players={selectablePlayers}
               placeholder="플레이어 2"
+            />
+          </div>
+          <div className="mt-3 flex flex-col gap-1">
+            <label className="text-[11px] text-zinc-400">
+              왜 이렇게 선택했는지 적어 주세요. (5글자 이상)
+            </label>
+            <textarea
+              className="h-20 w-full rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-xs outline-none focus:border-zinc-400"
+              value={reasonCunning}
+              onChange={(e) => setReasonCunning(e.target.value)}
             />
           </div>
         </section>
 
         <section className="rounded-xl bg-zinc-900 p-3">
-          <h2 className="mb-2 text-xs font-semibold text-zinc-300">2세트</h2>
+          <h2 className="mb-2 text-xs font-semibold text-zinc-300">
+            가장 전략적인 플레이어 2명
+          </h2>
           <div className="flex gap-2">
             <SelectPlayer
-              value={set2A}
-              onChange={setSet2A}
+              value={strategic1}
+              onChange={setStrategic1}
               players={selectablePlayers}
               placeholder="플레이어 3"
             />
             <SelectPlayer
-              value={set2B}
-              onChange={setSet2B}
+              value={strategic2}
+              onChange={setStrategic2}
               players={selectablePlayers}
               placeholder="플레이어 4"
             />
           </div>
-        </section>
-
-        <section className="flex flex-1 flex-col gap-2">
-          <label className="text-xs text-zinc-300">
-            왜 그렇게 선택했는지 이유를 적어 주세요.
-          </label>
-          <textarea
-            className="h-32 w-full flex-1 rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-sm outline-none focus:border-zinc-400"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
+          <div className="mt-3 flex flex-col gap-1">
+            <label className="text-[11px] text-zinc-400">
+              왜 이렇게 선택했는지 적어 주세요. (5글자 이상)
+            </label>
+            <textarea
+              className="h-20 w-full rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-xs outline-none focus:border-zinc-400"
+              value={reasonStrategic}
+              onChange={(e) => setReasonStrategic(e.target.value)}
+            />
+          </div>
         </section>
 
         <button

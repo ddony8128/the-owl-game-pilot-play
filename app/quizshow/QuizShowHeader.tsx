@@ -13,8 +13,8 @@ export function QuizShowHeader({ score, chances }: Props) {
       <div className="text-right text-[10px] text-zinc-400">
         <div>점수 {score}</div>
         <div>
-          찬스 P/B/S: {chances.peek ? "O" : "X"}/{chances.bet ? "O" : "X"}/
-          {chances.safe ? "O" : "X"}
+          남은 찬스 (컨닝/베팅/무산): {chances.peek ? "O" : "X"}/
+          {chances.bet ? "O" : "X"}/{chances.safe ? "O" : "X"}
         </div>
       </div>
     </header>

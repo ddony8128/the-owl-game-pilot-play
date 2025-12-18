@@ -4,14 +4,14 @@ import type {
   Player,
   QuizPlayerState,
   QuizQuestion,
-  QuizSubmission,
+  QuizEvent,
 } from "@/lib/types";
 
 type QuizStateResponse =
   | {
       player: QuizPlayerState | null;
-      questions: QuizQuestion[];
-      submissions: QuizSubmission[];
+      openQuestions: QuizQuestion[];
+      events: QuizEvent[];
     }
   | { error: string };
 
@@ -49,21 +49,17 @@ export async function GET(request: Request) {
 
   const player = playerRow as Player;
 
-  const [quizPlayerRes, questionsRes, subsRes] = await Promise.all([
+  const [quizPlayerRes, openQuestionsRes] = await Promise.all([
     supabase
-      .from("quiz_players")
+      .from("quiz_player_state")
       .select("player_id, score, chances, updated_at")
       .eq("player_id", player.id)
       .maybeSingle(),
     supabase
       .from("quiz_questions")
-      .select("id, question, options, correct_answer, is_open, updated_at"),
-    supabase
-      .from("quiz_submissions")
-      .select(
-        "id, player_id, question_id, answer, used_chance, result, created_at"
-      )
-      .eq("player_id", player.id),
+      .select("id, question, options, correct_answer, is_open, updated_at")
+      .eq("is_open", true)
+      .order("id", { ascending: true }),
   ]);
 
   if (quizPlayerRes.error) {
@@ -73,23 +69,39 @@ export async function GET(request: Request) {
     );
   }
 
-  if (questionsRes.error) {
+  if (openQuestionsRes.error) {
     return NextResponse.json(
-      { error: questionsRes.error.message } as QuizStateResponse,
-      { status: 500 }
-    );
-  }
-
-  if (subsRes.error) {
-    return NextResponse.json(
-      { error: subsRes.error.message } as QuizStateResponse,
+      { error: openQuestionsRes.error.message } as QuizStateResponse,
       { status: 500 }
     );
   }
 
   const quizPlayer = (quizPlayerRes.data || null) as QuizPlayerState | null;
-  const questions = (questionsRes.data || []) as QuizQuestion[];
-  const submissions = (subsRes.data || []) as QuizSubmission[];
+  const openQuestions = (openQuestionsRes.data || []) as QuizQuestion[];
 
-  return NextResponse.json({ player: quizPlayer, questions, submissions });
+  let events: QuizEvent[] = [];
+
+  if (openQuestions.length > 0) {
+    const openIds = openQuestions.map((q) => q.id);
+    const { data: eventsRows, error: eventsError } = await supabase
+      .from("quiz_events")
+      .select("id, player_id, question_id, event_type, payload, created_at")
+      .eq("player_id", player.id)
+      .in("question_id", openIds);
+
+    if (eventsError) {
+      return NextResponse.json(
+        { error: eventsError.message } as QuizStateResponse,
+        { status: 500 }
+      );
+    }
+
+    events = (eventsRows || []) as QuizEvent[];
+  }
+
+  return NextResponse.json({
+    player: quizPlayer,
+    openQuestions,
+    events,
+  });
 }
