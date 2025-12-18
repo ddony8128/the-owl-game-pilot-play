@@ -80,7 +80,7 @@ export function IntroOwlScene({
       <div className="flex flex-col items-center gap-3">
         <div
           ref={sunTrackRef}
-          className="relative flex h-48 w-32 items-start justify-center touch-none"
+          className="relative flex h-64 w-32 items-start justify-center touch-none"
           onPointerMove={handleSunPointerMove}
           onPointerUp={handleSunPointerUp}
           onPointerLeave={handleSunPointerUp}
@@ -125,14 +125,14 @@ export function IntroOwlScene({
           {/* 왼쪽 날개 클릭 영역 */}
           <button
             type="button"
-            className="absolute left-[-70%] top-1/2 h-[150%] w-[90%] -translate-y-1/2 cursor-pointer bg-transparent"
+            className="absolute left-[-70%] top-1/2 h-[150%] w-[110%] -translate-y-1/2 cursor-pointer bg-transparent"
             onClick={toggleLeftWing}
             aria-label="왼쪽 날개 토글"
           />
           {/* 오른쪽 날개 클릭 영역 */}
           <button
             type="button"
-            className="absolute right-[-70%] top-1/2 h-[150%] w-[90%] -translate-y-1/2 cursor-pointer bg-transparent"
+            className="absolute right-[-70%] top-1/2 h-[150%] w-[110%] -translate-y-1/2 cursor-pointer bg-transparent"
             onClick={toggleRightWing}
             aria-label="오른쪽 날개 토글"
           />
