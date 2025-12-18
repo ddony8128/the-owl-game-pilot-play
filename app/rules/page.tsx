@@ -37,15 +37,39 @@ export default function RulesPage() {
           </p>
         )}
 
-        {visibleRules.map(([key]) => (
-          <button
-            key={key}
-            className="h-11 w-full rounded-full border border-zinc-700 bg-zinc-900 text-left text-sm font-medium text-zinc-100 px-4 hover:bg-zinc-800"
-            onClick={() => router.push(`/rules/${key}`)}
-          >
-            {RULE_LABELS[key] ?? key}
-          </button>
-        ))}
+        {visibleRules.map(([key]) => {
+          const label = RULE_LABELS[key] ?? key;
+
+          const handleClick = () => {
+            if (key === "quiz_questions") {
+              router.push("/rules/quiz-questions");
+              return;
+            }
+
+            const pdfMap: Record<string, string> = {
+              intro: "/rulebook/intro.pdf",
+              hidden_piece: "/rulebook/hidden.pdf",
+              subway: "/rulebook/subway.pdf",
+              mafia: "/rulebook/mafia.pdf",
+              quiz: "/rulebook/quizshow.pdf",
+            };
+
+            const url = pdfMap[key];
+            if (url) {
+              window.open(url, "_blank");
+            }
+          };
+
+          return (
+            <button
+              key={key}
+              className="h-11 w-full rounded-full border border-zinc-700 bg-zinc-900 px-4 text-left text-sm font-medium text-zinc-100 hover:bg-zinc-800"
+              onClick={handleClick}
+            >
+              {label}
+            </button>
+          );
+        })}
 
         <button
           className="mt-auto h-10 rounded-full border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-900"

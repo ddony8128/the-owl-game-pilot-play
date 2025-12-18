@@ -1,4 +1,9 @@
-import type { MafiaPhaseState, Player, SubwayPlayerState } from "@/lib/types";
+import type {
+  MafiaPhaseState,
+  MafiaStocksHolding,
+  Player,
+  SubwayPlayerState,
+} from "@/lib/types";
 import type { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function handlePrepareToAuction(
@@ -53,7 +58,20 @@ export async function handlePrepareToAuction(
   const lastClearedRank =
     finishedRanks.length > 0 ? Math.max(...finishedRanks) : 0;
 
-  type BonusEntry = { player_id: string; cash: number };
+  // 플레이어별 초기 현금 + 주식(4종목 0주) 설정
+  type BonusEntry = {
+    player_id: string;
+    cash: number;
+    stocks: MafiaStocksHolding;
+  };
+
+  const initialStocks: MafiaStocksHolding = {
+    부엉교육: { amount: 0 },
+    번쩍전기: { amount: 0 },
+    국채: { amount: 0 },
+    이상교통: { amount: 0 },
+  };
+
   const bonuses: BonusEntry[] = [];
 
   for (const p of players) {
@@ -70,7 +88,11 @@ export async function handlePrepareToAuction(
     if (bonus < 0) bonus = 0;
 
     const cash = 30 + bonus;
-    bonuses.push({ player_id: p.id, cash });
+    bonuses.push({
+      player_id: p.id,
+      cash,
+      stocks: initialStocks,
+    });
   }
 
   if (bonuses.length > 0) {
@@ -80,8 +102,27 @@ export async function handlePrepareToAuction(
 
     if (upsertError) {
       throw new Error(
-        upsertError.message ?? "mafia_player_state 현금 초기화에 실패했습니다."
+        upsertError.message ??
+          "mafia_player_state 현금/주식 초기화에 실패했습니다."
       );
     }
+  }
+
+  // 주식 가격 초기화: 4종목 모두 5원으로 리셋
+  const initialStockRows = [
+    { stock_key: "부엉교육", price: 5 },
+    { stock_key: "번쩍전기", price: 5 },
+    { stock_key: "국채", price: 5 },
+    { stock_key: "이상교통", price: 5 },
+  ];
+
+  const { error: stockResetError } = await supabase
+    .from("mafia_stock_state")
+    .upsert(initialStockRows, { onConflict: "stock_key" });
+
+  if (stockResetError) {
+    throw new Error(
+      stockResetError.message ?? "mafia_stock_state 초기화에 실패했습니다."
+    );
   }
 }

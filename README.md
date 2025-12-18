@@ -78,7 +78,7 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
   - `POST /api/mafia/action` – `{ nickname, type, payload }`를 `mafia_actions`에 기록
   - `POST /api/mafia/vote` – `{ nickname, target_id, vote_count }`를 `mafia_votes`에 기록
   - `POST /api/gm/mafia/advance-phase` – 현재 라운드/페이즈를 전환하고, `mafia_player_snapshots`에 스냅샷 저장
-  - `POST /api/gm/logs/add` – GM 공개 로그를 `mafia_logs`에 추가
+  - `POST /api/gm/logs/add` – GM 공개 로그를 `mafia_public_logs`에 추가
 
 ---
 
@@ -117,15 +117,21 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
 
 - `rules_state` 테이블에서 `is_open = true`인 rule만 버튼으로 노출
 - rule 키 예시: `intro`, `subway`, `hidden_piece`, `mafia`, `quiz`, `quiz_questions`
-- 버튼 클릭 시 `/rules/[ruleKey]`로 이동
+- 버튼 동작
+  - `intro` → 정적 PDF 룰북 `/rulebook/intro.pdf` 새 창으로 열기
+  - `hidden_piece` → `/rulebook/hidden.pdf`
+  - `subway` → `/rulebook/subway.pdf`
+  - `mafia` → `/rulebook/mafia.pdf`
+  - `quiz` → `/rulebook/quizshow.pdf`
+  - `quiz_questions` → `/rules/quiz-questions` 페이지로 이동
 
-### 3.3 `/rules/[ruleKey]` – 규칙 상세
+### 3.3 `/rules/quiz-questions` – 퀴즈 문제 목록
 
-구현 파일: `app/rules/[ruleKey]/page.tsx`
+구현 파일: `app/rules/quiz-questions/page.tsx`
 
-- `useGameState`로 `rules_state`를 읽어와, 해당 `ruleKey`의 `is_open` 여부 확인
-  - `false` 또는 미등록 → `/locked`로 리다이렉트
-- 콘텐츠는 v1 기준 **텍스트 설명** 위주로 구성 (추후 이미지/슬라이드로 교체 가능)
+- 공개용 API `GET /api/quiz/questions-list`를 호출해 `quiz_questions` 테이블에서 **id, question만** 로딩
+- 각 문제를 `Q{id}. {question}` 형식의 카드로 보여주며, 정답/보기(`correct_answer`, `options`)는 표시하지 않음
+- 하단 버튼으로 `/rules` 목록으로 돌아가기
 
 ### 3.4 `/locked` – 접근 불가 페이지
 
@@ -209,30 +215,33 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
 구현 파일: `app/mafia/page.tsx`
 
 - `PageGuard`로 보호: `requireLogin`, `allowGames={["mafia", "mafia_tutorial"]}`
-- 초기 로딩 시
+- 초기 로딩 및 주기적 폴링
   - 클라이언트는 `GET /api/mafia/state?nickname=...` 호출
   - 서버에서 아래 테이블을 조회해 하나의 JSON으로 반환
-    - `mafia_players` – 본인 자산/직업 상태
+    - `mafia_player_state` – 본인 자산/직업/보유 주식 상태
     - `mafia_stock_state` – 전체 주가 정보
     - `mafia_phase_state` – 현재 라운드 번호/페이즈
-    - `mafia_logs` – 최근 공개 로그(20건)
+    - `mafia_public_logs` – 최근 공개 로그(예: 50건)
+    - `mafia_ability_results` – 본인 능력 결과 로그
+  - 클라이언트는 일정 주기로 동일 API를 폴링해 phase·현금·능력결과·투표 요약을 갱신
 - 상단 공통 영역
   - 현재 라운드 번호/페이즈 (`mafia_phase_state.round_number`, `phase`)
-  - 타이머 자리는 v1에서는 고정 표기(`--:--`), 추후 실제 마감 시각과 연동 가능
+  - `/api/gm/timers/mafia` 기반 카운트다운(페이즈 전환 시 GM API에서 자동 리셋)
 - 탭 구조(`TabLayout` 사용)
   - 항상: 정보, 규칙, 주가
   - `phase='auction'`: 경매 탭 추가
   - `phase='trade' | 'apply'`: 거래, 능력사용 탭 추가
-  - `phase='vote'`: 능력결과, 투표 탭 추가
+  - `phase='apply' | 'vote'`: 능력결과 탭 추가
+  - `phase='vote'`: 투표 탭 추가
 - 각 탭 동작 (모두 서버 API를 통해 간접적으로 DB에 기록)
-  - **정보**: 본인 `cash`, `job` 표시
+  - **정보**: 보유 현금/총 자산, 보유 주식, 직업 아이콘+이름 표시
   - **규칙**: 마피아 게임 요약 텍스트
-  - **주가**: `mafia_stock_state` 리스트
-  - **경매**: 금액 입력 후 `POST /api/mafia/action` 호출 → 서버에서 `mafia_actions(action_type='bet')`로 기록
+  - **주가**: `mafia_stock_state` 리스트와 회사 로고(`public/mafia/company/**`)
+  - **경매**: 직업 선택 카드(UI에 직업 아이콘 사용) → 베팅 금액 입력 후 `POST /api/mafia/action` 호출 → 서버에서 `mafia_actions(action_type='bet')`로 기록
   - **거래**: 종목 키 + 수량 입력 → `POST /api/mafia/action` (`type='buy' | 'sell'`)
   - **능력사용**: 대상/내용 입력 → `POST /api/mafia/action` (`type='ability'`)
-  - **능력결과**: `mafia_logs` 리스트 표시
-  - **투표**: 대상 닉네임/표 수 입력 → `POST /api/mafia/vote` 호출(서버에서 `mafia_votes`에 기록)
+  - **능력결과**: `mafia_ability_results` 기반 개인 능력 결과 + `mafia_public_logs` 표시
+  - **투표**: 대상 닉네임/표 수 입력 → `POST /api/mafia/vote` 호출(서버에서 `mafia_votes`에 기록, 잔액 검증 포함)
 
 ### 3.8 3게임 – 퀴즈쇼 & 투표
 
@@ -246,7 +255,7 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
   - 자기 자신은 목록에서 제외
 - 이유 textarea(최소 5글자)
 - 제출 시
-  - `POST /api/vote` 호출 → 서버에서 `player_votes` 테이블에 4건 insert(각 target별 1표)
+  - `POST /api/vote` 호출 → 서버에서 `player_votes` 테이블에 4건 insert(각 topic×target별 1표)
   - 같은 내용의 요약을 `gm_memo`에 추가
   - LocalStorage에 `owlgame:vote-submitted` 플래그 저장 → 재진입 시 완료 화면만 표시
 
@@ -258,18 +267,21 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
 - 초기 로딩 시
   - 클라이언트는 `GET /api/quiz/state?nickname=...`을 호출
   - 서버에서 아래 테이블을 조회하여 하나의 JSON으로 반환
-    - `quiz_players` – 본인 점수/찬스
+    - `quiz_player_state` – 본인 점수/찬스
     - `quiz_questions` – 전체 문제(클라이언트에서 `is_open=true`인 문제만 사용)
-    - `quiz_submissions` – 본인 제출 이력
+    - `quiz_events` – 본인 제출/찬스 사용 이력
 - 현재 문제 선정
   - 이미 제출한 `question_id`를 제외하고, `is_open=true`인 문제 중 가장 작은 `id` 선택
 - 제출 플로우
-  - 답안 텍스트 입력
-  - 찬스 선택(옵션): `peek`, `bet`, `safe` 중 1개
-  - 제출 시 `POST /api/quiz/submit` 호출
-    - 서버에서 `quiz_submissions`에 insert (`result`는 null)
-    - 찬스를 사용한 경우 `quiz_players.chances`에서 해당 키를 `false`로 업데이트
-  - 제출 후 대기 화면으로 전환(다음 문제가 열릴 때까지 고정)
+  - 문제 유형에 따라
+    - 객관식: 보기 버튼 중 하나 선택
+    - 주관식: textarea에 답 입력
+    - 무응답: “무응답” 버튼 선택
+  - 1단계: 답안 제출 (`POST /api/quiz/submit`)
+    - 서버에서 `quiz_events`에 `event_type='answer_submitted'` 또는 `skip` 이벤트 insert
+  - 2단계: 찬스 사용 여부 선택(옵션)
+    - `peek`, `bet`, `safe` 중 0~1개 선택하여 별도 API로 제출 → `quiz_events(event_type='use_chance')` 기록 및 `quiz_player_state.chances` 업데이트
+  - 각 단계 이후 `/api/quiz/state`를 폴링하여 다음 문제/대기 화면으로 자동 전환
 
 ---
 
@@ -296,7 +308,7 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
   - 각 `rule_key`에 대해 공개 여부 토글 체크박스
 - 결승 진출자 선정
   - `players` 전체에서 `is_finalist` 체크박스로 토글
-  - finalist로 변경 시 `quiz_players`에 해당 플레이어 row upsert
+  - finalist로 변경 시 `quiz_player_state`에 해당 플레이어 row upsert
 
 ### 4.3 `/dashboard/x9a2k7/subway` – 이상교통 현황
 
@@ -311,35 +323,45 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
 구현 파일: `app/dashboard/x9a2k7/mafia/page.tsx`
 
 - 라운드/페이즈
-  - 최신 `mafia_rounds` 표시
-  - `auction`, `trade`, `apply`, `vote` 버튼으로 새 라운드 생성
+  - `mafia_phase_state`에서 현재 `round_number`, `phase` 표시
+  - `prepare`, `auction`, `trade`, `apply`, `vote`, `end` 버튼으로 페이즈 전환 (`POST /api/gm/mafia/advance-phase`)
+  - 특정 전환 시(prepare→auction, auction→trade, apply→vote) `/api/gm/timers/mafia`를 통해 타이머 자동 리셋
 - 자산 현황
-  - `mafia_players` 테이블을 표로 표시(cash, job, is_mafia)
+  - `mafia_player_state` + `players`를 조인해 플레이어별 카드 표시(cash, job, is_mafia, 보유 주식, 총 자산)
 - 주가
-  - `mafia_stocks`를 pill 형태로 표시
+  - `mafia_stock_state`를 pill/카드 형태로 표시(회사 로고 포함)
 - 라운드 로그
-  - 공개 로그 입력 후 `mafia_logs` insert
-  - 최신 로그 리스트 표시
+  - 공개 로그 입력 후 `POST /api/gm/logs/add` → `mafia_public_logs`에 insert
+  - 최신 공개 로그 리스트 표시
+- 라운드별 요약
+  - `GET /api/gm/mafia/round-state?round=n`으로 라운드별 경매/능력/거래/투표/주가 변동을 카드 형태로 표시
 
 ### 4.5 `/dashboard/x9a2k7/quiz` – 퀴즈 문제 관리
 
 구현 파일: `app/dashboard/x9a2k7/quiz/page.tsx`
 
-- `quiz_questions` 중 id 7,8,9,11,12를 대상으로 편집
+- 상단: 공개 문제 선택 드롭다운
+  - 1~12번 문제 중 하나를 선택해 해당 `quiz_questions.id`의 `is_open`을 `true`로 설정 (`POST /api/gm/quiz/open-question`)
+  - “대기 상태 (모든 문제 비공개)” 옵션 선택 시 모든 `quiz_questions.is_open`을 `false`로 설정
+- 하단: 문제 편집 (id 7, 8, 9, 11, 12 대상)
   - 클라이언트는 `GET /api/gm/quiz/questions`를 통해 대상 문제들을 로딩
-  - 문제 텍스트 수정 시 `POST /api/gm/quiz/questions`로 `{ id, question }` 패치
-  - `is_open` 체크박스로 공개/비공개 전환 시 `{ id, is_open }` 패치
+  - 각 문제에 대해 `question`, `options`, `correct_answer`를 수정
+    - `options`는 줄바꿈으로 구분된 텍스트를 입력하면 서버에서 JSON 배열로 저장
+  - 변경 내용은 `POST /api/gm/quiz/questions`로 `{ id, question?, options?, correct_answer? }` 패치
 
 ### 4.6 `/dashboard/x9a2k7/show` – 쇼 진행/채점
 
 구현 파일: `app/dashboard/x9a2k7/show/page.tsx`
 
 - 점수판
-  - `GET /api/gm/quiz/show-state`로 `quiz_players` + `players`를 조인한 상태를 로딩
-  - `+/-` 버튼으로 점수 수동 조정 시 `POST /api/gm/quiz/score` 호출 → 서버에서 `quiz_players.score` 업데이트
+  - `GET /api/gm/quiz/show-state`로 `quiz_player_state` + `players`를 조인한 상태를 로딩
+  - `+/-` 버튼으로 점수 수동 조정 시 `POST /api/gm/quiz/score` 호출 → 서버에서 `quiz_player_state.score` 업데이트
+  - 히든 피스 보너스 버튼(`+200`) 클릭 시 `POST /api/gm/quiz/hidden-bonus` 호출 → `quiz_events`에 `hidden_bonus` 이벤트 기록 후 점수 재계산
 - 제출 현황/채점
-  - `quiz_submissions` 리스트를 `show-state` 응답에서 사용
-  - 각 제출에 대해 `correct` / `wrong` / `skip` 버튼으로 `POST /api/gm/quiz/submission-result` 호출 → 서버에서 `result` 필드 업데이트
+  - `show-state` 응답에서 `quiz_events`를 바탕으로 문제별 제출 리스트 구성(답안/사용 찬스 등 표시)
+  - 각 제출에 대해 `correct` / `wrong` / `skip` 버튼으로 `POST /api/gm/quiz/submission-result` 호출
+    - 서버는 `quiz_events`에 `judge` 이벤트를 추가하고, 해당 플레이어의 점수를 모든 이벤트(정답/오답, 베팅/세이프/무산, 연속 정답 보너스)를 반영해 자동 계산
+  - 각 제출 카드에는 문제 텍스트/보기/정답도 함께 표시
 
 ---
 

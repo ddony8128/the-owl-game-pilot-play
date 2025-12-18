@@ -140,6 +140,26 @@ export async function POST(request: Request) {
     );
   }
 
+  // 특정 페이즈 전환 시 타이머를 해당 페이즈 기본값으로 리셋한다.
+  // - prepare -> auction (직업 경매 시작)
+  // - auction -> trade (주식 거래 시작)
+  // - apply -> vote (투표 시작)
+  if (to === "auction" || to === "trade" || to === "vote") {
+    try {
+      const origin = new URL(request.url).origin;
+      await fetch(`${origin}/api/gm/timers/mafia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reset",
+          phase: to,
+        }),
+      });
+    } catch {
+      // 타이머 리셋 실패는 페이즈 전환 자체를 막지 않는다.
+    }
+  }
+
   return NextResponse.json(
     { ok: true, phase: updatedPhase as MafiaPhaseState } as AdvanceResponse,
     { status: 200 }
