@@ -29,8 +29,8 @@ export function IntroOwlScene({
     if (!track) return;
 
     const rect = track.getBoundingClientRect();
-    const ratio = (rect.bottom - clientY) / rect.height; // 0: 맨 아래, 1: 맨 위
-    const clamped = Math.min(1, Math.max(0, ratio));
+    const ratio = (rect.bottom - clientY - 48) / rect.height; // 0: 맨 아래, 1: 맨 위
+    const clamped = Math.min(0.8, Math.max(0, ratio));
     const nextLevel = Math.round(clamped * 100);
     setSunLevel(nextLevel);
   };
@@ -104,7 +104,7 @@ export function IntroOwlScene({
 
       {/* 부엉이 */}
       <div className="flex flex-col items-center gap-2">
-        <div className="relative flex h-32 w-32 items-center justify-center">
+        <div className="relative flex h-40 w-48 items-center justify-center">
           <Image
             src={
               owlLeftWing && owlRightWing
@@ -125,14 +125,14 @@ export function IntroOwlScene({
           {/* 왼쪽 날개 클릭 영역 */}
           <button
             type="button"
-            className="absolute left-0 top-0 h-full w-1/2 cursor-pointer bg-transparent"
+            className="absolute left-[-70%] top-1/2 h-[150%] w-[90%] -translate-y-1/2 cursor-pointer bg-transparent"
             onClick={toggleLeftWing}
             aria-label="왼쪽 날개 토글"
           />
           {/* 오른쪽 날개 클릭 영역 */}
           <button
             type="button"
-            className="absolute right-0 top-0 h-full w-1/2 cursor-pointer bg-transparent"
+            className="absolute right-[-70%] top-1/2 h-[150%] w-[90%] -translate-y-1/2 cursor-pointer bg-transparent"
             onClick={toggleRightWing}
             aria-label="오른쪽 날개 토글"
           />
