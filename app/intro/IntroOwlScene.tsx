@@ -30,7 +30,7 @@ export function IntroOwlScene({
 
     const rect = track.getBoundingClientRect();
     const ratio = (rect.bottom - clientY - 48) / rect.height; // 0: 맨 아래, 1: 맨 위
-    const clamped = Math.min(0.8, Math.max(0, ratio));
+    const clamped = Math.min(1, Math.max(0, ratio));
     const nextLevel = Math.round(clamped * 100);
     setSunLevel(nextLevel);
   };
@@ -80,7 +80,7 @@ export function IntroOwlScene({
       <div className="flex flex-col items-center gap-3">
         <div
           ref={sunTrackRef}
-          className="relative flex h-56 w-32 items-start justify-center"
+          className="relative flex h-48 w-32 items-start justify-center touch-none"
           onPointerMove={handleSunPointerMove}
           onPointerUp={handleSunPointerUp}
           onPointerLeave={handleSunPointerUp}
