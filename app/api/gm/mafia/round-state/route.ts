@@ -274,7 +274,7 @@ export async function GET(request: Request) {
       continue;
     }
 
-    if (phase === "apply" && type === "ability") {
+    if ((phase === "trade" || phase === "apply") && type === "ability") {
       const payload = (a.payload ?? {}) as Record<string, unknown>;
       const job =
         typeof payload.job === "string" ? (payload.job as string) : null;

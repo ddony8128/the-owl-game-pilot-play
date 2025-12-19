@@ -10,6 +10,7 @@ type Props = {
   stocks: MafiaStockState[];
   playerCash: number | null;
   holdings: MafiaStocksHolding | null;
+  myTradesThisRound: Record<string, { bought: boolean; sold: boolean }> | null;
 };
 
 type TradeStep = "pickStock" | "enterAmount";
@@ -29,7 +30,12 @@ const getStockLogoSrc = (key: string): string | null => {
   }
 };
 
-export function MafiaTradeTab({ stocks, playerCash, holdings }: Props) {
+export function MafiaTradeTab({
+  stocks,
+  playerCash,
+  holdings,
+  myTradesThisRound,
+}: Props) {
   const [step, setStep] = useState<TradeStep>("pickStock");
   const [type, setType] = useState<"buy" | "sell">("buy");
   const [stockKey, setStockKey] = useState<string | null>(null);
@@ -131,9 +137,12 @@ export function MafiaTradeTab({ stocks, playerCash, holdings }: Props) {
           </p>
           <div className="space-y-2">
             {stocks.map((s) => {
-              const disabledBuy = soldStocks.includes(s.stock_key);
+              const tradeInfo = myTradesThisRound?.[s.stock_key];
+              const disabledBuy =
+                soldStocks.includes(s.stock_key) || tradeInfo?.sold === true;
               const disabledSell =
                 boughtStocks.includes(s.stock_key) ||
+                tradeInfo?.bought === true ||
                 holdingAmountFor(s.stock_key) <= 0;
               return (
                 <div

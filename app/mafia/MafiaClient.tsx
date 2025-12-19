@@ -62,6 +62,14 @@ function MafiaInner() {
   } | null>(null);
   const [hasUsedAbilityThisPhase, setHasUsedAbilityThisPhase] =
     useState<boolean>(false);
+  const [myAbilityActionThisPhase, setMyAbilityActionThisPhase] = useState<{
+    job: string | null;
+    payload: Record<string, unknown> | null;
+  } | null>(null);
+  const [myTradesThisRound, setMyTradesThisRound] = useState<Record<
+    string,
+    { bought: boolean; sold: boolean }
+  > | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
@@ -104,6 +112,14 @@ function MafiaInner() {
                 give_up: boolean;
               } | null;
               hasUsedAbilityThisPhase?: boolean;
+              myAbilityActionThisPhase?: {
+                job: string | null;
+                payload: Record<string, unknown> | null;
+              } | null;
+              myTradesThisRound?: Record<
+                string,
+                { bought: boolean; sold: boolean }
+              > | null;
               error?: undefined;
             }
           | { error: string }
@@ -131,6 +147,8 @@ function MafiaInner() {
         setMyVoteSummary(json.myVoteSummary ?? []);
         setMyAuctionBet(json.myAuctionBet ?? null);
         setHasUsedAbilityThisPhase(!!json.hasUsedAbilityThisPhase);
+        setMyAbilityActionThisPhase(json.myAbilityActionThisPhase ?? null);
+        setMyTradesThisRound(json.myTradesThisRound ?? null);
         setError(null);
       } catch (e: unknown) {
         if (!cancelled) {
@@ -191,6 +209,14 @@ function MafiaInner() {
                 give_up: boolean;
               } | null;
               hasUsedAbilityThisPhase?: boolean;
+              myAbilityActionThisPhase?: {
+                job: string | null;
+                payload: Record<string, unknown> | null;
+              } | null;
+              myTradesThisRound?: Record<
+                string,
+                { bought: boolean; sold: boolean }
+              > | null;
               error?: undefined;
             }
           | { error: string }
@@ -213,6 +239,8 @@ function MafiaInner() {
         setMyVoteSummary(json.myVoteSummary ?? []);
         setMyAuctionBet(json.myAuctionBet ?? null);
         setHasUsedAbilityThisPhase(!!json.hasUsedAbilityThisPhase);
+        setMyAbilityActionThisPhase(json.myAbilityActionThisPhase ?? null);
+        setMyTradesThisRound(json.myTradesThisRound ?? null);
       } catch {
         // 폴링 에러는 조용히 무시 (초기 로딩 에러는 위 effect에서 처리)
       }
@@ -420,6 +448,7 @@ function MafiaInner() {
                   | import("@/lib/types").MafiaStocksHolding
                   | null) ?? null
               }
+              myTradesThisRound={myTradesThisRound}
             />
           )}
           {activeTab === "ability" && (
@@ -428,10 +457,11 @@ function MafiaInner() {
               stocks={stocks}
               players={players}
               hasUsedAbilityThisPhase={hasUsedAbilityThisPhase}
+              myAbilityActionThisPhase={myAbilityActionThisPhase}
             />
           )}
           {activeTab === "result" && (
-            <MafiaResultTab logs={logs} abilityResults={abilityResults} />
+            <MafiaResultTab abilityResults={abilityResults} />
           )}
           {activeTab === "vote" && (
             <MafiaVoteTab

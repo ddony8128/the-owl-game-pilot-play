@@ -1,13 +1,12 @@
 "use client";
 
-import type { MafiaAbilityResult, MafiaLog } from "@/lib/types";
+import type { MafiaAbilityResult } from "@/lib/types";
 
 type Props = {
-  logs: MafiaLog[];
   abilityResults: MafiaAbilityResult[];
 };
 
-export function MafiaResultTab({ logs, abilityResults }: Props) {
+export function MafiaResultTab({ abilityResults }: Props) {
   const latestRound =
     abilityResults.length > 0
       ? Math.max(
@@ -56,25 +55,6 @@ export function MafiaResultTab({ logs, abilityResults }: Props) {
               <p className="mt-1 whitespace-pre-wrap text-xs">{r.message}</p>
             </div>
           ))}
-        </div>
-      </section>
-
-      <section className="space-y-1">
-        <p className="text-xs text-zinc-400">GM 공개 로그</p>
-        <div className="space-y-2">
-          {logs.map((log) => (
-            <div
-              key={log.id}
-              className="rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100 whitespace-pre-wrap"
-            >
-              {log.content}
-            </div>
-          ))}
-          {logs.length === 0 && (
-            <p className="text-xs text-zinc-400">
-              아직 공개된 로그가 없습니다.
-            </p>
-          )}
         </div>
       </section>
     </div>

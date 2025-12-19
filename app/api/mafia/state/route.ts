@@ -144,6 +144,14 @@ export async function GET(request: Request) {
     amount: number | null;
     give_up: boolean;
   } | null = null;
+  let myAbilityActionThisPhase: {
+    job: string | null;
+    payload: Record<string, unknown> | null;
+  } | null = null;
+  let myTradesThisRound: Record<
+    string,
+    { bought: boolean; sold: boolean }
+  > | null = null;
 
   if (nickname) {
     const playerRes = await supabase
@@ -324,14 +332,51 @@ export async function GET(request: Request) {
       } else {
         myVoteSummary = [];
       }
+      // 현재 플레이어의 이번 라운드 주식 거래 요약 (trade 단계 UI용)
+      const { data: myTradeRows, error: myTradesError } = await supabase
+        .from("mafia_actions")
+        .select("action_type, payload")
+        .eq("round_number", phase.round_number)
+        .eq("phase", "trade")
+        .eq("player_id", player.id);
+
+      if (!myTradesError && myTradeRows) {
+        const byStock: Record<string, { bought: boolean; sold: boolean }> = {};
+        for (const row of myTradeRows as {
+          action_type?: string;
+          payload?: unknown;
+        }[]) {
+          const payload = (row.payload ?? {}) as { stock_key?: string | null };
+          const stockKey =
+            typeof payload.stock_key === "string" &&
+            payload.stock_key.length > 0
+              ? payload.stock_key
+              : null;
+          if (!stockKey) continue;
+          if (!byStock[stockKey]) {
+            byStock[stockKey] = { bought: false, sold: false };
+          }
+          if (row.action_type === "buy") {
+            byStock[stockKey].bought = true;
+          } else if (row.action_type === "sell") {
+            byStock[stockKey].sold = true;
+          }
+        }
+        myTradesThisRound =
+          Object.keys(byStock).length > 0
+            ? byStock
+            : (null as typeof byStock | null);
+      } else {
+        myTradesThisRound = null;
+      }
     }
 
-    // 현재 라운드/페이즈에서 이미 능력을 사용했는지 여부 (trade/apply 단계 UI용)
+    // 현재 라운드/페이즈에서 이미 능력을 사용했는지 여부 (trade/apply 단계 UI용) + payload 요약
     if (phase) {
       const { data: abilityActionRow, error: abilityActionError } =
         await supabase
           .from("mafia_actions")
-          .select("id")
+          .select("payload")
           .eq("round_number", phase.round_number)
           .eq("phase", phase.phase)
           .eq("action_type", "ability")
@@ -340,6 +385,16 @@ export async function GET(request: Request) {
 
       if (!abilityActionError && abilityActionRow) {
         hasUsedAbilityThisPhase = true;
+        const payload =
+          (abilityActionRow.payload as Record<string, unknown> | null) ?? null;
+        const job =
+          payload && typeof payload.job === "string"
+            ? (payload.job as string)
+            : null;
+        myAbilityActionThisPhase = {
+          job,
+          payload,
+        };
       }
     }
   }
@@ -356,5 +411,7 @@ export async function GET(request: Request) {
     myVoteSummary,
     hasUsedAbilityThisPhase,
     myAuctionBet,
+    myAbilityActionThisPhase,
+    myTradesThisRound,
   });
 }

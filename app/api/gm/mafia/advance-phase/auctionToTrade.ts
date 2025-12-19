@@ -40,6 +40,7 @@ export async function handleAuctionToTrade(
   // 직업별 입찰 내역: job -> amount -> player_id[]
   const bidsByJob = new Map<string, Map<number, string[]>>();
   const gaveUp = new Set<string>();
+  const winningBids: { player_id: string; job: string; amount: number }[] = [];
 
   for (const a of actions) {
     if (!a.player_id) continue;
@@ -76,16 +77,19 @@ export async function handleAuctionToTrade(
   for (const [job, byAmount] of bidsByJob.entries()) {
     const amounts = Array.from(byAmount.keys()).sort((a, b) => b - a);
     let winner: string | null = null;
+    let winningAmount = 0;
     for (const amt of amounts) {
       const bidders = byAmount.get(amt) ?? [];
       if (bidders.length === 1) {
         winner = bidders[0]!;
+        winningAmount = amt;
         break;
       }
       // 동점이면 다음(amount)로 내려감
     }
     if (winner) {
       jobByPlayer.set(winner, job);
+      winningBids.push({ player_id: winner, job, amount: winningAmount });
     }
   }
 
@@ -98,9 +102,17 @@ export async function handleAuctionToTrade(
   const updates: Partial<MafiaPlayerState>[] = [];
   for (const pid of playerIds) {
     const job = jobByPlayer.get(pid) ?? null;
+
+    // 마피아 직업(상승/하락 주가조작범, 강도)은 is_mafia=true, 그 외는 false
+    const isMafia =
+      job === "up_manipulator" ||
+      job === "down_manipulator" ||
+      job === "robber";
+
     updates.push({
       player_id: pid,
       job,
+      is_mafia: isMafia,
     } as Partial<MafiaPlayerState>);
   }
 
@@ -113,6 +125,45 @@ export async function handleAuctionToTrade(
       throw new Error(
         updateError.message ?? "직업 배정을 반영하지 못했습니다."
       );
+    }
+  }
+
+  // 경매 낙찰자의 베팅 금액만큼 현금 차감
+  if (winningBids.length > 0) {
+    const byPlayerAmount = new Map<string, number>();
+    for (const wb of winningBids) {
+      byPlayerAmount.set(
+        wb.player_id,
+        (byPlayerAmount.get(wb.player_id) ?? 0) + wb.amount
+      );
+    }
+
+    const updatedPlayers: Partial<MafiaPlayerState>[] = [];
+    for (const p of playerStates) {
+      const pid = p.player_id;
+      const betAmount = byPlayerAmount.get(pid) ?? 0;
+      if (betAmount <= 0) continue;
+      const nextCash = Math.max(
+        0,
+        (typeof p.cash === "number" ? p.cash : 0) - betAmount
+      );
+      updatedPlayers.push({
+        player_id: pid,
+        cash: nextCash,
+      } as Partial<MafiaPlayerState>);
+    }
+
+    if (updatedPlayers.length > 0) {
+      const { error: cashUpdateError } = await supabase
+        .from("mafia_player_state")
+        .upsert(updatedPlayers, { onConflict: "player_id" });
+
+      if (cashUpdateError) {
+        throw new Error(
+          cashUpdateError.message ??
+            "경매 베팅 금액을 현금에서 차감하지 못했습니다."
+        );
+      }
     }
   }
 }

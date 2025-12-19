@@ -133,6 +133,56 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const payload = (body.payload ?? {}) as {
+      job?: string | null;
+      amount?: number;
+      give_up?: boolean;
+    };
+
+    const amount =
+      typeof payload.amount === "number" && payload.amount > 0
+        ? Math.floor(payload.amount)
+        : 0;
+    const giveUp = payload.give_up === true;
+
+    // 포기(give_up)는 금액 검증 없이 허용
+    if (!giveUp) {
+      if (amount <= 0) {
+        return NextResponse.json(
+          { error: "유효한 베팅 금액을 입력해 주세요." } as ActionResponse,
+          { status: 400 }
+        );
+      }
+
+      // 플레이어 현금 조회 후, 보유 현금을 초과하는 베팅은 거부
+      const { data: stateRow, error: stateError } = await supabase
+        .from("mafia_player_state")
+        .select("player_id, cash, is_mafia, job, stocks, updated_at")
+        .eq("player_id", player.id)
+        .maybeSingle();
+
+      if (stateError) {
+        return NextResponse.json(
+          { error: stateError.message } as ActionResponse,
+          { status: 500 }
+        );
+      }
+
+      const currentCash =
+        stateRow && typeof stateRow.cash === "number" && stateRow.cash >= 0
+          ? stateRow.cash
+          : 0;
+
+      if (amount > currentCash) {
+        return NextResponse.json(
+          {
+            error: "보유 현금을 초과해서 베팅할 수 없습니다.",
+          } as ActionResponse,
+          { status: 400 }
+        );
+      }
+    }
   }
 
   // 주식 거래: 즉시 현금/보유 주식에 반영 + 검증

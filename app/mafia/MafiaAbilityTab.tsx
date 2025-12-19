@@ -11,6 +11,10 @@ type Props = {
   stocks: MafiaStockState[];
   players: Player[];
   hasUsedAbilityThisPhase: boolean;
+  myAbilityActionThisPhase: {
+    job: string | null;
+    payload: Record<string, unknown> | null;
+  } | null;
 };
 
 export function MafiaAbilityTab({
@@ -18,6 +22,7 @@ export function MafiaAbilityTab({
   stocks,
   players,
   hasUsedAbilityThisPhase,
+  myAbilityActionThisPhase,
 }: Props) {
   const { player } = usePlayerAuth();
   const [selectedStockKey, setSelectedStockKey] = useState<string | null>(null);
@@ -146,14 +151,85 @@ export function MafiaAbilityTab({
     );
   }
 
+  const summarizeUsedAbility = (): string => {
+    const action = myAbilityActionThisPhase;
+    if (!action || !action.job) {
+      return "이번 라운드에 이미 능력을 사용했습니다. 능력은 각 라운드마다 한 번만 사용할 수 있습니다.";
+    }
+
+    const payload = (action.payload ?? {}) as Record<string, unknown>;
+
+    switch (action.job) {
+      case "up_manipulator":
+      case "down_manipulator":
+      case "broker": {
+        const stockKey =
+          typeof payload.stock_key === "string" ? payload.stock_key : null;
+        if (stockKey) {
+          return `이번 라운드에 ${stockKey} 주식에 능력을 사용했습니다.`;
+        }
+        return "이번 라운드에 주가 조작/증권사 능력을 사용했습니다.";
+      }
+      case "robber": {
+        const targets = payload.targets as unknown;
+        const names =
+          Array.isArray(targets) && targets.length >= 2
+            ? (targets as unknown[]).filter(
+                (t): t is string => typeof t === "string"
+              )
+            : [];
+        if (names.length >= 2) {
+          return `이번 라운드에 강도 능력으로 ${names[0]}, ${names[1]}을(를) 대상으로 지정했습니다.`;
+        }
+        return "이번 라운드에 강도 능력을 사용했습니다.";
+      }
+      case "police": {
+        const target =
+          typeof payload.target === "string"
+            ? (payload.target as string)
+            : null;
+        if (!target) {
+          return "이번 라운드에는 아무도 조사하지 않기로 선택했습니다.";
+        }
+        return `이번 라운드에 경찰 능력으로 ${target}을(를) 조사 대상으로 선택했습니다.`;
+      }
+      case "tax_auditor": {
+        const target =
+          typeof payload.target === "string"
+            ? (payload.target as string)
+            : null;
+        if (target) {
+          return `이번 라운드에 세무조사원 능력으로 ${target}의 자산을 조사하기로 선택했습니다.`;
+        }
+        return "이번 라운드에 세무조사원 능력을 사용했습니다.";
+      }
+      case "mayor": {
+        const tp =
+          typeof payload.ticket_price === "number"
+            ? (payload.ticket_price as number)
+            : null;
+        if (tp != null) {
+          return `이번 라운드 표 가격을 ${tp}원으로 설정했습니다.`;
+        }
+        return "이번 라운드에 시장 능력으로 표 가격을 설정했습니다.";
+      }
+      case "ceo":
+        return "이번 라운드에 CEO 능력을 사용했습니다. (고정 월급 지급)";
+      case "salaryman":
+        return "이번 라운드에 월급쟁이 능력을 사용했습니다. (고정 월급 지급)";
+      default:
+        return "이번 라운드에 이미 능력을 사용했습니다. 능력은 각 라운드마다 한 번만 사용할 수 있습니다.";
+    }
+  };
+
   // 이미 이번 라운드/페이즈에서 능력을 사용했다면 요약 문구만 표시
   if (hasUsedAbilityThisPhase || submitted) {
+    const summary = summarizeUsedAbility();
     return (
       <div className="space-y-3 text-sm text-zinc-100">
         {error && <ErrorMessage message={error} />}
         <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 whitespace-pre-wrap">
-          이번 라운드에 이미 능력을 사용했습니다. 능력은 각 라운드마다 한 번만
-          사용할 수 있습니다.
+          {summary}
         </p>
         <p className="text-xs text-zinc-400">
           능력 결과는 페이즈가 진행된 뒤 &quot;능력결과&quot; 탭에서 확인할 수

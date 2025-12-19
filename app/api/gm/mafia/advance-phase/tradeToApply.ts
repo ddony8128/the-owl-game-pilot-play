@@ -185,7 +185,7 @@ export async function handleTradeToApply(
     }
   }
 
-  // 마피아 주가조작 능력 반영 (국채 제외)
+  // 마피아 주가조작 능력 반영 (국채 제외) + 능력 결과 메시지
   const applyAbilityPriceChange = () => {
     for (const [playerId, abilities] of abilitiesByPlayer.entries()) {
       const pState = playerStateById.get(playerId);
@@ -196,12 +196,40 @@ export async function handleTradeToApply(
             const key = ability.stock_key;
             if (!key || !stockMap.has(key) || key === "국채") continue;
             priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) + 2);
+
+            // 능력 결과 기록: 상승 주가조작
+            abilityResults.push({
+              player_id: playerId,
+              round_number: current.round_number,
+              phase: "apply",
+              job: "up_manipulator",
+              category: "price_manipulation",
+              message: `상승 주가조작 능력으로 ${key} 주가에 영향을 주었습니다.`,
+              payload: {
+                stock_key: key,
+                delta: 2,
+              },
+            });
             break;
           }
           case "down_manipulator": {
             const key = ability.stock_key;
             if (!key || !stockMap.has(key) || key === "국채") continue;
             priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) - 3);
+
+            // 능력 결과 기록: 하락 주가조작
+            abilityResults.push({
+              player_id: playerId,
+              round_number: current.round_number,
+              phase: "apply",
+              job: "down_manipulator",
+              category: "price_manipulation",
+              message: `하락 주가조작 능력으로 ${key} 주가에 영향을 주었습니다.`,
+              payload: {
+                stock_key: key,
+                delta: -3,
+              },
+            });
             break;
           }
           default:
