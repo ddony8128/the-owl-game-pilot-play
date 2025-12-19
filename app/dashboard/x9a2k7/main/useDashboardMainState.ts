@@ -122,7 +122,14 @@ export function useDashboardMainState(): MainState {
       setGameState((prev) =>
         prev
           ? { ...prev, active_game: value }
-          : { id: 1, active_game: value, updated_at: "" }
+          : {
+              id: 1,
+              active_game: value,
+              updated_at: "",
+              timer_start: null,
+              timer_start_at: null,
+              pause_at: null,
+            }
       );
     } catch (e: unknown) {
       const message =

@@ -47,11 +47,11 @@ export default function RulesPage() {
             }
 
             const pdfMap: Record<string, string> = {
-              intro: "/rulebook/intro.pdf",
-              hidden_piece: "/rulebook/hidden.pdf",
-              subway: "/rulebook/subway.pdf",
-              mafia: "/rulebook/mafia.pdf",
-              quiz: "/rulebook/quizshow.pdf",
+              intro: "/rulebook/avsmvlkdmv_intro.pdf",
+              hidden_piece: "/rulebook/1491j0rjflcelfe_hidden.pdf",
+              subway: "/rulebook/13fsm4wg_subway.pdf",
+              mafia: "/rulebook/141rfwkvm_mafia.pdf",
+              quiz: "/rulebook/1rqvskldm_quizshow.pdf",
             };
 
             const url = pdfMap[key];

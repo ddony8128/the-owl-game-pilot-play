@@ -12,6 +12,9 @@ export type GameState = {
   id: number;
   active_game: string; // 'ready' | 'subway' | 'mafia_tutorial' | 'mafia' | 'vote' | 'quiz' | 'survey'
   updated_at: string;
+  timer_start: boolean | null;
+  timer_start_at: string | null;
+  pause_at: string | null;
 };
 
 export type RulesState = {

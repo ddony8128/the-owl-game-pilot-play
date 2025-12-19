@@ -1,9 +1,52 @@
 import { useEffect, useState } from "react";
 
+type ApiTimer = {
+  timerStart: boolean;
+  timerStartAt: string | null;
+  pauseAt: string | null;
+  totalSeconds: number;
+};
+
 type TimerState = {
   remainingSeconds: number;
   isRunning: boolean;
 };
+
+function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
+  if (!api) {
+    return { remainingSeconds: 50 * 60, isRunning: false };
+  }
+
+  const total = api.totalSeconds || 50 * 60;
+
+  if (!api.timerStart && !api.pauseAt) {
+    // 아직 시작 전/리셋 상태
+    return { remainingSeconds: total, isRunning: false };
+  }
+
+  if (api.timerStart && api.timerStartAt) {
+    const startMs = new Date(api.timerStartAt).getTime();
+    if (Number.isNaN(startMs)) {
+      return { remainingSeconds: total, isRunning: false };
+    }
+    const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+    const remaining = Math.max(0, total - elapsed);
+    return { remainingSeconds: remaining, isRunning: remaining > 0 };
+  }
+
+  if (!api.timerStart && api.timerStartAt && api.pauseAt) {
+    const startMs = new Date(api.timerStartAt).getTime();
+    const pauseMs = new Date(api.pauseAt).getTime();
+    if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
+      return { remainingSeconds: total, isRunning: false };
+    }
+    const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
+    const remaining = Math.max(0, total - elapsed);
+    return { remainingSeconds: remaining, isRunning: false };
+  }
+
+  return { remainingSeconds: total, isRunning: false };
+}
 
 export function SubwayCountdownSection() {
   const [state, setState] = useState<TimerState>({
@@ -13,20 +56,15 @@ export function SubwayCountdownSection() {
 
   const reload = async () => {
     const res = await fetch("/api/gm/timers/subway");
-    const json = (await res.json().catch(() => null)) as {
-      remainingSeconds: number;
-      isRunning: boolean;
-    } | null;
+    const json = (await res.json().catch(() => null)) as ApiTimer | null;
     if (!json) return;
-    setState({
-      remainingSeconds: json.remainingSeconds,
-      isRunning: json.isRunning,
-    });
+    const now = Date.now();
+    setState(computeRemaining(json, now));
   };
 
   useEffect(() => {
     void reload();
-    const id = setInterval(() => {
+    const tickId = setInterval(() => {
       setState((prev) => ({
         ...prev,
         remainingSeconds: Math.max(
@@ -35,7 +73,15 @@ export function SubwayCountdownSection() {
         ),
       }));
     }, 1000);
-    return () => clearInterval(id);
+    // 주기적으로 서버 상태를 다시 불러와 드리프트를 보정한다.
+    const syncId = setInterval(() => {
+      void reload();
+    }, 5000);
+
+    return () => {
+      clearInterval(tickId);
+      clearInterval(syncId);
+    };
   }, []);
 
   const sendAction = async (action: "start" | "pause" | "reset") => {

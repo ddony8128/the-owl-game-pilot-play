@@ -6,19 +6,56 @@ type Props = {
   phase: MafiaPhaseState | null;
 };
 
+type ApiTimer = {
+  phase: string | null;
+  timerStart: boolean;
+  timerStartAt: string | null;
+  pauseAt: string | null;
+  totalSeconds: number;
+};
+
 type TimerState = {
   remainingSeconds: number;
   isRunning: boolean;
 };
 
-const DEFAULT_MAFIA_PHASE_SECONDS: Record<string, number | null> = {
-  prepare: null,
-  auction: 180,
-  trade: 600,
-  apply: null,
-  vote: 300,
-  end: null,
-};
+function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
+  if (!api || !api.phase) {
+    return { remainingSeconds: 0, isRunning: false };
+  }
+
+  const total = api.totalSeconds || 0;
+  if (total <= 0) {
+    return { remainingSeconds: 0, isRunning: false };
+  }
+
+  if (!api.timerStart && !api.pauseAt) {
+    return { remainingSeconds: total, isRunning: false };
+  }
+
+  if (api.timerStart && api.timerStartAt) {
+    const startMs = new Date(api.timerStartAt).getTime();
+    if (Number.isNaN(startMs)) {
+      return { remainingSeconds: total, isRunning: false };
+    }
+    const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+    const remaining = Math.max(0, total - elapsed);
+    return { remainingSeconds: remaining, isRunning: remaining > 0 };
+  }
+
+  if (!api.timerStart && api.timerStartAt && api.pauseAt) {
+    const startMs = new Date(api.timerStartAt).getTime();
+    const pauseMs = new Date(api.pauseAt).getTime();
+    if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
+      return { remainingSeconds: total, isRunning: false };
+    }
+    const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
+    const remaining = Math.max(0, total - elapsed);
+    return { remainingSeconds: remaining, isRunning: false };
+  }
+
+  return { remainingSeconds: total, isRunning: false };
+}
 
 export function MafiaCountdownSection({ phase }: Props) {
   const [state, setState] = useState<TimerState>({
@@ -28,20 +65,15 @@ export function MafiaCountdownSection({ phase }: Props) {
 
   const reload = async () => {
     const res = await fetch("/api/gm/timers/mafia");
-    const json = (await res.json().catch(() => null)) as {
-      remainingSeconds: number;
-      isRunning: boolean;
-    } | null;
+    const json = (await res.json().catch(() => null)) as ApiTimer | null;
     if (!json) return;
-    setState({
-      remainingSeconds: json.remainingSeconds,
-      isRunning: json.isRunning,
-    });
+    const now = Date.now();
+    setState(computeRemaining(json, now));
   };
 
   useEffect(() => {
     void reload();
-    const id = setInterval(() => {
+    const tickId = setInterval(() => {
       setState((prev) => ({
         ...prev,
         remainingSeconds: Math.max(
@@ -50,24 +82,23 @@ export function MafiaCountdownSection({ phase }: Props) {
         ),
       }));
     }, 1000);
-    return () => clearInterval(id);
-  }, []);
+    // 주기적으로 서버 상태를 다시 불러와 드리프트를 보정한다.
+    const syncId = setInterval(() => {
+      void reload();
+    }, 5000);
+
+    return () => {
+      clearInterval(tickId);
+      clearInterval(syncId);
+    };
+    // 페이즈가 바뀔 때마다 서버 기준으로 다시 초기화
+  }, [phase?.phase]);
 
   const sendAction = async (action: "start" | "pause" | "reset") => {
-    const currentPhaseKey = phase?.phase ?? null;
-    const defaultSeconds =
-      (currentPhaseKey && DEFAULT_MAFIA_PHASE_SECONDS[currentPhaseKey]) || 0;
-
     await fetch("/api/gm/timers/mafia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action,
-        durationSeconds:
-          action === "reset" || action === "start"
-            ? defaultSeconds ?? 0
-            : undefined,
-      }),
+      body: JSON.stringify({ action }),
     }).catch(() => undefined);
     void reload();
   };

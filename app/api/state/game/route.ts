@@ -11,7 +11,9 @@ export async function GET() {
   ] = await Promise.all([
     supabase
       .from("game_state")
-      .select("id, active_game, updated_at")
+      .select(
+        "id, active_game, updated_at, timer_start, timer_start_at, pause_at"
+      )
       .eq("id", 1)
       .maybeSingle(),
     supabase.from("rules_state").select("rule_key, is_open, updated_at"),

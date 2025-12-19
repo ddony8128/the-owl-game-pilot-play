@@ -61,22 +61,66 @@ function SubwayInner() {
     let cancelled = false;
 
     const loadTimer = async () => {
+      type ApiTimer = {
+        timerStart: boolean;
+        timerStartAt: string | null;
+        pauseAt: string | null;
+        totalSeconds: number;
+      };
+
+      const computeRemaining = (api: ApiTimer | null, nowMs: number) => {
+        if (!api) {
+          return { remainingSeconds: 50 * 60, isRunning: false } as const;
+        }
+
+        const total = api.totalSeconds || 50 * 60;
+
+        if (!api.timerStart && !api.pauseAt) {
+          return { remainingSeconds: total, isRunning: false } as const;
+        }
+
+        if (api.timerStart && api.timerStartAt) {
+          const startMs = new Date(api.timerStartAt).getTime();
+          if (Number.isNaN(startMs)) {
+            return { remainingSeconds: total, isRunning: false } as const;
+          }
+          const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+          const remaining = Math.max(0, total - elapsed);
+          return {
+            remainingSeconds: remaining,
+            isRunning: remaining > 0,
+          } as const;
+        }
+
+        if (!api.timerStart && api.timerStartAt && api.pauseAt) {
+          const startMs = new Date(api.timerStartAt).getTime();
+          const pauseMs = new Date(api.pauseAt).getTime();
+          if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
+            return { remainingSeconds: total, isRunning: false } as const;
+          }
+          const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
+          const remaining = Math.max(0, total - elapsed);
+          return { remainingSeconds: remaining, isRunning: false } as const;
+        }
+
+        return { remainingSeconds: total, isRunning: false } as const;
+      };
       try {
         const res = await fetch("/api/gm/timers/subway");
-        const json = (await res.json().catch(() => null)) as {
-          remainingSeconds: number;
-          isRunning: boolean;
-        } | null;
+        const json = (await res.json().catch(() => null)) as ApiTimer | null;
         if (!res.ok || !json || cancelled) return;
 
-        if (json.remainingSeconds <= 0) {
+        const now = Date.now();
+        const { remainingSeconds, isRunning } = computeRemaining(json, now);
+
+        if (remainingSeconds <= 0) {
           router.replace("/subway/end");
           return;
         }
 
         setTimerState({
-          remainingSeconds: json.remainingSeconds,
-          isRunning: json.isRunning,
+          remainingSeconds,
+          isRunning,
         });
       } catch {
         // 타이머 오류는 게임 진행을 막지 않음

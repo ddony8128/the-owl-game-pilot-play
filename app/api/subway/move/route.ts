@@ -80,23 +80,6 @@ const ALL_LOCATION_KEYS: string[] = [
 
 type SupabaseClient = ReturnType<typeof createServerSupabaseClient>;
 
-const locationVisitCounts = new Map<string, Map<string, number>>();
-
-function incrementLocationVisitCount(
-  playerId: string,
-  location: string
-): number {
-  let perPlayer = locationVisitCounts.get(playerId);
-  if (!perPlayer) {
-    perPlayer = new Map<string, number>();
-    locationVisitCounts.set(playerId, perPlayer);
-  }
-  const prev = perPlayer.get(location) ?? 0;
-  const next = prev + 1;
-  perPlayer.set(location, next);
-  return next;
-}
-
 async function getOpenedRuleIdsForPlayer(
   supabase: SupabaseClient,
   playerId: string
@@ -228,6 +211,22 @@ export async function POST(request: Request) {
     });
   }
 
+  const { data: gameRow, error: gameError } = await supabase
+    .from("game_state")
+    .select("timer_start, timer_start_at")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (gameError) {
+    return NextResponse.json({ error: gameError.message } as MoveResponse, {
+      status: 500,
+    });
+  }
+  const timerStartAtMs =
+    gameRow?.timer_start && gameRow.timer_start_at
+      ? new Date(gameRow.timer_start_at).getTime()
+      : null;
+
   if (!stateRow) {
     // 아직 게임이 시작되지 않은 상태에서 move를 호출한 경우
     const initialLocation = await getRandomLocation();
@@ -263,9 +262,6 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
-
-    // 같은 장소 방문 횟수 카운트 (규칙 5 조건용)
-    incrementLocationVisitCount(player.id, initialLocation);
 
     // 최초 위치 진입 이벤트
     await supabase.from("subway_player_events").insert({
@@ -332,7 +328,12 @@ export async function POST(request: Request) {
   if (lastEnter?.created_at) {
     const enteredAt = new Date(lastEnter.created_at).getTime();
     if (!Number.isNaN(enteredAt)) {
-      const diff = now - enteredAt;
+      const effectiveStartMs =
+        timerStartAtMs != null
+          ? Math.max(timerStartAtMs, enteredAt)
+          : enteredAt;
+
+      const diff = now - effectiveStartMs;
       if (diff < 30_000) {
         // 30초 이내에는 무조건 wrong
         result = "wrong";
@@ -342,6 +343,13 @@ export async function POST(request: Request) {
         await insertRuleOpenedEvent(supabase, player.id, 1);
         openedRuleIds.add(1);
       }
+    }
+  }
+  if (!reason) {
+    if (state.exit_number === 6) {
+      result = direction === "back" ? "correct" : "wrong";
+      reason =
+        direction === "back" ? "exit6_back_correct" : "exit6_forward_wrong";
     }
   }
 
@@ -414,11 +422,20 @@ export async function POST(request: Request) {
     );
   }
 
-  // 같은 장소 3번 방문 시 규칙 5 공개
-  const visitCount = incrementLocationVisitCount(player.id, nextLocation);
-  if (visitCount === 3 && !openedRuleIds.has(5)) {
-    await insertRuleOpenedEvent(supabase, player.id, 5);
-    openedRuleIds.add(5);
+  // 같은 장소 3번 방문 시 규칙 5 공개 (DB 기반)
+  if (!openedRuleIds.has(5)) {
+    const { count, error: visitError } = await supabase
+      .from("subway_player_events")
+      .select("id", { count: "exact", head: true })
+      .eq("player_id", player.id)
+      .eq("event_type", "enter_location")
+      // event_value JSONB 안의 location 필드가 nextLocation과 같은 경우만 카운트
+      .filter("event_value->>location", "eq", nextLocation);
+
+    if (!visitError && typeof count === "number" && count + 1 === 3) {
+      await insertRuleOpenedEvent(supabase, player.id, 5);
+      openedRuleIds.add(5);
+    }
   }
 
   const updatePayload: Partial<SubwayPlayerState> = {
