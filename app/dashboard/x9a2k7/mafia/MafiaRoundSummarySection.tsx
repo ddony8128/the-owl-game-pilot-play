@@ -57,7 +57,7 @@ type Props = {
 };
 
 export function MafiaRoundSummarySection({ currentRound }: Props) {
-  const [selectedRound, setSelectedRound] = useState<number>(0);
+  const [selectedRound, setSelectedRound] = useState<number | null>(null);
   const [data, setData] = useState<RoundState>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,11 +66,12 @@ export function MafiaRoundSummarySection({ currentRound }: Props) {
     if (
       typeof currentRound === "number" &&
       currentRound >= 0 &&
-      currentRound <= 5
+      currentRound <= 5 &&
+      selectedRound === null
     ) {
       setSelectedRound(currentRound);
     }
-  }, [currentRound]);
+  }, [currentRound, selectedRound]);
 
   const load = async (round: number) => {
     setLoading(true);
@@ -110,12 +111,16 @@ export function MafiaRoundSummarySection({ currentRound }: Props) {
   };
 
   useEffect(() => {
+    if (selectedRound == null) return;
     void load(selectedRound);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRound]);
 
   const roundLabel =
-    selectedRound === 0 ? "튜토리얼" : `${selectedRound}라운드`;
+    selectedRound === 0
+      ? "튜토리얼"
+      : typeof selectedRound === "number"
+      ? `${selectedRound}라운드`
+      : "-";
 
   return (
     <section className="space-y-3 text-sm">

@@ -18,8 +18,9 @@ const JOBS: { id: string; label: string; icon: string | null }[] = [
   },
   { id: "robber", label: "강도", icon: "/mafia/job/robber.png" },
   { id: "police", label: "경찰", icon: "/mafia/job/police.png" },
-  { id: "tax_auditor", label: "세무조사원", icon: "/mafia/job/financial.png" },
-  { id: "broker", label: "증권사 직원", icon: "/mafia/job/investor.png" },
+  { id: "tax_auditor", label: "세무조사원", icon: "/mafia/job/investor.png" },
+  { id: "broker", label: "증권사 직원", icon: "/mafia/job/financial.png" },
+  { id: "mayor", label: "시장", icon: "/mafia/job/mayor.png" },
   { id: "ceo", label: "CEO", icon: "/mafia/job/ceo.png" },
 ];
 
@@ -31,9 +32,10 @@ type Props = {
     amount: number | null;
     give_up: boolean;
   } | null;
+  playerCash: number | null;
 };
 
-export function MafiaAuctionTab({ myAuctionBet }: Props) {
+export function MafiaAuctionTab({ myAuctionBet, playerCash }: Props) {
   const [step, setStep] = useState<Step>("pickJob");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
@@ -81,6 +83,9 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
       return;
     }
 
+    // 서버 반영/폴링이 따라올 시간을 조금 준다 (체감상 깜빡임 완화)
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
     setSubmitting(false);
     const jobLabel =
       JOBS.find((j) => j.id === selectedJobId)?.label ?? "선택한 직업";
@@ -122,6 +127,9 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
       return;
     }
 
+    // 서버 반영/폴링이 따라올 시간을 조금 준다
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
     setSubmitting(false);
     setInfo("이번 라운드 직업 경매에서 베팅을 포기했습니다.");
     setSelectedJobId(null);
@@ -146,12 +154,8 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
     return (
       <div className="space-y-3 text-sm text-zinc-100">
         {error && <ErrorMessage message={error} />}
-        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 whitespace-pre-wrap">
+        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-base text-emerald-300 whitespace-pre-wrap">
           {message}
-        </p>
-        <p className="text-xs text-zinc-400">
-          한 라운드에는 한 번만 베팅할 수 있습니다. 다음 라운드 경매에서 다시
-          선택할 수 있습니다.
         </p>
       </div>
     );
@@ -168,9 +172,9 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
 
       {step === "pickJob" && (
         <div className="space-y-3">
-          <p className="text-xs text-zinc-400">
-            어떤 직업에 베팅하시겠습니까? 한 라운드에 하나의 직업만 선택할 수
-            있습니다.
+          <p className="text-base text-zinc-400">
+            어떤 직업에 베팅하시겠습니까? <br /> (한 라운드에 하나의 직업만
+            선택할 수 있습니다.)
           </p>
           <div className="grid grid-cols-2 gap-3">
             {JOBS.map((job) => (
@@ -186,7 +190,7 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
                 }}
               >
                 {job.icon && (
-                  <div className="relative h-16 w-16 overflow-hidden rounded-full bg-zinc-800 md:h-20 md:w-20">
+                  <div className="relative h-40 w-40 overflow-hidden rounded-full bg-zinc-800 md:h-40 md:w-40">
                     <Image
                       src={job.icon}
                       alt={job.label}
@@ -195,16 +199,13 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
                     />
                   </div>
                 )}
-                <span className="mt-2 text-[11px] text-zinc-200">
-                  {job.label}
-                </span>
               </button>
             ))}
           </div>
           <div className="pt-1">
             <button
               type="button"
-              className="flex w-full items-center justify-between rounded-lg border border-red-500/60 bg-zinc-950 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+              className="flex w-full items-center justify-between rounded-lg border border-red-500/60 bg-zinc-950 px-3 py-2 text-lg text-red-300 hover:bg-red-500/10"
               onClick={() => {
                 setSelectedJobId("give_up");
                 setError(null);
@@ -212,7 +213,6 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
               }}
             >
               <span>베팅 포기</span>
-              <span className="text-[11px] text-red-300">선택</span>
             </button>
           </div>
         </div>
@@ -222,9 +222,18 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
         selectedJobId &&
         selectedJobId !== "give_up" && (
           <div className="space-y-3">
-            <p className="text-xs text-zinc-400">
-              {currentJobLabel} 직업에 얼마나 베팅하시겠습니까?
+            <p className="text-base text-zinc-400">
+              {currentJobLabel} 직업에 얼마나 베팅하시겠습니까? <br /> (최소
+              1원)
             </p>
+            {playerCash != null && (
+              <p className="text-sm text-zinc-500">
+                현재 보유 현금:{" "}
+                <span className="font-semibold text-amber-300">
+                  {playerCash} 코인
+                </span>
+              </p>
+            )}
             <input
               className="h-10 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-400"
               placeholder="베팅 금액"
@@ -233,7 +242,7 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
             />
             <div className="flex gap-2">
               <button
-                className="h-10 flex-1 rounded-full bg-zinc-800 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
+                className="h-12 flex-1 rounded-full bg-zinc-800 text-base font-semibold text-zinc-100 hover:bg-zinc-700"
                 type="button"
                 onClick={() => {
                   setStep("pickJob");
@@ -244,7 +253,7 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
                 취소
               </button>
               <button
-                className="h-10 flex-1 rounded-full bg-amber-400 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+                className="h-12 flex-1 rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
                 type="button"
                 onClick={handleSubmitBet}
                 disabled={submitting}
@@ -257,12 +266,12 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
 
       {step === "confirmGiveUp" && (
         <div className="space-y-3">
-          <p className="text-xs text-zinc-400">
+          <p className="text-base text-zinc-400">
             정말 이번 라운드에서 직업 경매 베팅을 포기하시겠습니까?
           </p>
           <div className="flex gap-2">
             <button
-              className="h-10 flex-1 rounded-full bg-zinc-800 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
+              className="h-10 flex-1 rounded-full bg-zinc-800 text-base font-semibold text-zinc-100 hover:bg-zinc-700"
               type="button"
               onClick={() => {
                 setStep("pickJob");
@@ -272,7 +281,7 @@ export function MafiaAuctionTab({ myAuctionBet }: Props) {
               취소
             </button>
             <button
-              className="h-10 flex-1 rounded-full bg-red-500 text-xs font-semibold text-zinc-950 hover:bg-red-400 disabled:opacity-40"
+              className="h-10 flex-1 rounded-full bg-red-500 text-base font-semibold text-zinc-950 hover:bg-red-400 disabled:opacity-40"
               type="button"
               onClick={handleSubmitGiveUp}
               disabled={submitting}

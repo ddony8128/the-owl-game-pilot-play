@@ -64,10 +64,9 @@ export default function QuizQuestionsPage() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-8 text-zinc-50">
       <header className="w-full max-w-md">
-        <h1 className="text-lg font-semibold">퀴즈 문제 목록</h1>
-        <p className="text-xs text-zinc-400">
-          현재 사용 중인 퀴즈 문제들의 번호와 문항입니다. 정답이나 옵션은
-          표시되지 않습니다.
+        <h1 className="text-xl font-semibold">퀴즈 문제 목록</h1>
+        <p className="text-sm text-zinc-400">
+          퀴즈쇼에서 동일한 순서대로 출제된다부엉!
         </p>
       </header>
 
@@ -80,22 +79,22 @@ export default function QuizQuestionsPage() {
           </p>
         )}
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {questions.map((q) => (
             <div
               key={q.id}
-              className="rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100"
+              className="rounded-lg bg-zinc-900 px-4 py-4 text-xs text-zinc-100"
             >
-              <p className="text-[11px] font-semibold text-amber-300">
-                Q{q.id}
-              </p>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{q.question}</p>
+              <p className="text-base font-semibold text-amber-300">Q{q.id}</p>
+              <br />
+              <p className="mt-1 whitespace-pre-wrap text-base">{q.question}</p>
+              <br />
             </div>
           ))}
         </div>
 
         <button
-          className="mt-auto h-10 rounded-full border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-900"
+          className="mt-auto h-12 rounded-full border border-zinc-700 text-base text-zinc-200 hover:bg-zinc-900"
           onClick={() => router.push("/rules")}
         >
           규칙 목록으로 돌아가기

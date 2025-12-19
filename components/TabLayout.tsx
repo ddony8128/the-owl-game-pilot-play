@@ -19,11 +19,11 @@ type Props = {
 export function TabLayout({ tabs, activeKey, onChange, children }: Props) {
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex gap-1 overflow-x-auto pb-1">
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
               tab.key === activeKey
                 ? "bg-amber-400 text-zinc-950"
                 : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"

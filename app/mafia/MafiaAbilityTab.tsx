@@ -5,6 +5,7 @@ import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import type { MafiaAbilityPayload } from "@/lib/mafia/abilities";
 import type { MafiaStockState, Player } from "@/lib/types";
+import { JOB_META } from "./MafiaInfoTab";
 
 type Props = {
   job: string | null;
@@ -36,6 +37,11 @@ export function MafiaAbilityTab({
   const [info, setInfo] = useState<string | null>(null);
 
   const normalizedJob = job ?? null;
+
+  const jobLabel =
+    normalizedJob && JOB_META[normalizedJob]
+      ? JOB_META[normalizedJob].label
+      : normalizedJob ?? "없음";
 
   const availableStocks = useMemo(
     () => stocks.filter((s) => s.stock_key !== "국채"),
@@ -228,42 +234,42 @@ export function MafiaAbilityTab({
     return (
       <div className="space-y-3 text-sm text-zinc-100">
         {error && <ErrorMessage message={error} />}
-        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 whitespace-pre-wrap">
+        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-base text-emerald-300 whitespace-pre-wrap">
           {summary}
         </p>
-        <p className="text-xs text-zinc-400">
-          능력 결과는 페이즈가 진행된 뒤 &quot;능력결과&quot; 탭에서 확인할 수
-          있습니다.
+        <p className="text-sm text-zinc-400">
+          능력의 결과는 다음 단계(주가 변동)에서 적용됩니다.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 text-sm text-zinc-100">
+    <div className="space-y-3 text-base text-zinc-100">
       {error && <ErrorMessage message={error} />}
       {info && (
         <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
           {info}
         </p>
       )}
-      <p className="text-xs text-zinc-400">
-        현재 직업: <span className="font-semibold text-zinc-100">{job}</span>
+      <p className="text-base text-zinc-400">
+        현재 직업:{" "}
+        <span className="font-semibold text-zinc-100">{jobLabel}</span>
       </p>
 
       {(normalizedJob === "up_manipulator" ||
         normalizedJob === "down_manipulator" ||
         normalizedJob === "broker") && (
         <>
-          <p className="text-xs text-zinc-400">
-            국채를 제외한 대상 주식을 하나 선택해 주세요.
+          <p className="text-base text-zinc-400">
+            국채를 제외한 종목을 하나 선택해 주세요.
           </p>
           <div className="grid grid-cols-2 gap-2">
             {availableStocks.map((s) => (
               <button
                 key={s.stock_key}
                 type="button"
-                className={`h-9 rounded-lg border text-xs font-semibold ${
+                className={`h-12 rounded-lg border text-base font-semibold ${
                   selectedStockKey === s.stock_key
                     ? "border-amber-400 bg-amber-400 text-zinc-950"
                     : "border-zinc-700 bg-zinc-900 text-zinc-100"
@@ -278,7 +284,7 @@ export function MafiaAbilityTab({
               </button>
             ))}
             {availableStocks.length === 0 && (
-              <p className="col-span-2 text-[11px] text-zinc-500">
+              <p className="col-span-2 text-base text-zinc-500">
                 선택 가능한 주식이 없습니다.
               </p>
             )}
@@ -288,8 +294,8 @@ export function MafiaAbilityTab({
 
       {normalizedJob === "robber" && (
         <>
-          <p className="text-xs text-zinc-400">
-            강도의 피해를 줄 서로 다른 두 명을 선택해 주세요.
+          <p className="text-base text-zinc-400">
+            돈을 빼앗아 올 2명을 선택해줘부엉!
           </p>
           <div className="grid grid-cols-2 gap-2">
             {otherPlayers.map((p) => {
@@ -298,7 +304,7 @@ export function MafiaAbilityTab({
                 <button
                   key={p.id}
                   type="button"
-                  className={`h-8 rounded-lg border text-[11px] font-semibold ${
+                  className={`h-10 rounded-lg border text-sm font-semibold ${
                     selected
                       ? "border-red-400 bg-red-500 text-zinc-950"
                       : "border-zinc-700 bg-zinc-900 text-zinc-100"
@@ -320,13 +326,13 @@ export function MafiaAbilityTab({
               );
             })}
             {otherPlayers.length === 0 && (
-              <p className="col-span-2 text-[11px] text-zinc-500">
+              <p className="col-span-2 text-base text-zinc-500">
                 선택 가능한 다른 플레이어가 없습니다.
               </p>
             )}
           </div>
-          <p className="text-[11px] text-zinc-400">
-            선택된 대상:{" "}
+          <p className="text-sm text-zinc-400">
+            선택된 대상: {""}
             {robberTargets.length > 0 ? robberTargets.join(", ") : "없음"}
           </p>
         </>
@@ -334,9 +340,8 @@ export function MafiaAbilityTab({
 
       {normalizedJob === "police" && (
         <>
-          <p className="text-xs text-zinc-400">
-            조사할 대상을 선택해 주세요. 선택하지 않으면 이번 라운드에는
-            조사하지 않습니다.
+          <p className="text-base text-zinc-400">
+            마피아인지 조사할 대상을 선택해 주세요.
           </p>
           <div className="grid grid-cols-2 gap-2">
             {otherPlayers.map((p) => {
@@ -345,7 +350,7 @@ export function MafiaAbilityTab({
                 <button
                   key={p.id}
                   type="button"
-                  className={`h-8 rounded-lg border text-[11px] font-semibold ${
+                  className={`h-10 rounded-lg border text-sm font-semibold ${
                     selected
                       ? "border-emerald-400 bg-emerald-500 text-zinc-950"
                       : "border-zinc-700 bg-zinc-900 text-zinc-100"
@@ -361,7 +366,7 @@ export function MafiaAbilityTab({
               );
             })}
             {otherPlayers.length === 0 && (
-              <p className="col-span-2 text-[11px] text-zinc-500">
+              <p className="col-span-2 text-sm text-zinc-500">
                 선택 가능한 다른 플레이어가 없습니다.
               </p>
             )}
@@ -371,8 +376,8 @@ export function MafiaAbilityTab({
 
       {normalizedJob === "tax_auditor" && (
         <>
-          <p className="text-xs text-zinc-400">
-            세무조사를 진행할 대상을 선택해 주세요.
+          <p className="text-base text-zinc-400">
+            세무조사를 진행할 대상을 선택해줘부엉! 아주 탈탈 털어보자부엉!
           </p>
           <div className="grid grid-cols-2 gap-2">
             {otherPlayers.map((p) => {
@@ -381,7 +386,7 @@ export function MafiaAbilityTab({
                 <button
                   key={p.id}
                   type="button"
-                  className={`h-8 rounded-lg border text-[11px] font-semibold ${
+                  className={`h-10 rounded-lg border text-sm font-semibold ${
                     selected
                       ? "border-amber-400 bg-amber-400 text-zinc-950"
                       : "border-zinc-700 bg-zinc-900 text-zinc-100"
@@ -397,7 +402,7 @@ export function MafiaAbilityTab({
               );
             })}
             {otherPlayers.length === 0 && (
-              <p className="col-span-2 text-[11px] text-zinc-500">
+              <p className="col-span-2 text-sm text-zinc-500">
                 선택 가능한 다른 플레이어가 없습니다.
               </p>
             )}
@@ -407,15 +412,15 @@ export function MafiaAbilityTab({
 
       {normalizedJob === "mayor" && (
         <>
-          <p className="text-xs text-zinc-400">
-            이번 라운드 표 가격을 선택해 주세요. (1~3원)
+          <p className="text-base text-zinc-400">
+            이번 라운드의 표 가격을 선택해 주세요. (1~3원)
           </p>
           <div className="flex gap-2">
             {[1, 2, 3].map((p) => (
               <button
                 key={p}
                 type="button"
-                className={`h-8 flex-1 rounded-full border text-xs font-semibold ${
+                className={`h-12 flex-1 rounded-full border text-base font-semibold ${
                   mayorPrice === p
                     ? "border-amber-400 bg-amber-400 text-zinc-950"
                     : "border-zinc-600 bg-zinc-900 text-zinc-100"
@@ -430,14 +435,14 @@ export function MafiaAbilityTab({
       )}
 
       {(normalizedJob === "ceo" || normalizedJob === "salaryman") && (
-        <p className="text-xs text-zinc-400">
-          이 직업은 별도의 대상 선택 없이 자동으로 능력이 적용됩니다. 아래
-          버튼을 눌러 능력 사용을 확정해 주세요.
+        <p className="text-base text-zinc-400">
+          이 직업은 별도로 사용하지 않아도 자동으로 적용된다부엉. 그래도 버튼을
+          눌러서 기분을 내보자부엉!
         </p>
       )}
 
       <button
-        className="h-10 w-full rounded-full bg-amber-400 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+        className="h-12 w-full rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
         onClick={handleSubmit}
         disabled={submitting || !normalizedJob || submitted}
       >

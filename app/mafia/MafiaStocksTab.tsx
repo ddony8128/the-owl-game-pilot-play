@@ -31,18 +31,17 @@ const getStockLogoSrc = (key: string): string | null => {
 
 export function MafiaStocksTab({ stocks, stockHistory }: Props) {
   return (
-    <div className="space-y-4 text-sm text-zinc-100">
+    <div className="space-y-4 text-base text-zinc-100">
       <section className="space-y-2">
-        <p className="text-xs text-zinc-400">현재 공개된 주가입니다.</p>
         <div className="divide-y divide-zinc-800 rounded-xl bg-zinc-900">
           {stocks.map((s) => (
             <div
               key={s.stock_key}
-              className="flex items-center justify-between px-3 py-2 text-sm"
+              className="flex items-center justify-between px-5 py-5 text-base"
             >
               <div className="flex items-center gap-2">
                 {getStockLogoSrc(s.stock_key) && (
-                  <div className="relative h-7 w-7 overflow-hidden rounded-md bg-zinc-800">
+                  <div className="relative h-30 w-30 overflow-hidden rounded-md bg-zinc-800">
                     <Image
                       src={getStockLogoSrc(s.stock_key)!}
                       alt={s.stock_key}
@@ -53,13 +52,13 @@ export function MafiaStocksTab({ stocks, stockHistory }: Props) {
                 )}
                 <span className="text-zinc-200">{s.stock_key}</span>
               </div>
-              <span className="font-semibold text-emerald-300">
+              <span className="font-semibold text-2xl text-emerald-300">
                 {s.price} 코인
               </span>
             </div>
           ))}
           {stocks.length === 0 && (
-            <p className="px-3 py-4 text-xs text-zinc-400">
+            <p className="px-3 py-4 text-base text-zinc-400">
               아직 공개된 주가 정보가 없습니다.
             </p>
           )}
@@ -67,10 +66,10 @@ export function MafiaStocksTab({ stocks, stockHistory }: Props) {
       </section>
 
       <section className="space-y-2">
-        <p className="text-xs text-zinc-400">
+        <p className="text-sm text-zinc-400">
           각 종목의 라운드별 주가 변동 히스토리입니다.
         </p>
-        <div className="space-y-2 text-[11px] text-zinc-300">
+        <div className="space-y-2 text-base text-zinc-300">
           {stocks.map((s) => {
             const history = stockHistory?.[s.stock_key] ?? [];
             if (history.length === 0) {
@@ -80,7 +79,7 @@ export function MafiaStocksTab({ stocks, stockHistory }: Props) {
                     {s.stock_key}
                   </span>
                   <span className="ml-2 text-zinc-400">
-                    아직 기록된 히스토리가 없습니다.
+                    아직 주가 변동이 없습니다.
                   </span>
                 </div>
               );

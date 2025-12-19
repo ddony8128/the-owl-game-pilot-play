@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     .from("mafia_actions")
     .select("payload")
     .eq("round_number", roundNumber)
-    .eq("phase", "apply")
+    .eq("phase", "trade")
     .eq("action_type", "ability");
 
   if (!abilityError && abilityRows) {

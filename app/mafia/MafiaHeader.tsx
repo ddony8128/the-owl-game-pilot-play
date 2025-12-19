@@ -1,7 +1,4 @@
-import type { MafiaPhaseState } from "@/lib/types";
-
 type Props = {
-  phase: MafiaPhaseState | null;
   minutes: number | null;
   seconds: number | null;
   roundLabel: string;
@@ -9,7 +6,6 @@ type Props = {
 };
 
 export function MafiaHeader({
-  phase,
   minutes,
   seconds,
   roundLabel,
@@ -18,7 +14,7 @@ export function MafiaHeader({
   return (
     <header className="flex w-full max-w-md flex-col items-center gap-2 text-center">
       <h1 className="text-2xl font-semibold">자본주의 마피아</h1>
-      <div className="text-sm text-zinc-300">
+      <div className="text-base text-zinc-300">
         <span className="font-medium">{roundLabel}</span>{" "}
         <span className="mx-1">/</span>
         <span>{phaseLabel}</span>
@@ -30,9 +26,6 @@ export function MafiaHeader({
               .padStart(2, "0")}`
           : "--:--"}
       </div>
-      <p className="text-xs text-zinc-400">
-        라운드와 페이즈, 남은 시간을 잘 확인하고 행동해 주세요.
-      </p>
     </header>
   );
 }

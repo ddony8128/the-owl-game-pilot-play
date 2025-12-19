@@ -124,18 +124,18 @@ export function MafiaTradeTab({
     <div className="space-y-4 text-sm text-zinc-100">
       {error && <ErrorMessage message={error} />}
       {info && (
-        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
           {info}
         </p>
       )}
 
       {step === "pickStock" && (
         <div className="space-y-3">
-          <p className="text-xs text-zinc-400">
-            같은 주식을 매수, 매도 둘 다 할 수는 없습니다. 어떤 주식을
-            거래하겠습니까?
+          <p className="text-base text-zinc-400">
+            어떤 주식을 거래하겠습니까?
+            <br /> (같은 주식을 매수, 매도 둘 다 할 수는 없습니다.)
           </p>
-          <div className="space-y-2">
+          <div className="space-y-3 ">
             {stocks.map((s) => {
               const tradeInfo = myTradesThisRound?.[s.stock_key];
               const disabledBuy =
@@ -151,7 +151,7 @@ export function MafiaTradeTab({
                 >
                   <div className="flex items-center gap-2">
                     {getStockLogoSrc(s.stock_key) && (
-                      <div className="relative h-7 w-7 overflow-hidden rounded-md bg-zinc-800">
+                      <div className="relative h-30 w-30 overflow-hidden rounded-md bg-zinc-800">
                         <Image
                           src={getStockLogoSrc(s.stock_key)!}
                           alt={s.stock_key}
@@ -161,10 +161,10 @@ export function MafiaTradeTab({
                       </div>
                     )}
                     <div className="flex flex-col">
-                      <span className="text-sm text-zinc-100">
+                      <span className="text-lg text-zinc-100">
                         {s.stock_key}
                       </span>
-                      <span className="text-[11px] text-zinc-400">
+                      <span className="text-base text-zinc-400">
                         현재 가격: {s.price}원
                       </span>
                     </div>
@@ -172,7 +172,7 @@ export function MafiaTradeTab({
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      className="h-8 rounded-full bg-emerald-500 px-3 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40"
+                      className="h-12 rounded-full bg-emerald-500 px-4 text-base font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40"
                       disabled={disabledBuy}
                       onClick={() => {
                         setType("buy");
@@ -186,7 +186,7 @@ export function MafiaTradeTab({
                     </button>
                     <button
                       type="button"
-                      className="h-8 rounded-full bg-red-500 px-3 text-[11px] font-semibold text-zinc-950 hover:bg-red-400 disabled:opacity-40"
+                      className="h-12 rounded-full bg-red-500 px-4 text-base font-semibold text-zinc-950 hover:bg-red-400 disabled:opacity-40"
                       disabled={disabledSell}
                       onClick={() => {
                         setType("sell");
@@ -207,13 +207,13 @@ export function MafiaTradeTab({
       )}
 
       {step === "enterAmount" && stockKey && (
-        <div className="space-y-3">
-          <p className="text-xs text-zinc-400">
+        <div className="space-y-4">
+          <p className="text-base text-zinc-400">
             {stockKey}을(를) 얼마나 {type === "buy" ? "매수" : "매도"}
             하시겠습니까?
           </p>
           {type === "buy" && (
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-sm text-zinc-500">
               현재 보유 현금:{" "}
               <span className="font-semibold text-amber-300">
                 {playerCash ?? 0} 코인
@@ -221,7 +221,7 @@ export function MafiaTradeTab({
             </p>
           )}
           {type === "sell" && (
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-sm text-zinc-500">
               현재 보유 수량:{" "}
               <span className="font-semibold text-emerald-300">
                 {holdingAmountFor(stockKey)}개
@@ -234,7 +234,7 @@ export function MafiaTradeTab({
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
-          <p className="text-xs text-zinc-400">
+          <p className="text-sm text-zinc-400">
             현재 가격 {priceFor(stockKey)}원 × 수량 ={" "}
             <span className="font-semibold text-amber-300">
               {validAmount ? `${totalPrice}원` : "-원"}
@@ -242,7 +242,7 @@ export function MafiaTradeTab({
           </p>
           <div className="flex gap-2">
             <button
-              className="h-10 flex-1 rounded-full bg-zinc-800 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
+              className="h-12 flex-1 rounded-full bg-zinc-800 text-base font-semibold text-zinc-100 hover:bg-zinc-700"
               type="button"
               onClick={() => {
                 setStep("pickStock");
@@ -253,7 +253,7 @@ export function MafiaTradeTab({
               취소
             </button>
             <button
-              className="h-10 flex-1 rounded-full bg-amber-400 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+              className="h-12 flex-1 rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
               type="button"
               onClick={handleSubmit}
               disabled={submitting}

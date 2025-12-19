@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   MafiaAbilityResult,
   MafiaLog,
@@ -269,46 +269,49 @@ function MafiaInner() {
     totalSeconds: number;
   };
 
-  const computeRemaining = (
-    api: MafiaTimerApi | null,
-    nowMs: number
-  ): { remainingSeconds: number; isRunning: boolean } => {
-    if (!api || !api.phase) {
-      return { remainingSeconds: 0, isRunning: false };
-    }
+  const computeRemaining = useCallback(
+    (
+      api: MafiaTimerApi | null,
+      nowMs: number
+    ): { remainingSeconds: number; isRunning: boolean } => {
+      if (!api || !api.phase) {
+        return { remainingSeconds: 0, isRunning: false };
+      }
 
-    const total = api.totalSeconds || 0;
-    if (total <= 0) {
-      return { remainingSeconds: 0, isRunning: false };
-    }
+      const total = api.totalSeconds || 0;
+      if (total <= 0) {
+        return { remainingSeconds: 0, isRunning: false };
+      }
 
-    if (!api.timerStart && !api.pauseAt) {
+      if (!api.timerStart && !api.pauseAt) {
+        return { remainingSeconds: total, isRunning: false };
+      }
+
+      if (api.timerStart && api.timerStartAt) {
+        const startMs = new Date(api.timerStartAt).getTime();
+        if (Number.isNaN(startMs)) {
+          return { remainingSeconds: total, isRunning: false };
+        }
+        const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+        const remaining = Math.max(0, total - elapsed);
+        return { remainingSeconds: remaining, isRunning: remaining > 0 };
+      }
+
+      if (!api.timerStart && api.timerStartAt && api.pauseAt) {
+        const startMs = new Date(api.timerStartAt).getTime();
+        const pauseMs = new Date(api.pauseAt).getTime();
+        if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
+          return { remainingSeconds: total, isRunning: false };
+        }
+        const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
+        const remaining = Math.max(0, total - elapsed);
+        return { remainingSeconds: remaining, isRunning: false };
+      }
+
       return { remainingSeconds: total, isRunning: false };
-    }
-
-    if (api.timerStart && api.timerStartAt) {
-      const startMs = new Date(api.timerStartAt).getTime();
-      if (Number.isNaN(startMs)) {
-        return { remainingSeconds: total, isRunning: false };
-      }
-      const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
-      const remaining = Math.max(0, total - elapsed);
-      return { remainingSeconds: remaining, isRunning: remaining > 0 };
-    }
-
-    if (!api.timerStart && api.timerStartAt && api.pauseAt) {
-      const startMs = new Date(api.timerStartAt).getTime();
-      const pauseMs = new Date(api.pauseAt).getTime();
-      if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
-        return { remainingSeconds: total, isRunning: false };
-      }
-      const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
-      const remaining = Math.max(0, total - elapsed);
-      return { remainingSeconds: remaining, isRunning: false };
-    }
-
-    return { remainingSeconds: total, isRunning: false };
-  };
+    },
+    []
+  );
 
   // 서버 타이머 폴링 + 로컬 1초 틱 (GM 카운트다운과 동일 패턴)
   useEffect(() => {
@@ -350,7 +353,7 @@ function MafiaInner() {
       clearInterval(pollId);
       clearInterval(tickId);
     };
-  }, []);
+  }, [computeRemaining]);
 
   const availableTabs = useMemo(() => {
     const base: TabKey[] = ["info", "rules", "stocks"];
@@ -412,14 +415,13 @@ function MafiaInner() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
       <MafiaHeader
-        phase={phase}
         minutes={minutes}
         seconds={seconds}
         roundLabel={roundLabel}
         phaseLabel={phaseLabel}
       />
 
-      <p className="mt-2 text-xs text-red-300">
+      <p className="mt-2 text-sm text-red-300">
         이 화면은 다른 플레이어에게 보여주면 안 됩니다.
       </p>
 
@@ -437,7 +439,10 @@ function MafiaInner() {
             <MafiaStocksTab stocks={stocks} stockHistory={stockHistory} />
           )}
           {activeTab === "auction" && (
-            <MafiaAuctionTab myAuctionBet={myAuctionBet} />
+            <MafiaAuctionTab
+              myAuctionBet={myAuctionBet}
+              playerCash={mafiaPlayer?.cash ?? null}
+            />
           )}
           {activeTab === "trade" && (
             <MafiaTradeTab

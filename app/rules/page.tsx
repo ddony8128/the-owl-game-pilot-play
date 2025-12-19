@@ -24,8 +24,8 @@ export default function RulesPage() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-8 text-zinc-50">
       <header className="w-full max-w-md">
-        <h1 className="text-lg font-semibold">규칙 / 안내</h1>
-        <p className="text-xs text-zinc-400">
+        <h1 className="text-xl font-semibold">규칙 / 안내</h1>
+        <p className="text-sm text-zinc-400">
           헷갈릴 땐 꼼꼼히 보도록 해 부엉! 그래도 모르겠으면 물어봐 부엉!
         </p>
       </header>
@@ -50,7 +50,7 @@ export default function RulesPage() {
               intro: "/rulebook/avsmvlkdmv_intro.pdf",
               hidden_piece: "/rulebook/1491j0rjflcelfe_hidden.pdf",
               subway: "/rulebook/13fsm4wg_subway.pdf",
-              mafia: "/rulebook/141rfwkvm_mafia.pdf",
+              mafia: "/rulebook/1141rfwkvm_mafia.pdf",
               quiz: "/rulebook/1rqvskldm_quizshow.pdf",
             };
 
@@ -63,7 +63,7 @@ export default function RulesPage() {
           return (
             <button
               key={key}
-              className="h-11 w-full rounded-full border border-zinc-700 bg-zinc-900 px-4 text-left text-sm font-medium text-zinc-100 hover:bg-zinc-800"
+              className="h-12 w-full rounded-full border border-zinc-700 bg-zinc-900 px-4 text-left text-base font-medium text-zinc-100 hover:bg-zinc-800"
               onClick={handleClick}
             >
               {label}
@@ -72,8 +72,8 @@ export default function RulesPage() {
         })}
 
         <button
-          className="mt-auto h-10 rounded-full border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-900"
-          onClick={() => router.back()}
+          className="mt-auto h-12 rounded-full border border-zinc-700 text-base text-zinc-200 hover:bg-zinc-900"
+          onClick={() => router.push("/intro")}
         >
           메인 화면으로
         </button>

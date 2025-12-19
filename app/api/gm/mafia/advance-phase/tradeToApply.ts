@@ -90,6 +90,8 @@ export async function handleTradeToApply(
   // 직업 능력 payload
   const abilitiesByPlayer = new Map<string, MafiaAbilityPayload[]>();
 
+  const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at">[] = [];
+
   const addIncome = (playerId: string, amount: number) => {
     if (!amount) return;
     const prev = roundIncomeForRobber.get(playerId) ?? 0;
@@ -296,8 +298,6 @@ export async function handleTradeToApply(
 
   // 직업별 현금 수익 및 강도 정산 + 능력결과 기록
   const cashDelta = new Map<string, number>();
-
-  const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at">[] = [];
 
   const addCash = (
     playerId: string,
@@ -550,7 +550,22 @@ export async function handleTradeToApply(
     for (const tid of targets) {
       const victimState = playerStateById.get(tid);
       if (!victimState) continue;
-      if (victimState.job === "mayor") continue; // 시장은 강도 면역
+
+      // 시장은 강도 면역: 시장에게는 "강도를 막아냈습니다" 능력 결과를 남긴다.
+      if (victimState.job === "mayor") {
+        abilityResults.push({
+          player_id: tid,
+          round_number: current.round_number,
+          phase: "apply",
+          job: "mayor",
+          category: "robber_blocked",
+          message: "강도의 공격을 막아냈습니다.",
+          payload: {
+            from_player_id: pid,
+          },
+        });
+        continue;
+      }
 
       const income = roundIncomeForRobber.get(tid) ?? 0;
       if (income <= 0) continue;
@@ -578,13 +593,22 @@ export async function handleTradeToApply(
 
     if (totalStolen > 0) {
       cashDelta.set(pid, (cashDelta.get(pid) ?? 0) + totalStolen);
+
+      // 강도 본인에게는 피해자별로 얼마를 빼앗았는지 상세히 알려준다.
+      const victimSummaries = victimsPayload.map((v) => {
+        const name = nicknameById.get(v.player_id) ?? v.player_id;
+        return `${name}에게 ${v.stolen}원`;
+      });
+      const detailText =
+        victimSummaries.length > 0 ? ` (${victimSummaries.join(", ")})` : "";
+
       abilityResults.push({
         player_id: pid,
         round_number: current.round_number,
         phase: "apply",
         job: "robber",
         category: "robber_gain",
-        message: `강도로 총 ${totalStolen}원을 빼앗았습니다.`,
+        message: `강도로 총 ${totalStolen}원을 빼앗았습니다.${detailText}`,
         payload: {
           victims: victimsPayload,
         },

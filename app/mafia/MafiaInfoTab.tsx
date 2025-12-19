@@ -14,7 +14,7 @@ type Props = {
   logs: MafiaLog[];
 };
 
-const JOB_META: Record<
+export const JOB_META: Record<
   string,
   {
     label: string;
@@ -36,11 +36,11 @@ const JOB_META: Record<
   },
   tax_auditor: {
     label: "세무조사원",
-    icon: "/mafia/job/financial.png",
+    icon: "/mafia/job/investor.png",
   },
   broker: {
     label: "증권사 직원",
-    icon: "/mafia/job/investor.png",
+    icon: "/mafia/job/financial.png",
   },
 };
 
@@ -80,14 +80,13 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
   return (
     <div className="flex flex-col gap-4 text-sm text-zinc-100">
       <section className="space-y-2">
-        <p className="text-xs text-zinc-400">당신의 현재 상태입니다.</p>
         <div className="rounded-xl bg-zinc-900 p-3">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center justify-between text-base">
             <span className="text-zinc-300">보유 현금</span>
             <span className="font-semibold text-amber-300">{cash} 코인</span>
           </div>
-          <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
-            <span>총 자산(현금 + 주식 평가액)</span>
+          <div className="mt-3 flex items-center justify-between text-sm text-zinc-400">
+            <span>총 자산 ( 현금 + 주식 평가액 )</span>
             <span className="font-semibold text-emerald-300">
               {totalAsset} 코인
             </span>
@@ -95,7 +94,7 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
           <div className="mt-3 h-px w-full bg-zinc-800" />
           <div className="mt-3 flex items-center gap-3">
             {jobMeta?.icon && (
-              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-zinc-800">
+              <div className="relative h-30 w-30 shrink-0 overflow-hidden rounded-full bg-zinc-800">
                 <Image
                   src={jobMeta.icon}
                   alt={jobMeta.label}
@@ -105,9 +104,9 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
               </div>
             )}
             <div className="flex flex-col text-xs">
-              <span className="text-[11px] text-zinc-400">나의 직업</span>
+              <span className="text-base text-zinc-300">내 직업</span>
               <span className="mt-1 text-sm font-semibold text-zinc-100">
-                {jobMeta?.label ?? "(비공개)"}
+                {jobMeta?.label ?? "없음"}
               </span>
             </div>
           </div>
@@ -115,11 +114,10 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
       </section>
 
       <section className="space-y-2">
-        <p className="text-xs text-zinc-400">보유 주식과 평가 금액입니다.</p>
         <div className="divide-y divide-zinc-800 rounded-xl bg-zinc-900">
           {stockRows.length === 0 && (
-            <p className="px-3 py-4 text-xs text-zinc-400">
-              아직 보유한 주식이 없습니다.
+            <p className="px-3 py-4 text-sm text-zinc-400">
+              보유한 주식이 없습니다.
             </p>
           )}
           {stockRows.map((row) => (
@@ -129,7 +127,7 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
             >
               <div className="flex flex-col">
                 <span className="text-sm text-zinc-100">{row.key}</span>
-                <span className="text-[11px] text-zinc-400">
+                <span className="text-sm text-zinc-400">
                   수량 {row.amount}개 · 현재가 {row.price} 코인
                 </span>
               </div>
@@ -140,9 +138,7 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
           ))}
           {stockRows.length > 0 && (
             <div className="flex items-center justify-between px-3 py-2 text-xs">
-              <span className="text-[11px] text-zinc-400">
-                주식 평가액 합계
-              </span>
+              <span className="text-sm text-zinc-400">주식 평가액 합계</span>
               <span className="text-sm font-semibold text-emerald-300">
                 {totalStockValue} 코인
               </span>
@@ -152,20 +148,18 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
       </section>
 
       <section className="space-y-2">
-        <p className="text-xs text-zinc-400">GM이 공개한 게임 로그입니다.</p>
+        <p className="text-sm text-zinc-400">추가 전달 사항입니다.</p>
         <div className="space-y-2">
           {logs.map((log) => (
             <div
               key={log.id}
-              className="rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100 whitespace-pre-wrap"
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-100 whitespace-pre-wrap"
             >
               {log.content}
             </div>
           ))}
           {logs.length === 0 && (
-            <p className="text-xs text-zinc-400">
-              아직 공개된 로그가 없습니다.
-            </p>
+            <p className="text-sm text-zinc-400">아직 전달 사항이 없습니다.</p>
           )}
         </div>
       </section>

@@ -83,6 +83,7 @@ export function MafiaVoteTab({
     }
 
     setSubmitting(false);
+    setSelectedTarget(null);
     setCount("1");
   };
 
@@ -99,8 +100,7 @@ export function MafiaVoteTab({
     <div className="space-y-3 text-sm text-zinc-100">
       {error && <ErrorMessage message={error} />}
 
-      <div className="rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-200">
-        <p className="font-semibold text-amber-300">이번 라운드 투표 정보</p>
+      <div className="rounded-lg bg-zinc-900 px-3 py-2 text-base text-zinc-200">
         <p className="mt-1">
           표 가격:{" "}
           <span className="font-semibold text-amber-300">
@@ -115,31 +115,29 @@ export function MafiaVoteTab({
         </p>
         {myVoteSummary && myVoteSummary.length > 0 ? (
           <div className="mt-2 space-y-1">
-            <p className="text-[11px] text-zinc-400">
-              이번 라운드 내 투표 현황
-            </p>
+            <p className="text-base text-zinc-400">이번 라운드 내 투표 현황</p>
             {myVoteSummary.map((v) => (
-              <p key={v.target} className="text-[11px]">
+              <p key={v.target} className="text-base">
                 {v.target}에게 {v.vote_count}표 (총 {v.total_spent}원 사용)
               </p>
             ))}
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-base text-zinc-500">
               총 사용 금액: {currentTotalSpent}원
             </p>
           </div>
         ) : (
-          <p className="mt-2 text-[11px] text-zinc-500">
-            아직 기록된 투표가 없습니다.
+          <p className="mt-2 text-base text-zinc-500">
+            아직 투표를 하지 않았습니다.
           </p>
         )}
       </div>
 
-      <p className="mt-1 text-xs text-zinc-400">
-        마피아로 의심되는 사람을 선택하고, 몇 표를 행사할지 정해 주세요.
+      <p className="mt-1 text-base text-zinc-400">
+        마피아로 의심되는 사람을 선택하고, 몇 표를 행사할지 정해 주세요. <br />{" "}
+        (여러 번 투표 가능합니다.)
       </p>
 
       <div className="space-y-2">
-        <p className="text-[11px] text-zinc-400">플레이어 선택</p>
         <div className="grid grid-cols-2 gap-2">
           {otherPlayers.map((p) => (
             <button
@@ -164,7 +162,7 @@ export function MafiaVoteTab({
       </div>
 
       {selectedTarget && (
-        <div className="space-y-2 rounded-lg bg-zinc-900 px-3 py-2 text-xs">
+        <div className="space-y-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm">
           <p className="font-semibold text-zinc-100">
             대상:{" "}
             <span className="text-amber-300">
@@ -173,7 +171,7 @@ export function MafiaVoteTab({
             </span>
           </p>
           <label className="block space-y-1">
-            <span className="text-[11px] text-zinc-400">표 수 입력</span>
+            <span className="text-base text-zinc-400">표 수 입력</span>
             <input
               className="h-9 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs outline-none focus:border-zinc-400"
               placeholder="표 수"
@@ -182,7 +180,7 @@ export function MafiaVoteTab({
               inputMode="numeric"
             />
           </label>
-          <p className="text-[11px] text-zinc-400">
+          <p className="text-sm text-zinc-400">
             예상 비용:{" "}
             <span className="font-semibold text-amber-300">
               {Number.isFinite(Number(count)) && Number(count) > 0
@@ -192,7 +190,7 @@ export function MafiaVoteTab({
             </span>
           </p>
           <button
-            className="mt-2 h-9 w-full rounded-full bg-amber-400 text-[11px] font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+            className="mt-2 h-12 w-full rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
             onClick={handleSubmit}
             disabled={submitting}
             type="button"

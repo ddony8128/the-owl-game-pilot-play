@@ -74,6 +74,26 @@ export async function POST(request: Request) {
     );
   }
 
+  // 새 라운드를 시작할 때는 모든 플레이어의 직업/마피아 여부를 초기화한다.
+  const { error: resetError } = await supabase
+    .from("mafia_player_state")
+    .update({
+      job: null,
+      is_mafia: false,
+    })
+    .not("player_id", "is", null);
+
+  if (resetError) {
+    return NextResponse.json(
+      {
+        error:
+          resetError.message ??
+          "라운드 변경 중 플레이어 직업 정보를 초기화하지 못했습니다.",
+      } as ResponseBody,
+      { status: 500 }
+    );
+  }
+
   return NextResponse.json(
     { ok: true, phase: updatedPhase as MafiaPhaseState } as ResponseBody,
     { status: 200 }
