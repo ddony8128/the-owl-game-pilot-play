@@ -21,7 +21,51 @@ export async function handleVoteToEnd(
   }
 
   const votes = voteRows ?? [];
+  // 공통: 경제사범이 뽑히지 않았을 때 모든 플레이어에게 안내 메시지를 남기는 함수
+  const insertNoEconAbilityResult = async () => {
+    const { data: stateRows, error: stateError } = await supabase
+      .from("mafia_player_state")
+      .select("player_id, job");
+
+    if (stateError) {
+      throw new Error(
+        stateError.message ??
+          "경제사범 부재 안내 메시지 생성을 위해 플레이어 상태를 조회하지 못했습니다."
+      );
+    }
+
+    const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at">[] = [];
+
+    for (const row of (stateRows ?? []) as MafiaPlayerState[]) {
+      if (!row.player_id) continue;
+      abilityResults.push({
+        player_id: row.player_id,
+        round_number: current.round_number,
+        phase: "vote",
+        job: row.job,
+        category: "vote_no_econ",
+        message: "이번 라운드에는 경제사범이 뽑히지 않았습니다.",
+        payload: null,
+      });
+    }
+
+    if (abilityResults.length > 0) {
+      const { error: abilityError } = await supabase
+        .from("mafia_ability_results")
+        .insert(abilityResults);
+
+      if (abilityError) {
+        throw new Error(
+          abilityError.message ??
+            "경제사범 부재 안내 메시지를 능력 결과로 기록하지 못했습니다."
+        );
+      }
+    }
+  };
+
+  // 1) 아무도 투표하지 않은 경우
   if (votes.length === 0) {
+    await insertNoEconAbilityResult();
     return;
   }
 
@@ -34,7 +78,9 @@ export async function handleVoteToEnd(
     tally.set(target, (tally.get(target) ?? 0) + count);
   }
 
+  // 2) 유효한 표(타깃/표 수)가 하나도 없는 경우
   if (tally.size === 0) {
+    await insertNoEconAbilityResult();
     return;
   }
 
@@ -49,8 +95,9 @@ export async function handleVoteToEnd(
     .filter(([, cnt]) => cnt === maxVotes)
     .map(([target]) => target);
 
-  // 공동 1위가 둘 이상이면 경제사범 없음
+  // 3) 공동 1위가 둘 이상이면 경제사범 없음
   if (topTargets.length !== 1) {
+    await insertNoEconAbilityResult();
     return;
   }
 
@@ -149,18 +196,6 @@ export async function handleVoteToEnd(
         player_id: row.player_id,
         stocks,
       } as Partial<MafiaPlayerState>);
-
-      abilityResults.push({
-        player_id: row.player_id,
-        round_number: current.round_number,
-        phase: "vote",
-        job: row.job,
-        category: "bond_bonus",
-        message: "경제사범이 마피아이어서 국채 1개를 받았습니다.",
-        payload: {
-          econ_target_nickname: econPlayer.nickname,
-        },
-      });
     }
 
     if (citizenUpdates.length > 0) {
@@ -173,6 +208,59 @@ export async function handleVoteToEnd(
           updateCitizensError.message ?? "시민 국채 지급을 반영하지 못했습니다."
         );
       }
+    }
+
+    // 모든 플레이어에게: 경제사범이 마피아이었고 시민에게 국채가 지급되었음을 안내
+    const { data: allRows, error: allError } = await supabase
+      .from("mafia_player_state")
+      .select("player_id, job");
+
+    if (allError) {
+      throw new Error(
+        allError.message ??
+          "경제사범 안내 메시지를 위한 플레이어 조회에 실패했습니다."
+      );
+    }
+
+    for (const row of (allRows ?? []) as MafiaPlayerState[]) {
+      if (!row.player_id) continue;
+      abilityResults.push({
+        player_id: row.player_id,
+        round_number: current.round_number,
+        phase: "vote",
+        job: row.job,
+        category: "econ_mafia",
+        message: `경제사범으로 지목되었던 ${econPlayer.nickname}은(는) 마피아였습니다. 모든 시민에게 국채가 지급되었습니다.`,
+        payload: {
+          econ_target_nickname: econPlayer.nickname,
+        },
+      });
+    }
+  } else {
+    // 경제사범이 마피아가 아니면, 모든 플레이어에게 "마피아가 아니었다"는 안내 메시지를 남긴다.
+    const { data: allRows, error: allError } = await supabase
+      .from("mafia_player_state")
+      .select("player_id, cash, is_mafia, job, stocks, updated_at");
+
+    if (allError) {
+      throw new Error(
+        allError.message ?? "경제사범 안내를 위한 플레이어 조회에 실패했습니다."
+      );
+    }
+
+    for (const row of (allRows ?? []) as MafiaPlayerState[]) {
+      if (!row.player_id) continue;
+      abilityResults.push({
+        player_id: row.player_id,
+        round_number: current.round_number,
+        phase: "vote",
+        job: row.job,
+        category: "econ_not_mafia",
+        message: `경제사범으로 지목되었던 ${econPlayer.nickname}은(는) 마피아가 아니었습니다.`,
+        payload: {
+          econ_target_nickname: econPlayer.nickname,
+        },
+      });
     }
   }
 

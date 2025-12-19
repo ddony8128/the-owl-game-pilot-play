@@ -78,6 +78,34 @@ export async function POST(request: Request) {
   }
 
   const player = playerRow as Player;
+  const phase = phaseState.phase;
+
+  // 페이즈별로 허용되는 액션 제한
+  const isAllowedAction = (() => {
+    if (phase === "auction") {
+      // 경매 페이즈에서는 bet만 허용
+      return action_type === "bet";
+    }
+    if (phase === "trade") {
+      // 거래 페이즈에서는 주식 거래 및 능력 사용만 허용
+      return (
+        action_type === "buy" ||
+        action_type === "sell" ||
+        action_type === "ability"
+      );
+    }
+    // 그 외 페이즈에서는 액션을 허용하지 않는다.
+    return false;
+  })();
+
+  if (!isAllowedAction) {
+    return NextResponse.json(
+      {
+        error: "현재 페이즈에서는 이 행동을 할 수 없습니다.",
+      } as ActionResponse,
+      { status: 400 }
+    );
+  }
 
   // 능력 사용은 라운드/페이즈당 1회만 허용
   if (action_type === "ability") {

@@ -102,11 +102,11 @@ export function MafiaStocksTab({ stocks, stockHistory }: Props) {
             }
 
             return (
-              <div key={s.stock_key}>
-                <span className="font-semibold text-zinc-100">
-                  {s.stock_key}
-                </span>
-                <span className="ml-2 text-zinc-300">{parts.join(", ")}</span>
+              <div key={s.stock_key} className="space-y-1">
+                <div className="font-semibold text-zinc-100">{s.stock_key}</div>
+                <div className="ml-2 text-zinc-300 whitespace-pre-wrap">
+                  {parts.join("\n")}
+                </div>
               </div>
             );
           })}

@@ -259,7 +259,7 @@ export async function GET(request: Request) {
           .from("mafia_actions")
           .select("payload")
           .eq("round_number", phase.round_number)
-          .eq("phase", "apply")
+          .eq("phase", "trade")
           .eq("action_type", "ability");
 
       if (!abilityPriceError && abilityPriceRows) {

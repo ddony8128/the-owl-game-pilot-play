@@ -7,30 +7,16 @@ type Props = {
 };
 
 export function MafiaResultTab({ abilityResults }: Props) {
-  const latestRound =
-    abilityResults.length > 0
-      ? Math.max(
-          ...abilityResults.map((r) =>
-            typeof r.round_number === "number" ? r.round_number : 0
-          )
-        )
-      : null;
-
-  const latestResults =
-    latestRound != null
-      ? abilityResults.filter((r) => r.round_number === latestRound)
-      : abilityResults;
-
   return (
-    <div className="space-y-4 text-xs text-zinc-200">
+    <div className="space-y-4 text-base text-zinc-200">
       <section className="space-y-1">
-        {latestResults.length === 0 && (
+        {abilityResults.length === 0 && (
           <p className="text-xs text-zinc-500">
             아직 기록된 능력 결과가 없습니다.
           </p>
         )}
         <div className="space-y-2">
-          {latestResults.map((r) => (
+          {abilityResults.map((r) => (
             <div
               key={r.id}
               className="rounded-lg bg-zinc-900 px-3 py-2 text-base text-zinc-100"

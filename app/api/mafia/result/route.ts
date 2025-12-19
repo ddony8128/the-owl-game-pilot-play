@@ -78,7 +78,7 @@ export async function GET() {
   const results: FinalResult[] = [];
 
   for (const p of mafiaPlayers) {
-    const cash = p.cash;
+    const cash = typeof p.cash === "number" ? p.cash : 0;
     const holdings = (p.stocks || {}) as MafiaStocksHolding;
 
     let stockValue = 0;

@@ -58,6 +58,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (phaseState.phase !== "vote") {
+    return NextResponse.json(
+      { error: "투표는 투표 단계에서만 할 수 있습니다." } as VoteResponse,
+      { status: 400 }
+    );
+  }
+
   const { data: playerRow, error: playerError } = await supabase
     .from("players")
     .select("id, nickname, is_finalist, created_at")

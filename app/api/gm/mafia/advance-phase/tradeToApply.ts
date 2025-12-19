@@ -403,6 +403,28 @@ export async function handleTradeToApply(
     const pid = p.player_id;
     const abilities = abilitiesByPlayer.get(pid) ?? [];
 
+    // 시장: 이번 라운드 표 가격 안내 (능력 사용 시)
+    const mayorAbility = abilities.find(
+      (a): a is Extract<MafiaAbilityPayload, { job: "mayor" }> =>
+        a.job === "mayor"
+    );
+    if (mayorAbility) {
+      const tp = mayorAbility.ticket_price;
+      if (tp === 1 || tp === 2 || tp === 3) {
+        abilityResults.push({
+          player_id: pid,
+          round_number: current.round_number,
+          phase: "apply",
+          job: "mayor",
+          category: "ticket_price",
+          message: `시장 능력으로 이번 라운드 표 가격이 ${tp}원으로 적용되었습니다.`,
+          payload: {
+            ticket_price: tp,
+          },
+        });
+      }
+    }
+
     // 경찰: 대상이 마피아인지 여부를 알려준다.
     const policeAbility = abilities.find(
       (a): a is Extract<MafiaAbilityPayload, { job: "police" }> =>

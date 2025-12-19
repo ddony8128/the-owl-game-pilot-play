@@ -356,14 +356,11 @@ function MafiaInner() {
   }, [computeRemaining]);
 
   const availableTabs = useMemo(() => {
-    const base: TabKey[] = ["info", "rules", "stocks"];
+    const base: TabKey[] = ["info", "rules", "stocks", "result"];
     const phaseKey = phase?.phase;
     if (phaseKey === "auction") base.push("auction");
     if (phaseKey === "trade") {
       base.push("trade", "ability");
-    }
-    if (phaseKey === "apply" || phaseKey === "vote") {
-      base.push("result");
     }
     if (phaseKey === "vote") base.push("vote");
     return base;
@@ -377,8 +374,8 @@ function MafiaInner() {
         { key: "stocks", label: "주가" },
         { key: "auction", label: "경매" },
         { key: "trade", label: "거래" },
-        { key: "ability", label: "능력사용" },
-        { key: "result", label: "능력결과" },
+        { key: "ability", label: "능력" },
+        { key: "result", label: "능력/투표결과" },
         { key: "vote", label: "투표" },
       ].filter((t) => availableTabs.includes(t.key)),
     [availableTabs]
