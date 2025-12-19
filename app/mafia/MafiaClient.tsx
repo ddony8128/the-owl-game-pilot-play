@@ -55,6 +55,13 @@ function MafiaInner() {
   const [myVoteSummary, setMyVoteSummary] = useState<
     { target: string; vote_count: number; total_spent: number }[]
   >([]);
+  const [myAuctionBet, setMyAuctionBet] = useState<{
+    job: string | null;
+    amount: number | null;
+    give_up: boolean;
+  } | null>(null);
+  const [hasUsedAbilityThisPhase, setHasUsedAbilityThisPhase] =
+    useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
@@ -91,6 +98,12 @@ function MafiaInner() {
                 vote_count: number;
                 total_spent: number;
               }[];
+              myAuctionBet?: {
+                job: string | null;
+                amount: number | null;
+                give_up: boolean;
+              } | null;
+              hasUsedAbilityThisPhase?: boolean;
               error?: undefined;
             }
           | { error: string }
@@ -116,6 +129,8 @@ function MafiaInner() {
           typeof json.ticketPrice === "number" ? json.ticketPrice : null
         );
         setMyVoteSummary(json.myVoteSummary ?? []);
+        setMyAuctionBet(json.myAuctionBet ?? null);
+        setHasUsedAbilityThisPhase(!!json.hasUsedAbilityThisPhase);
         setError(null);
       } catch (e: unknown) {
         if (!cancelled) {
@@ -170,6 +185,12 @@ function MafiaInner() {
                 vote_count: number;
                 total_spent: number;
               }[];
+              myAuctionBet?: {
+                job: string | null;
+                amount: number | null;
+                give_up: boolean;
+              } | null;
+              hasUsedAbilityThisPhase?: boolean;
               error?: undefined;
             }
           | { error: string }
@@ -190,6 +211,8 @@ function MafiaInner() {
           typeof json.ticketPrice === "number" ? json.ticketPrice : null
         );
         setMyVoteSummary(json.myVoteSummary ?? []);
+        setMyAuctionBet(json.myAuctionBet ?? null);
+        setHasUsedAbilityThisPhase(!!json.hasUsedAbilityThisPhase);
       } catch {
         // 폴링 에러는 조용히 무시 (초기 로딩 에러는 위 effect에서 처리)
       }
@@ -210,23 +233,68 @@ function MafiaInner() {
     isRunning: boolean;
   } | null>(null);
 
-  // 서버 타이머 폴링 + 로컬 1초 틱 (Subway와 유사 패턴)
+  type MafiaTimerApi = {
+    phase: string | null;
+    timerStart: boolean;
+    timerStartAt: string | null;
+    pauseAt: string | null;
+    totalSeconds: number;
+  };
+
+  const computeRemaining = (
+    api: MafiaTimerApi | null,
+    nowMs: number
+  ): { remainingSeconds: number; isRunning: boolean } => {
+    if (!api || !api.phase) {
+      return { remainingSeconds: 0, isRunning: false };
+    }
+
+    const total = api.totalSeconds || 0;
+    if (total <= 0) {
+      return { remainingSeconds: 0, isRunning: false };
+    }
+
+    if (!api.timerStart && !api.pauseAt) {
+      return { remainingSeconds: total, isRunning: false };
+    }
+
+    if (api.timerStart && api.timerStartAt) {
+      const startMs = new Date(api.timerStartAt).getTime();
+      if (Number.isNaN(startMs)) {
+        return { remainingSeconds: total, isRunning: false };
+      }
+      const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+      const remaining = Math.max(0, total - elapsed);
+      return { remainingSeconds: remaining, isRunning: remaining > 0 };
+    }
+
+    if (!api.timerStart && api.timerStartAt && api.pauseAt) {
+      const startMs = new Date(api.timerStartAt).getTime();
+      const pauseMs = new Date(api.pauseAt).getTime();
+      if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
+        return { remainingSeconds: total, isRunning: false };
+      }
+      const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
+      const remaining = Math.max(0, total - elapsed);
+      return { remainingSeconds: remaining, isRunning: false };
+    }
+
+    return { remainingSeconds: total, isRunning: false };
+  };
+
+  // 서버 타이머 폴링 + 로컬 1초 틱 (GM 카운트다운과 동일 패턴)
   useEffect(() => {
     let cancelled = false;
 
     const loadTimer = async () => {
       try {
         const res = await fetch("/api/gm/timers/mafia");
-        const json = (await res.json().catch(() => null)) as {
-          remainingSeconds: number;
-          isRunning: boolean;
-        } | null;
+        const json = (await res
+          .json()
+          .catch(() => null)) as MafiaTimerApi | null;
         if (!res.ok || !json || cancelled) return;
-
-        setTimerState({
-          remainingSeconds: json.remainingSeconds,
-          isRunning: json.isRunning,
-        });
+        const now = Date.now();
+        setTimerState(computeRemaining(json, now));
       } catch {
         // 타이머 오류는 게임 진행을 막지 않음
       }
@@ -260,7 +328,7 @@ function MafiaInner() {
     const base: TabKey[] = ["info", "rules", "stocks"];
     const phaseKey = phase?.phase;
     if (phaseKey === "auction") base.push("auction");
-    if (phaseKey === "trade" || phaseKey === "apply") {
+    if (phaseKey === "trade") {
       base.push("trade", "ability");
     }
     if (phaseKey === "apply" || phaseKey === "vote") {
@@ -340,13 +408,26 @@ function MafiaInner() {
           {activeTab === "stocks" && (
             <MafiaStocksTab stocks={stocks} stockHistory={stockHistory} />
           )}
-          {activeTab === "auction" && <MafiaAuctionTab />}
-          {activeTab === "trade" && <MafiaTradeTab stocks={stocks} />}
+          {activeTab === "auction" && (
+            <MafiaAuctionTab myAuctionBet={myAuctionBet} />
+          )}
+          {activeTab === "trade" && (
+            <MafiaTradeTab
+              stocks={stocks}
+              playerCash={mafiaPlayer?.cash ?? null}
+              holdings={
+                (mafiaPlayer?.stocks as
+                  | import("@/lib/types").MafiaStocksHolding
+                  | null) ?? null
+              }
+            />
+          )}
           {activeTab === "ability" && (
             <MafiaAbilityTab
               job={mafiaPlayer?.job ?? null}
               stocks={stocks}
               players={players}
+              hasUsedAbilityThisPhase={hasUsedAbilityThisPhase}
             />
           )}
           {activeTab === "result" && (

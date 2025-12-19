@@ -25,7 +25,15 @@ const JOBS: { id: string; label: string; icon: string | null }[] = [
 
 type Step = "pickJob" | "enterAmount" | "confirmGiveUp";
 
-export function MafiaAuctionTab() {
+type Props = {
+  myAuctionBet: {
+    job: string | null;
+    amount: number | null;
+    give_up: boolean;
+  } | null;
+};
+
+export function MafiaAuctionTab({ myAuctionBet }: Props) {
   const [step, setStep] = useState<Step>("pickJob");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
@@ -123,6 +131,31 @@ export function MafiaAuctionTab() {
 
   const currentJobLabel =
     (selectedJobId && JOBS.find((j) => j.id === selectedJobId)?.label) ?? "";
+
+  // 이미 서버에 기록된 베팅이 있다면, 해당 요약만 보여주고 재베팅은 막는다.
+  if (myAuctionBet) {
+    const chosenLabel =
+      myAuctionBet.job && JOBS.find((j) => j.id === myAuctionBet.job)?.label;
+
+    const message = myAuctionBet.give_up
+      ? "이번 라운드 직업 경매에서 베팅을 포기했습니다."
+      : `${chosenLabel ?? myAuctionBet.job ?? "선택한 직업"} 직업에 ${
+          myAuctionBet.amount ?? 0
+        }원을 베팅했습니다.`;
+
+    return (
+      <div className="space-y-3 text-sm text-zinc-100">
+        {error && <ErrorMessage message={error} />}
+        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 whitespace-pre-wrap">
+          {message}
+        </p>
+        <p className="text-xs text-zinc-400">
+          한 라운드에는 한 번만 베팅할 수 있습니다. 다음 라운드 경매에서 다시
+          선택할 수 있습니다.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 text-sm text-zinc-100">

@@ -41,11 +41,12 @@ export function MafiaLogsSection({ logs, onLogAdded }: Props) {
     <section className="space-y-2 text-sm">
       <h2 className="text-base font-semibold">라운드별 로그</h2>
       <div className="flex gap-2 text-xs">
-        <input
-          className="h-8 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 text-xs outline-none focus:border-zinc-400"
-          placeholder="공개 로그를 입력하세요."
+        <textarea
+          className="h-16 flex-1 resize-none rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs outline-none focus:border-zinc-400"
+          placeholder="공개 로그를 입력하세요. (여러 줄 입력 가능)"
           value={newLog}
           onChange={(e) => setNewLog(e.target.value)}
+          rows={3}
         />
         <button
           className="h-8 rounded bg-amber-400 px-3 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-50"
@@ -59,7 +60,7 @@ export function MafiaLogsSection({ logs, onLogAdded }: Props) {
         {logs.map((l) => (
           <div
             key={l.id}
-            className="rounded bg-zinc-900 px-2 py-1 text-zinc-100"
+            className="rounded bg-zinc-900 px-2 py-1 text-zinc-100 whitespace-pre-wrap"
           >
             {l.content}
           </div>

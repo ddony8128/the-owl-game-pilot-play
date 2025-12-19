@@ -72,8 +72,10 @@ export async function handleTradeToApply(
 
   const players = playerRows as Player[];
   const idByNickname = new Map<string, string>();
+  const nicknameById = new Map<string, string>();
   for (const p of players) {
     idByNickname.set(p.nickname, p.id);
+    nicknameById.set(p.id, p.nickname);
   }
 
   type TradeAgg = { buy: number; sell: number };
@@ -368,6 +370,133 @@ export async function handleTradeToApply(
     }
   }
 
+  // 경찰 / 세무조사원 능력 결과 메시지
+  for (const p of playerStates) {
+    const pid = p.player_id;
+    const abilities = abilitiesByPlayer.get(pid) ?? [];
+
+    // 경찰: 대상이 마피아인지 여부를 알려준다.
+    const policeAbility = abilities.find(
+      (a): a is Extract<MafiaAbilityPayload, { job: "police" }> =>
+        a.job === "police"
+    );
+    if (policeAbility) {
+      const targetName = policeAbility.target ?? null;
+
+      if (!targetName) {
+        abilityResults.push({
+          player_id: pid,
+          round_number: current.round_number,
+          phase: "apply",
+          job: "police",
+          category: "police_check",
+          message:
+            "이번 라운드에는 아무도 조사하지 않았습니다. (대상을 선택하지 않음)",
+          payload: null,
+        });
+      } else {
+        const targetId = idByNickname.get(targetName) ?? null;
+        const targetState = targetId
+          ? playerStateById.get(targetId) ?? null
+          : null;
+        const isMafia = !!targetState?.is_mafia;
+
+        abilityResults.push({
+          player_id: pid,
+          round_number: current.round_number,
+          phase: "apply",
+          job: "police",
+          category: "police_check",
+          message: `경찰 조사 결과: ${targetName}은(는) ${
+            isMafia ? "마피아입니다." : "마피아가 아닙니다."
+          }.`,
+          payload: {
+            target_nickname: targetName,
+            target_player_id: targetId,
+            is_mafia: isMafia,
+          },
+        });
+      }
+    }
+
+    // 세무조사원: 대상의 보유 주식 및 이번 라운드 거래 내역을 알려준다.
+    const taxAbility = abilities.find(
+      (a): a is Extract<MafiaAbilityPayload, { job: "tax_auditor" }> =>
+        a.job === "tax_auditor"
+    );
+    if (taxAbility) {
+      const targetName = taxAbility.target;
+      const targetId = idByNickname.get(targetName) ?? null;
+      const targetState = targetId
+        ? playerStateById.get(targetId) ?? null
+        : null;
+
+      let message: string;
+
+      if (!targetId || !targetState) {
+        message = `세무조사 결과: ${targetName}의 정보를 찾을 수 없어 조사에 실패했습니다.`;
+      } else {
+        const rawStocks = (targetState as unknown as { stocks?: unknown })
+          .stocks;
+        const stocks: Record<string, { amount: number }> =
+          rawStocks && typeof rawStocks === "object"
+            ? { ...(rawStocks as Record<string, { amount: number }>) }
+            : {};
+
+        const trades =
+          tradeByPlayerStock.get(targetId) ?? new Map<string, TradeAgg>();
+
+        const lines: string[] = [];
+        const displayName =
+          nicknameById.get(targetId) ?? targetName ?? targetId ?? "알 수 없음";
+
+        lines.push(
+          `세무조사 결과: ${displayName}의 보유 주식과 이번 라운드 거래 내역입니다.`
+        );
+        lines.push("");
+        lines.push("보유 주식:");
+
+        const holdingEntries = Object.entries(stocks);
+        if (holdingEntries.length === 0) {
+          lines.push("- 보유 주식 없음");
+        } else {
+          for (const [stockKey, info] of holdingEntries) {
+            const amt =
+              typeof info?.amount === "number" && info.amount > 0
+                ? info.amount
+                : 0;
+            lines.push(`- ${stockKey}: ${amt}주`);
+          }
+        }
+
+        lines.push("");
+        lines.push("이번 라운드 매수/매도:");
+        if (trades.size === 0) {
+          lines.push("- 거래 내역 없음");
+        } else {
+          for (const [stockKey, agg] of trades.entries()) {
+            lines.push(`- ${stockKey}: 매수 ${agg.buy} / 매도 ${agg.sell}`);
+          }
+        }
+
+        message = lines.join("\n");
+      }
+
+      abilityResults.push({
+        player_id: pid,
+        round_number: current.round_number,
+        phase: "apply",
+        job: "tax_auditor",
+        category: "tax_audit",
+        message,
+        payload: {
+          target_nickname: targetName,
+          target_player_id: targetId ?? null,
+        },
+      });
+    }
+  }
+
   // 강도 정산
   for (const p of playerStates) {
     if (p.job !== "robber") continue;
@@ -435,39 +564,20 @@ export async function handleTradeToApply(
     }
   }
 
-  // 보유 주식(stocks) 반영
+  // 능력/강도로 인한 현금 변화만 반영 (주식 보유량은 trade 시점에 이미 반영됨)
   const updatedPlayers: Partial<MafiaPlayerState>[] = [];
 
   for (const p of playerStates) {
     const pid = p.player_id;
-    const perStock = tradeByPlayerStock.get(pid);
     const deltaCash = cashDelta.get(pid) ?? 0;
 
-    if (!perStock && deltaCash === 0) continue;
-
-    const rawStocks = (p as unknown as { stocks?: unknown }).stocks;
-    const stocks: Record<string, { amount: number }> =
-      rawStocks && typeof rawStocks === "object"
-        ? { ...(rawStocks as Record<string, { amount: number }>) }
-        : {};
-
-    if (perStock) {
-      for (const [stockKey, agg] of perStock.entries()) {
-        const prevAmount =
-          typeof stocks[stockKey]?.amount === "number"
-            ? stocks[stockKey].amount
-            : 0;
-        const nextAmount = prevAmount + agg.buy - agg.sell;
-        stocks[stockKey] = { amount: nextAmount };
-      }
-    }
+    if (deltaCash === 0) continue;
 
     const nextCash = p.cash + deltaCash;
 
     updatedPlayers.push({
       player_id: pid,
       cash: nextCash,
-      stocks,
     } as Partial<MafiaPlayerState>);
   }
 

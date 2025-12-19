@@ -138,6 +138,13 @@ export async function GET(request: Request) {
       }[]
     | null = null;
 
+  let hasUsedAbilityThisPhase = false;
+  let myAuctionBet: {
+    job: string | null;
+    amount: number | null;
+    give_up: boolean;
+  } | null = null;
+
   if (nickname) {
     const playerRes = await supabase
       .from("players")
@@ -186,6 +193,36 @@ export async function GET(request: Request) {
     }
 
     players = (playersRows || []) as Player[];
+
+    if (phase && typeof phase.round_number === "number") {
+      const { data: betRow, error: betError } = await supabase
+        .from("mafia_actions")
+        .select("payload")
+        .eq("round_number", phase.round_number)
+        .eq("phase", "auction")
+        .eq("action_type", "bet")
+        .eq("player_id", player.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!betError && betRow) {
+        const payload = betRow.payload as {
+          job?: string | null;
+          amount?: number;
+          give_up?: boolean;
+        } | null;
+
+        myAuctionBet = {
+          job: payload?.job ?? null,
+          amount:
+            typeof payload?.amount === "number" && payload.amount > 0
+              ? payload.amount
+              : null,
+          give_up: !!payload?.give_up,
+        };
+      }
+    }
 
     // 현재 플레이어의 능력결과 (최신 라운드 우선, created_at 오름차순)
     const { data: abilityRows, error: abilityError } = await supabase
@@ -288,6 +325,23 @@ export async function GET(request: Request) {
         myVoteSummary = [];
       }
     }
+
+    // 현재 라운드/페이즈에서 이미 능력을 사용했는지 여부 (trade/apply 단계 UI용)
+    if (phase) {
+      const { data: abilityActionRow, error: abilityActionError } =
+        await supabase
+          .from("mafia_actions")
+          .select("id")
+          .eq("round_number", phase.round_number)
+          .eq("phase", phase.phase)
+          .eq("action_type", "ability")
+          .eq("player_id", player.id)
+          .maybeSingle();
+
+      if (!abilityActionError && abilityActionRow) {
+        hasUsedAbilityThisPhase = true;
+      }
+    }
   }
 
   return NextResponse.json({
@@ -300,5 +354,7 @@ export async function GET(request: Request) {
     abilityResults,
     ticketPrice,
     myVoteSummary,
+    hasUsedAbilityThisPhase,
+    myAuctionBet,
   });
 }

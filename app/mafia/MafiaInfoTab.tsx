@@ -157,7 +157,7 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
           {logs.map((log) => (
             <div
               key={log.id}
-              className="rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100"
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100 whitespace-pre-wrap"
             >
               {log.content}
             </div>

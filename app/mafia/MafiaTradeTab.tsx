@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import type { MafiaStockState } from "@/lib/types";
+import type { MafiaStockState, MafiaStocksHolding } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { ErrorMessage } from "@/components/ErrorMessage";
 
 type Props = {
   stocks: MafiaStockState[];
+  playerCash: number | null;
+  holdings: MafiaStocksHolding | null;
 };
 
 type TradeStep = "pickStock" | "enterAmount";
@@ -27,7 +29,7 @@ const getStockLogoSrc = (key: string): string | null => {
   }
 };
 
-export function MafiaTradeTab({ stocks }: Props) {
+export function MafiaTradeTab({ stocks, playerCash, holdings }: Props) {
   const [step, setStep] = useState<TradeStep>("pickStock");
   const [type, setType] = useState<"buy" | "sell">("buy");
   const [stockKey, setStockKey] = useState<string | null>(null);
@@ -38,6 +40,14 @@ export function MafiaTradeTab({ stocks }: Props) {
   const [boughtStocks, setBoughtStocks] = useState<string[]>([]);
   const [soldStocks, setSoldStocks] = useState<string[]>([]);
   const { player } = usePlayerAuth();
+
+  const holdingAmountFor = (key: string): number => {
+    if (!holdings || typeof holdings !== "object") return 0;
+    const entry = (holdings as Record<string, { amount: number }>)[key];
+    return typeof entry?.amount === "number" && entry.amount > 0
+      ? entry.amount
+      : 0;
+  };
 
   const handleSubmit = async () => {
     if (!player?.nickname) return;
@@ -122,7 +132,9 @@ export function MafiaTradeTab({ stocks }: Props) {
           <div className="space-y-2">
             {stocks.map((s) => {
               const disabledBuy = soldStocks.includes(s.stock_key);
-              const disabledSell = boughtStocks.includes(s.stock_key);
+              const disabledSell =
+                boughtStocks.includes(s.stock_key) ||
+                holdingAmountFor(s.stock_key) <= 0;
               return (
                 <div
                   key={s.stock_key}
@@ -191,6 +203,22 @@ export function MafiaTradeTab({ stocks }: Props) {
             {stockKey}을(를) 얼마나 {type === "buy" ? "매수" : "매도"}
             하시겠습니까?
           </p>
+          {type === "buy" && (
+            <p className="text-[11px] text-zinc-500">
+              현재 보유 현금:{" "}
+              <span className="font-semibold text-amber-300">
+                {playerCash ?? 0} 코인
+              </span>
+            </p>
+          )}
+          {type === "sell" && (
+            <p className="text-[11px] text-zinc-500">
+              현재 보유 수량:{" "}
+              <span className="font-semibold text-emerald-300">
+                {holdingAmountFor(stockKey)}개
+              </span>
+            </p>
+          )}
           <input
             className="h-10 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-400"
             placeholder="수량"

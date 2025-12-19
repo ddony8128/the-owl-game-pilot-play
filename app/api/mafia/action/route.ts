@@ -107,6 +107,201 @@ export async function POST(request: Request) {
     }
   }
 
+  // 직업 경매 베팅도 라운드/페이즈당 1회만 허용
+  if (action_type === "bet") {
+    const { data: existingBet, error: existingBetError } = await supabase
+      .from("mafia_actions")
+      .select("id")
+      .eq("player_id", player.id)
+      .eq("round_number", phaseState.round_number)
+      .eq("phase", phaseState.phase)
+      .eq("action_type", "bet")
+      .maybeSingle();
+
+    if (existingBetError) {
+      return NextResponse.json(
+        { error: existingBetError.message } as ActionResponse,
+        { status: 500 }
+      );
+    }
+
+    if (existingBet) {
+      return NextResponse.json(
+        {
+          error: "이번 라운드에서는 이미 직업 경매에 베팅했습니다.",
+        } as ActionResponse,
+        { status: 400 }
+      );
+    }
+  }
+
+  // 주식 거래: 즉시 현금/보유 주식에 반영 + 검증
+  if (action_type === "buy" || action_type === "sell") {
+    const payload = (body.payload ?? {}) as {
+      stock_key?: string;
+      amount?: number;
+    };
+
+    const stockKey =
+      typeof payload.stock_key === "string" && payload.stock_key.length > 0
+        ? payload.stock_key
+        : null;
+    const amount =
+      typeof payload.amount === "number" && payload.amount > 0
+        ? Math.floor(payload.amount)
+        : 0;
+
+    if (!stockKey || amount <= 0) {
+      return NextResponse.json(
+        { error: "유효한 종목과 수량을 입력해 주세요." } as ActionResponse,
+        { status: 400 }
+      );
+    }
+
+    // 같은 라운드/페이즈/종목에 대해 매수·매도를 동시에 할 수 없음
+    const oppositeType = action_type === "buy" ? "sell" : "buy";
+    const { data: oppositeRow, error: oppositeError } = await supabase
+      .from("mafia_actions")
+      .select("id")
+      .eq("player_id", player.id)
+      .eq("round_number", phaseState.round_number)
+      .eq("phase", phaseState.phase)
+      .eq("action_type", oppositeType)
+      // JSON 필드 stock_key가 동일한 경우만 막는다
+      .eq("payload->>stock_key", stockKey)
+      .maybeSingle();
+
+    if (oppositeError) {
+      return NextResponse.json(
+        { error: oppositeError.message } as ActionResponse,
+        { status: 500 }
+      );
+    }
+
+    if (oppositeRow) {
+      return NextResponse.json(
+        {
+          error:
+            "같은 라운드에서는 같은 종목을 매수와 매도 둘 다 할 수 없습니다.",
+        } as ActionResponse,
+        { status: 400 }
+      );
+    }
+
+    // 현재 주가 조회
+    const { data: stockRow, error: stockError } = await supabase
+      .from("mafia_stock_state")
+      .select("stock_key, price")
+      .eq("stock_key", stockKey)
+      .maybeSingle();
+
+    if (stockError) {
+      return NextResponse.json(
+        { error: stockError.message } as ActionResponse,
+        { status: 500 }
+      );
+    }
+
+    const price =
+      stockRow && typeof stockRow.price === "number" ? stockRow.price : 0;
+    if (price <= 0) {
+      return NextResponse.json(
+        { error: "유효하지 않은 주가입니다." } as ActionResponse,
+        { status: 400 }
+      );
+    }
+
+    // 플레이어 자산 상태 조회
+    const { data: stateRow, error: stateError } = await supabase
+      .from("mafia_player_state")
+      .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("player_id", player.id)
+      .maybeSingle();
+
+    if (stateError) {
+      return NextResponse.json(
+        { error: stateError.message } as ActionResponse,
+        { status: 500 }
+      );
+    }
+
+    if (!stateRow) {
+      return NextResponse.json(
+        {
+          error:
+            "플레이어 자산 상태가 초기화되지 않았습니다. GM에게 문의해 주세요.",
+        } as ActionResponse,
+        { status: 500 }
+      );
+    }
+
+    const currentCash =
+      typeof stateRow.cash === "number" && stateRow.cash >= 0
+        ? stateRow.cash
+        : 0;
+    const rawStocks = (stateRow as unknown as { stocks?: unknown }).stocks;
+    const stocks: Record<string, { amount: number }> =
+      rawStocks && typeof rawStocks === "object"
+        ? { ...(rawStocks as Record<string, { amount: number }>) }
+        : {};
+
+    const prevAmount =
+      typeof stocks[stockKey]?.amount === "number"
+        ? stocks[stockKey].amount
+        : 0;
+
+    let nextCash = currentCash;
+    let nextAmount = prevAmount;
+
+    if (action_type === "buy") {
+      const totalCost = price * amount;
+      nextCash = currentCash - totalCost;
+      if (nextCash < 0) {
+        return NextResponse.json(
+          { error: "현금이 부족합니다." } as ActionResponse,
+          { status: 400 }
+        );
+      }
+      nextAmount = prevAmount + amount;
+    } else {
+      // sell
+      if (prevAmount < amount) {
+        return NextResponse.json(
+          {
+            error: "보유 수량보다 많이 매도할 수 없습니다.",
+          } as ActionResponse,
+          { status: 400 }
+        );
+      }
+      const revenue = price * amount;
+      nextCash = currentCash + revenue;
+      nextAmount = prevAmount - amount;
+    }
+
+    stocks[stockKey] = { amount: nextAmount };
+
+    const { error: updateStateError } = await supabase
+      .from("mafia_player_state")
+      .update({
+        cash: nextCash,
+        stocks,
+      })
+      .eq("player_id", player.id);
+
+    if (updateStateError) {
+      return NextResponse.json(
+        { error: updateStateError.message } as ActionResponse,
+        { status: 500 }
+      );
+    }
+
+    // payload는 이후 주가 변동/강도 계산 등을 위해 그대로 기록
+    body.payload = {
+      stock_key: stockKey,
+      amount,
+    };
+  }
+
   const { error: insertError } = await supabase.from("mafia_actions").insert({
     player_id: player.id,
     round_number: phaseState.round_number,

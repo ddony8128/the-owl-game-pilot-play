@@ -10,9 +10,15 @@ type Props = {
   job: string | null;
   stocks: MafiaStockState[];
   players: Player[];
+  hasUsedAbilityThisPhase: boolean;
 };
 
-export function MafiaAbilityTab({ job, stocks, players }: Props) {
+export function MafiaAbilityTab({
+  job,
+  stocks,
+  players,
+  hasUsedAbilityThisPhase,
+}: Props) {
   const { player } = usePlayerAuth();
   const [selectedStockKey, setSelectedStockKey] = useState<string | null>(null);
   const [robberTargets, setRobberTargets] = useState<string[]>([]);
@@ -135,6 +141,23 @@ export function MafiaAbilityTab({ job, stocks, players }: Props) {
         <p className="text-xs text-zinc-400">
           현재 직업 정보가 없습니다. GM에게 직업을 확인한 뒤 능력 사용 내용을
           적어 주세요.
+        </p>
+      </div>
+    );
+  }
+
+  // 이미 이번 라운드/페이즈에서 능력을 사용했다면 요약 문구만 표시
+  if (hasUsedAbilityThisPhase || submitted) {
+    return (
+      <div className="space-y-3 text-sm text-zinc-100">
+        {error && <ErrorMessage message={error} />}
+        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 whitespace-pre-wrap">
+          이번 라운드에 이미 능력을 사용했습니다. 능력은 각 라운드마다 한 번만
+          사용할 수 있습니다.
+        </p>
+        <p className="text-xs text-zinc-400">
+          능력 결과는 페이즈가 진행된 뒤 &quot;능력결과&quot; 탭에서 확인할 수
+          있습니다.
         </p>
       </div>
     );
