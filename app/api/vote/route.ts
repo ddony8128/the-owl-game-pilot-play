@@ -52,6 +52,15 @@ export async function POST(request: Request) {
     );
   }
 
+  if (cunning1 === cunning2 || strategic1 === strategic2) {
+    return NextResponse.json(
+      {
+        error: "duplicate target ids in same topic are not allowed",
+      } as VoteResponse,
+      { status: 400 }
+    );
+  }
+
   const nickname = body.nickname.trim();
 
   const { data: voterRow, error: voterError } = await supabase

@@ -66,6 +66,14 @@ export default function DashboardShowPage() {
 
   const updateScore = async (playerId: string, delta: number) => {
     setError(null);
+
+    // 낙관적 업데이트: 서버 응답 전에 먼저 UI에 반영
+    setPlayers((prev) =>
+      prev.map((p) =>
+        p.player_id === playerId ? { ...p, score: (p.score ?? 0) + delta } : p
+      )
+    );
+
     try {
       const res = await fetch("/api/gm/quiz/score", {
         method: "POST",
@@ -133,33 +141,6 @@ export default function DashboardShowPage() {
         players={players}
         playerNames={playerNames}
         onChangeScore={updateScore}
-        onHiddenBonus={async (playerId) => {
-          setError(null);
-          try {
-            const res = await fetch("/api/gm/quiz/hidden-bonus", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ player_id: playerId }),
-            });
-            const json = (await res.json().catch(() => null)) as {
-              ok?: true;
-              error?: string;
-            } | null;
-            if (!res.ok || !json?.ok) {
-              throw new Error(
-                json?.error ?? "히든 피스 보너스를 적용하지 못했습니다."
-              );
-            }
-          } catch (e: unknown) {
-            const message =
-              e instanceof Error
-                ? e.message
-                : "히든 피스 보너스를 적용하지 못했습니다.";
-            setError(message);
-          }
-        }}
       />
 
       <ShowSubmissionSection

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Player } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { PageGuard } from "@/components/PageGuard";
@@ -18,6 +19,7 @@ export default function VotePage() {
 }
 
 function VoteInner() {
+  const router = useRouter();
   const { player } = usePlayerAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,7 @@ function VoteInner() {
     if (!player?.nickname) return;
 
     if (reasonCunning.trim().length < 5) {
-      setError("가장 비열한 플레이어에 대한 이유를 5글자 이상 적어 주세요.");
+      setError("가장 무자비한 플레이어에 대한 이유를 5글자 이상 적어 주세요.");
       return;
     }
     if (reasonStrategic.trim().length < 5) {
@@ -102,6 +104,16 @@ function VoteInner() {
     }
     if (!cunning1 || !cunning2 || !strategic1 || !strategic2) {
       setError("각 항목마다 플레이어 2명을 모두 선택해 주세요.");
+      return;
+    }
+
+    if (cunning1 === cunning2) {
+      setError("가장 무자비한 플레이어 2명은 서로 다른 사람이어야 합니다.");
+      return;
+    }
+
+    if (strategic1 === strategic2) {
+      setError("가장 전략적인 플레이어 2명은 서로 다른 사람이어야 합니다.");
       return;
     }
 
@@ -151,12 +163,13 @@ function VoteInner() {
   if (submitted) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 px-4 text-center text-zinc-50">
-        <h1 className="mb-2 text-lg font-semibold">투표가 완료되었습니다</h1>
-        <p className="max-w-xs text-sm text-zinc-400">
-          다시 접속해도 이 화면만 보입니다.
-          <br />
-          GM의 안내를 기다려 주세요.
-        </p>
+        <h1 className="mb-3 text-lg font-semibold">투표가 완료되었습니다</h1>
+        <button
+          className="mt-2 h-12 rounded-full bg-zinc-100 px-6 text-base font-semibold text-zinc-900 hover:bg-white"
+          onClick={() => router.push("/intro")}
+        >
+          메인 페이지로 돌아가기
+        </button>
       </div>
     );
   }
@@ -164,19 +177,17 @@ function VoteInner() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-8 text-zinc-50">
       <header className="w-full max-w-md text-center">
-        <h1 className="text-lg font-semibold">부엉이 투표</h1>
-        <p className="mt-1 text-xs text-zinc-400">
-          가장 비열한 플레이어 2명, 가장 전략적인 플레이어 2명을 고르고, 각자에
-          대한 이유를 적어 주세요.
+        <h1 className="text-lg font-semibold">투표</h1>
+        <p className="mt-1 text-base text-zinc-400">
+          가장 무자비한 플레이어 2명, 가장 전략적인 플레이어 2명을 고르고,
+          각각에 대한 이유를 적어 주세요.
         </p>
       </header>
 
-      <main className="mt-6 flex w-full max-w-md flex-1 flex-col gap-4 text-sm">
-        {error && <ErrorMessage message={error} />}
-
+      <main className="mt-6 flex w-full max-w-md flex-1 flex-col gap-4 text-base">
         <section className="rounded-xl bg-zinc-900 p-3">
-          <h2 className="mb-2 text-xs font-semibold text-zinc-300">
-            가장 비열한 플레이어 2명
+          <h2 className="mb-2 text-base font-semibold text-zinc-300">
+            가장 무자비한 플레이어 2명
           </h2>
           <div className="flex gap-2">
             <SelectPlayer
@@ -193,7 +204,7 @@ function VoteInner() {
             />
           </div>
           <div className="mt-3 flex flex-col gap-1">
-            <label className="text-[11px] text-zinc-400">
+            <label className="text-base text-zinc-400">
               왜 이렇게 선택했는지 적어 주세요. (5글자 이상)
             </label>
             <textarea
@@ -205,7 +216,7 @@ function VoteInner() {
         </section>
 
         <section className="rounded-xl bg-zinc-900 p-3">
-          <h2 className="mb-2 text-xs font-semibold text-zinc-300">
+          <h2 className="mb-2 text-base font-semibold text-zinc-300">
             가장 전략적인 플레이어 2명
           </h2>
           <div className="flex gap-2">
@@ -223,7 +234,7 @@ function VoteInner() {
             />
           </div>
           <div className="mt-3 flex flex-col gap-1">
-            <label className="text-[11px] text-zinc-400">
+            <label className="text-base text-zinc-400">
               왜 이렇게 선택했는지 적어 주세요. (5글자 이상)
             </label>
             <textarea
@@ -234,8 +245,10 @@ function VoteInner() {
           </div>
         </section>
 
+        {error && <ErrorMessage message={error} />}
+
         <button
-          className="mt-2 h-11 w-full rounded-full bg-amber-400 text-sm font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+          className="mt-2 h-12 w-full rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
           onClick={handleSubmit}
           disabled={submitting}
         >

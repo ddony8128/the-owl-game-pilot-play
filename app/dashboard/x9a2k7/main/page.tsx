@@ -14,6 +14,7 @@ export default function DashboardMainPage() {
     {
       topic: string;
       target_id: string | null;
+      target_nickname: string | null;
       votes: number;
       reasons: string[];
     }[]
@@ -39,6 +40,7 @@ export default function DashboardMainPage() {
               summaries: {
                 topic: string;
                 target_id: string | null;
+                target_nickname: string | null;
                 votes: number;
                 reasons: string[];
               }[];
@@ -97,6 +99,7 @@ export default function DashboardMainPage() {
                       summaries: {
                         topic: string;
                         target_id: string | null;
+                        target_nickname: string | null;
                         votes: number;
                         reasons: string[];
                       }[];
@@ -135,7 +138,8 @@ export default function DashboardMainPage() {
             <details key={`${s.topic}-${s.target_id}-${idx}`} className="group">
               <summary className="flex cursor-pointer items-center justify-between rounded bg-zinc-950 px-2 py-1 text-[11px]">
                 <span>
-                  {s.topic} / {s.target_id ?? "unknown"} — {s.votes}표
+                  {s.topic} / {s.target_nickname ?? s.target_id ?? "unknown"} —{" "}
+                  {s.votes}표
                 </span>
                 <span className="text-[10px] text-zinc-500">
                   사유 {s.reasons.length}개

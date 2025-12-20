@@ -11,7 +11,7 @@ import { QuizShowTabs } from "./QuizShowTabs";
 
 export default function QuizShowClient() {
   return (
-    <PageGuard requireLogin allowGames={["quiz"]} requireFinalist>
+    <PageGuard requireLogin allowGames={["quiz"]}>
       <QuizInner />
     </PageGuard>
   );
@@ -23,7 +23,6 @@ function QuizInner() {
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(
     null
   );
-  const [events, setEvents] = useState<QuizEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +77,6 @@ function QuizInner() {
 
         setCurrentQuestion(nextQuestion);
         const evts = json.events ?? [];
-        setEvents(evts);
 
         // 현재 열린 문제에 대해 이미 답변/무응답 이벤트가 있으면 대기 화면으로 전환
         if (nextQuestion) {
@@ -172,9 +170,16 @@ function QuizInner() {
   }
 
   const score = quizPlayer?.score ?? 0;
+  const nickname = player.nickname;
+  const isFinalist = !!player.is_finalist;
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
+      {isFinalist ? null : (
+        <p className="mb-2 text-sm font-semibold text-emerald-300">
+          관전자를 위한 페이지다부엉!
+        </p>
+      )}
       <QuizShowHeader score={score} chances={chances} />
 
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
@@ -187,6 +192,8 @@ function QuizInner() {
           chances={chances}
           submitting={submitting}
           waitingNext={waitingNext}
+          nickname={nickname}
+          isFinalist={isFinalist}
           onSubmit={handleSubmit}
         />
       </main>

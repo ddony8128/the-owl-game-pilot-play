@@ -47,20 +47,24 @@ export default function DashboardQuizPage() {
     };
   }, []);
 
-  const updateQuestion = async (
-    id: number,
-    patch: Partial<
-      Pick<QuizQuestion, "question" | "is_open" | "options" | "correct_answer">
-    >
-  ) => {
+  const saveQuestion = async (question: QuizQuestion) => {
     setError(null);
     try {
+      const body = {
+        id: question.id,
+        question: question.question,
+        options: Array.isArray(question.options)
+          ? (question.options as string[]).join("\n")
+          : "",
+        correct_answer: question.correct_answer ?? "",
+      };
+
       const res = await fetch("/api/gm/quiz/questions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, ...patch }),
+        body: JSON.stringify(body),
       });
       const json = (await res.json().catch(() => null)) as {
         ok?: true;
@@ -69,8 +73,9 @@ export default function DashboardQuizPage() {
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error ?? "문제를 업데이트하지 못했습니다.");
       }
+      // 서버에서 성공적으로 저장되면, 현재 로컬 상태를 그대로 유지 (이미 최신 상태)
       setQuestions((prev) =>
-        prev.map((q) => (q.id === id ? { ...q, ...patch } : q))
+        prev.map((q) => (q.id === question.id ? { ...q } : q))
       );
     } catch (e: unknown) {
       const message =
@@ -197,9 +202,14 @@ export default function DashboardQuizPage() {
                 <textarea
                   className="mt-1 h-20 w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-xs outline-none focus:border-zinc-400"
                   value={q.question}
-                  onChange={(e) =>
-                    updateQuestion(q.id, { question: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setQuestions((prev) =>
+                      prev.map((qq) =>
+                        qq.id === q.id ? { ...qq, question: value } : qq
+                      )
+                    );
+                  }}
                 />
                 <label className="mt-3 block text-[11px] text-zinc-400">
                   보기 (줄바꿈으로 구분, 비워두면 주관식)
@@ -211,9 +221,20 @@ export default function DashboardQuizPage() {
                       ? (q.options as string[]).join("\n")
                       : ""
                   }
-                  onChange={(e) =>
-                    updateQuestion(q.id, { options: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const lines = value
+                      .split("\n")
+                      .map((line) => line.trim())
+                      .filter((line) => line.length > 0);
+                    setQuestions((prev) =>
+                      prev.map((qq) =>
+                        qq.id === q.id
+                          ? { ...qq, options: lines.length > 0 ? lines : null }
+                          : qq
+                      )
+                    );
+                  }}
                 />
                 <label className="mt-3 block text-[11px] text-zinc-400">
                   정답 (선택형인 경우 보기 텍스트와 동일하게 입력)
@@ -221,10 +242,21 @@ export default function DashboardQuizPage() {
                 <input
                   className="mt-1 h-8 w-full rounded border border-zinc-700 bg-zinc-950 px-2 text-xs outline-none focus:border-zinc-400"
                   value={q.correct_answer ?? ""}
-                  onChange={(e) =>
-                    updateQuestion(q.id, { correct_answer: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setQuestions((prev) =>
+                      prev.map((qq) =>
+                        qq.id === q.id ? { ...qq, correct_answer: value } : qq
+                      )
+                    );
+                  }}
                 />
+                <button
+                  className="mt-3 h-8 rounded bg-amber-400 px-3 text-[11px] font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+                  onClick={() => saveQuestion(q)}
+                >
+                  이 문제 저장
+                </button>
               </div>
             ))}
           {questions.length === 0 && (
