@@ -197,7 +197,7 @@ export async function handleTradeToApply(
           case "up_manipulator": {
             const key = ability.stock_key;
             if (!key || !stockMap.has(key) || key === "국채") continue;
-            priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) + 2);
+            priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) + 1);
 
             // 능력 결과 기록: 상승 주가조작
             abilityResults.push({
@@ -209,7 +209,7 @@ export async function handleTradeToApply(
               message: `상승 주가조작 능력으로 ${key} 주가에 영향을 주었습니다.`,
               payload: {
                 stock_key: key,
-                delta: 2,
+                delta: 1,
               },
             });
             break;
@@ -217,7 +217,7 @@ export async function handleTradeToApply(
           case "down_manipulator": {
             const key = ability.stock_key;
             if (!key || !stockMap.has(key) || key === "국채") continue;
-            priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) - 3);
+            priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) - 2);
 
             // 능력 결과 기록: 하락 주가조작
             abilityResults.push({
@@ -229,7 +229,7 @@ export async function handleTradeToApply(
               message: `하락 주가조작 능력으로 ${key} 주가에 영향을 주었습니다.`,
               payload: {
                 stock_key: key,
-                delta: -3,
+                delta: -2,
               },
             });
             break;
@@ -332,10 +332,10 @@ export async function handleTradeToApply(
   const getBrokerReward = (stockKey: string): number => {
     const total = tradeValueByStock.get(stockKey) ?? 0;
     if (total <= 0) return 0;
-    return Math.floor(total * 0.1);
+    return Math.floor(total * 0.05);
   };
 
-  // CEO, 월급쟁이, 경찰, 세무조사원, 증권사 직원 보너스
+  // CEO, 월급쟁이, 경찰, 세무조사원, 시장, 증권사 직원 보너스
   for (const p of playerStates) {
     const job = p.job;
     const pid = p.player_id;
@@ -359,6 +359,13 @@ export async function handleTradeToApply(
       case "police":
         addCash(pid, 5, true, {
           job: "police",
+          category: "salary",
+          message: "이번 라운드 월급으로 5원을 얻었습니다.",
+        });
+        break;
+      case "mayor":
+        addCash(pid, 5, true, {
+          job: "mayor",
           category: "salary",
           message: "이번 라운드 월급으로 5원을 얻었습니다.",
         });

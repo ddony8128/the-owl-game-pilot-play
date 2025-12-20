@@ -51,23 +51,23 @@ export function MafiaRulesTab() {
         <ul className="list-disc pl-4">
           <li>
             <span className="font-semibold">상승 주가조작범 (마피아)</span>:
-            선택한 한 종목(국채 제외)의 주가를 2원 올립니다.
+            선택한 한 종목(국채 제외)의 주가를 1원 올립니다.
           </li>
           <br />
           <li>
             <span className="font-semibold">하락 주가조작범 (마피아)</span>:
-            선택한 한 종목(국채 제외)의 주가를 3원 떨어뜨립니다.
+            선택한 한 종목(국채 제외)의 주가를 2원 떨어뜨립니다.
           </li>
           <br />
           <li>
             <span className="font-semibold">강도 (마피아) </span>: 자신을 제외한
-            두 명을 대상으로 지정해, 그 라운드 수익의 절반을 빼앗습니다. 라운드
-            수익은 월급과 주식 매도 금액의 합입니다.
+            두 명을 대상으로 지정해, 그 라운드 수익의 절반(버림)을 빼앗습니다.
+            라운드 수익은 월급과 주식 매도 금액의 합입니다.
           </li>
           <br />
           <li>
             <span className="font-semibold">증권사 직원</span>: 선택한 한
-            종목(국채 제외)의 총 거래금액 10%를 얻습니다.
+            종목(국채 제외)의 총 거래금액 5%(버림)를 얻습니다.
           </li>
           <br />
           <li>
@@ -82,8 +82,9 @@ export function MafiaRulesTab() {
           </li>
           <br />
           <li>
-            <span className="font-semibold">시장</span>: 강도와 벌금에
-            면역입니다. 이번 라운드의 표 가격을 1, 2, 3원 중 선택합니다.
+            <span className="font-semibold">시장</span>: 5 원의 월급을 받습니다.
+            강도와 벌금에 면역입니다. 이번 라운드의 표 가격을 1, 2, 3원 중
+            선택합니다.
           </li>
           <br />
           <li>
