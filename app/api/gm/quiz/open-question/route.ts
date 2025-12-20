@@ -23,7 +23,8 @@ export async function POST(request: Request) {
     // 대기 상태: 모든 문제를 비공개로 전환
     const { error: closeAllError } = await supabase
       .from("quiz_questions")
-      .update({ is_open: false });
+      .update({ is_open: false })
+      .gt("id", 0);
 
     if (closeAllError) {
       return NextResponse.json(

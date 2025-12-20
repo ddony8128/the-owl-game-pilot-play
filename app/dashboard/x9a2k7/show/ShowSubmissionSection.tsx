@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { QuizQuestion, QuizSubmission } from "@/lib/types";
 
 type Props = {
@@ -18,18 +19,13 @@ export function ShowSubmissionSection({
     byId.set(q.id, q);
   }
 
+  const orderedSubs = useMemo(() => [...subs].slice().reverse(), [subs]);
+
   return (
     <section className="flex flex-1 flex-col gap-2 text-xs">
       <h2 className="text-base font-semibold">제출 현황 / 채점</h2>
-      <div className="mb-2 rounded-lg bg-zinc-900 p-2 text-[11px] text-zinc-300">
-        <p className="font-semibold">문제 정보</p>
-        <p className="mt-1 text-zinc-400">
-          각 제출 카드의 Q번호를 참고해, 아래 GM 규칙서에 맞춰 채점하고 점수는
-          자동으로 계산됩니다.
-        </p>
-      </div>
       <div className="flex-1 space-y-2 overflow-y-auto rounded-lg bg-zinc-900 p-2">
-        {subs.map((s) => {
+        {orderedSubs.map((s) => {
           const qid = s.question_id ?? null;
           const q = typeof qid === "number" ? byId.get(qid) ?? null : null;
           return (
@@ -39,7 +35,7 @@ export function ShowSubmissionSection({
                   {playerNames[s.player_id ?? ""] ?? s.player_id} / Q
                   {s.question_id}
                 </span>
-                <span className="text-[10px] text-zinc-500">
+                <span className="text-base text-zinc-500">
                   result: {s.result ?? "-"}
                 </span>
               </div>

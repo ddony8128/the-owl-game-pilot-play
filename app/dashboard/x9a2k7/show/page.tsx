@@ -12,6 +12,7 @@ export default function DashboardShowPage() {
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [subs, setSubs] = useState<QuizSubmission[]>([]);
+  const [streaks, setStreaks] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,6 +29,7 @@ export default function DashboardShowPage() {
               questions: QuizQuestion[];
               subs: QuizSubmission[];
               playerNames: Record<string, string>;
+              streaks: Record<string, number>;
               error?: undefined;
             }
           | { error: string }
@@ -46,6 +48,7 @@ export default function DashboardShowPage() {
         setQuestions(json.questions ?? []);
         setSubs(json.subs ?? []);
         setPlayerNames(json.playerNames ?? {});
+        setStreaks(json.streaks ?? {});
         setError(null);
       } catch (e: unknown) {
         if (!cancelled) {
@@ -140,6 +143,7 @@ export default function DashboardShowPage() {
       <ShowScoreSection
         players={players}
         playerNames={playerNames}
+        streaks={streaks}
         onChangeScore={updateScore}
       />
 

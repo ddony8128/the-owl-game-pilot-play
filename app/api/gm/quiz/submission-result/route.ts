@@ -27,16 +27,41 @@ async function recalcScoreForPlayer(
 
   const events = (eventsRows || []) as QuizEvent[];
 
-  const betCountByQuestion = new Map<number, number>();
+  // 이 플레이어가 관여한 문제들(id) 수집
+  const questionIdSet = new Set<number>();
   const safeByQuestion = new Map<number, boolean>();
 
   for (const e of events) {
     const qid = typeof e.question_id === "number" ? e.question_id : null;
     if (!qid) continue;
-    if (e.event_type === "use_bet") {
-      betCountByQuestion.set(qid, (betCountByQuestion.get(qid) ?? 0) + 1);
-    } else if (e.event_type === "use_safe") {
+    questionIdSet.add(qid);
+    if (e.event_type === "use_safe") {
       safeByQuestion.set(qid, true);
+    }
+  }
+
+  // 각 문제별 전역 베팅 수(use_bet)를 집계 (모든 플레이어 기준)
+  const globalBetCountByQuestion = new Map<number, number>();
+
+  if (questionIdSet.size > 0) {
+    const { data: betRows, error: betError } = await supabase
+      .from("quiz_events")
+      .select("question_id, event_type")
+      .in("question_id", Array.from(questionIdSet))
+      .eq("event_type", "use_bet");
+
+    if (betError) {
+      throw new Error(betError.message);
+    }
+
+    for (const row of betRows || []) {
+      const rawQid = (row as { question_id: number | null }).question_id;
+      const qid = typeof rawQid === "number" ? rawQid : null;
+      if (!qid) continue;
+      globalBetCountByQuestion.set(
+        qid,
+        (globalBetCountByQuestion.get(qid) ?? 0) + 1
+      );
     }
   }
 
@@ -60,27 +85,26 @@ async function recalcScoreForPlayer(
     const result = payload.result;
     if (!result) continue;
 
-    const betCount = betCountByQuestion.get(qid) ?? 0;
+    const globalBetCount = globalBetCountByQuestion.get(qid) ?? 0;
     const safeUsed = safeByQuestion.get(qid) ?? false;
 
-    let baseDelta = 0;
+    let netDelta = 0;
     if (result === "correct") {
-      baseDelta = 100;
-    } else if (result === "wrong") {
-      baseDelta = -100;
-    } else if (result === "skip") {
-      baseDelta = 0;
-    }
-
-    let netDelta = baseDelta;
-    if (result === "correct") {
-      netDelta += betCount * 100;
+      // 기본 100점 + 해당 문제에 들어간 전역 베팅 수 * 100점
+      netDelta = 100 + globalBetCount * 100;
     } else if (result === "wrong") {
       if (safeUsed) {
         netDelta = 0;
       } else {
-        netDelta += betCount * -100;
+        // 기본 -100점 + 전역 베팅 수만큼 추가 손실
+        netDelta = -100 - globalBetCount * 100;
       }
+    } else if (result === "skip") {
+      // 무응답 + 베팅도 전략:
+      // - 본인 점수는 0점 유지 (netDelta = 0)
+      // - 하지만 본인의 use_bet 이벤트도 전역 베팅 수에 포함되어,
+      //   해당 문제 배점은 전체적으로 커진 상태가 된다.
+      netDelta = 0;
     }
 
     const lostPoints = netDelta < 0;

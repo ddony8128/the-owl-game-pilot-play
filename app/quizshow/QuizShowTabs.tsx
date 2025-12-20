@@ -186,11 +186,11 @@ export function QuizSubmitTab({
   nickname,
   onSubmit,
 }: QuizSubmitProps) {
+  const questionId = currentQuestion?.id ?? null;
   const [step, setStep] = useState<"answer" | "chance">("answer");
   const [peekAnswers, setPeekAnswers] = useState<
     { nickname: string; answer: string }[] | null
   >(null);
-  const [peekLoading, setPeekLoading] = useState(false);
   const [peekError, setPeekError] = useState<string | null>(null);
   const [canReopen, setCanReopen] = useState(false);
 
@@ -200,12 +200,12 @@ export function QuizSubmitTab({
     setPeekAnswers(null);
     setPeekError(null);
     setCanReopen(false);
-  }, [currentQuestion]);
+  }, [questionId]);
 
   // 컨닝을 사용한 플레이어가 모든 다른 컨닝 사용자들의 확정을 기다리는 폴링
   useEffect(() => {
     if (!waitingNext) return;
-    if (!currentQuestion) return;
+    if (!questionId) return;
     if (usedChance !== "peek") return;
 
     let cancelled = false;
@@ -219,7 +219,7 @@ export function QuizSubmitTab({
           },
           body: JSON.stringify({
             nickname,
-            question_id: currentQuestion.id,
+            question_id: questionId,
           }),
         });
         const json = (await res.json().catch(() => null)) as
@@ -250,24 +250,107 @@ export function QuizSubmitTab({
       cancelled = true;
       clearInterval(id);
     };
-  }, [waitingNext, usedChance, nickname, currentQuestion]);
+  }, [waitingNext, usedChance, nickname, questionId]);
+
+  // 컨닝 확정 후(대기 화면) 다른 사람들의 답안을 주기적으로 갱신
+  useEffect(() => {
+    if (!waitingNext) return;
+    if (!questionId) return;
+    if (usedChance !== "peek") return;
+
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const res = await fetch("/api/quiz/peek-answers", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nickname,
+            question_id: questionId,
+          }),
+        });
+        const json = (await res.json().catch(() => null)) as
+          | { answers: { nickname: string; answer: string }[] }
+          | { error: string }
+          | null;
+
+        if (!res.ok || !json || "error" in json) {
+          return;
+        }
+
+        if (cancelled) return;
+        setPeekAnswers(json.answers ?? []);
+      } catch {
+        // 에러는 조용히 무시
+      }
+    };
+
+    void load();
+    const id = setInterval(() => {
+      void load();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [waitingNext, usedChance, nickname, questionId]);
 
   if (waitingNext) {
-    const showReopenButton = usedChance === "peek" && canReopen;
+    const isPeekFlow = usedChance === "peek";
+    const showReopenButton = isPeekFlow && canReopen;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-base text-zinc-200">
+      <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-base text-zinc-200">
         <div>
-          <p>답안을 제출했습니다.</p>
-          <p className="mt-2 text-xs text-zinc-400">
-            다른 컨닝 사용 참가자들이 답안을 확정할 때까지 기다려 주세요.
-          </p>
+          <p>{isPeekFlow ? "슬쩍 컨닝하는 중..." : "답안을 제출했습니다."}</p>
         </div>
+
+        {isPeekFlow && (
+          <div className="w-full max-w-md space-y-2 text-xs text-zinc-200">
+            {(!peekAnswers || peekAnswers.length === 0) && (
+              <p className="text-[11px] text-zinc-400">
+                다른 플레이어의 답안을 불러오는 중입니다...
+              </p>
+            )}
+            {peekError && (
+              <p className="text-[11px] text-red-400">{peekError}</p>
+            )}
+            {peekAnswers && peekAnswers.length > 0 && (
+              <div className="rounded-lg bg-zinc-900 p-2">
+                <p className="mb-1 text-[12px] font-semibold text-zinc-100">
+                  다른 플레이어들의 답
+                </p>
+                <ul className="space-y-1">
+                  {peekAnswers.map((a, idx) => (
+                    <li
+                      key={idx}
+                      className="flex flex-col rounded bg-zinc-950 px-2 py-1"
+                    >
+                      <span className="text-[11px] font-semibold text-amber-300">
+                        {a.nickname}
+                      </span>
+                      <span className="mt-1 text-[11px] wrap-break-word">
+                        {a.answer && a.answer.length > 0
+                          ? a.answer
+                          : "(무응답)"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
         {showReopenButton && (
           <button
             type="button"
             className="mt-2 h-10 rounded-full border border-zinc-700 bg-zinc-900 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-800"
             onClick={async () => {
-              if (!currentQuestion) return;
+              if (!questionId) return;
               setPeekError(null);
               try {
                 const res = await fetch("/api/quiz/reset-answer", {
@@ -277,7 +360,7 @@ export function QuizSubmitTab({
                   },
                   body: JSON.stringify({
                     nickname,
-                    question_id: currentQuestion.id,
+                    question_id: questionId,
                   }),
                 });
                 const json = (await res.json().catch(() => null)) as
@@ -324,10 +407,12 @@ export function QuizSubmitTab({
     ? (currentQuestion.options as string[])
     : null;
 
-  const handleTogglePeek = async () => {
+  const handleTogglePeek = () => {
     // 이미 선택된 상태면 단순 해제 (UI 상 토글만)
     if (usedChance === "peek") {
       setUsedChance(null);
+      setPeekAnswers(null);
+      setPeekError(null);
       return;
     }
 
@@ -336,41 +421,6 @@ export function QuizSubmitTab({
 
     setUsedChance("peek");
     setPeekError(null);
-    setPeekLoading(true);
-
-    try {
-      const res = await fetch("/api/quiz/peek-answers", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          nickname,
-          question_id: currentQuestion.id,
-        }),
-      });
-      const json = (await res.json().catch(() => null)) as
-        | { answers: { nickname: string; answer: string }[] }
-        | { error: string }
-        | null;
-
-      if (!res.ok || !json || "error" in json) {
-        throw new Error(
-          (json as { error?: string })?.error ??
-            "다른 플레이어의 답안을 불러오지 못했습니다."
-        );
-      }
-
-      setPeekAnswers(json.answers ?? []);
-    } catch (e: unknown) {
-      const message =
-        e instanceof Error
-          ? e.message
-          : "다른 플레이어의 답안을 불러오지 못했습니다.";
-      setPeekError(message);
-    } finally {
-      setPeekLoading(false);
-    }
   };
 
   const handleSubmitAnswer = () => {
@@ -396,7 +446,7 @@ export function QuizSubmitTab({
   return (
     <div className="flex h-full flex-col gap-4 text-sm text-zinc-100">
       <div className="rounded-xl bg-zinc-900 p-3">
-        <p className="text-sm text-zinc-400">문제 {currentQuestion.id}</p>
+        <p className="text-base text-zinc-400">문제 {currentQuestion.id}</p>
         <p className="mt-2 text-base text-zinc-100">
           {currentQuestion.question}
         </p>
@@ -433,13 +483,10 @@ export function QuizSubmitTab({
               />
             </div>
           )}
-          <div className="mt-2 flex flex-col gap-2 text-[11px] text-zinc-400">
-            <p>
-              답안을 제출하거나, 이번 문제는 답하지 않고 넘어갈 수 있습니다.
-            </p>
+          <div className="mt-2 flex flex-col gap-2 text-base text-zinc-400">
             <div className="flex gap-2">
               <button
-                className="h-11 flex-1 rounded-full bg-amber-400 text-sm font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+                className="h-12 flex-1 rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
                 type="button"
                 onClick={handleSubmitAnswer}
                 disabled={submitting}
@@ -447,7 +494,7 @@ export function QuizSubmitTab({
                 {submitting ? "제출 중..." : "답안 제출"}
               </button>
               <button
-                className="h-11 flex-1 rounded-full border border-zinc-700 bg-zinc-900 text-sm font-semibold text-zinc-100 hover:bg-zinc-800 disabled:opacity-40"
+                className="h-12 flex-1 rounded-full border border-zinc-700 bg-zinc-900 text-base font-semibold text-zinc-100 hover:bg-zinc-800 disabled:opacity-40"
                 type="button"
                 onClick={handleSkip}
                 disabled={submitting}
@@ -462,7 +509,7 @@ export function QuizSubmitTab({
       {step === "chance" && (
         <>
           <div className="space-y-2 text-sm text-zinc-200">
-            <p>이 문제에 사용할 찬스를 선택해 주세요. (선택)</p>
+            <p>이 문제에 사용할 찬스를 선택해 주세요.</p>
             <div className="flex gap-2">
               <ChanceChip
                 label="컨닝"
@@ -487,37 +534,9 @@ export function QuizSubmitTab({
                 }
               />
             </div>
-            {peekLoading && (
-              <p className="text-xs text-zinc-400">
-                다른 플레이어의 답안을 불러오는 중입니다...
-              </p>
-            )}
-            {peekError && <p className="text-xs text-red-400">{peekError}</p>}
-            {peekAnswers && peekAnswers.length > 0 && (
-              <div className="mt-2 rounded-lg bg-zinc-900 p-2 text-xs text-zinc-200">
-                <p className="mb-1 font-semibold text-zinc-100">
-                  다른 플레이어들의 답
-                </p>
-                <ul className="space-y-1">
-                  {peekAnswers.map((a, idx) => (
-                    <li
-                      key={idx}
-                      className="flex flex-col rounded bg-zinc-950 px-2 py-1"
-                    >
-                      <span className="text-[11px] font-semibold text-amber-300">
-                        {a.nickname}
-                      </span>
-                      <span className="mt-1 text-[11px] wrap-break-word">
-                        {a.answer}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
           <button
-            className="mt-2 h-11 w-full rounded-full bg-amber-400 text-sm font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
+            className="mt-2 h-12 w-full rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
             type="button"
             onClick={handleFinalSubmit}
             disabled={submitting}
@@ -564,13 +583,14 @@ type QuizSpectateProps = {
 };
 
 function QuizSpectateTab({ currentQuestion }: QuizSpectateProps) {
+  const questionId = currentQuestion?.id ?? null;
   const [answers, setAnswers] = useState<
     { nickname: string; answer: string | null }[]
   >([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!currentQuestion) {
+    if (!questionId) {
       setAnswers([]);
       setError(null);
       return;
@@ -581,7 +601,7 @@ function QuizSpectateTab({ currentQuestion }: QuizSpectateProps) {
     const load = async () => {
       try {
         const params = new URLSearchParams({
-          question_id: String(currentQuestion.id),
+          question_id: String(questionId),
         });
         const res = await fetch(`/api/quiz/live-answers?${params.toString()}`);
         const json = (await res.json().catch(() => null)) as
@@ -615,7 +635,7 @@ function QuizSpectateTab({ currentQuestion }: QuizSpectateProps) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [currentQuestion]);
+  }, [questionId]);
 
   if (!currentQuestion) {
     return (
@@ -637,13 +657,13 @@ function QuizSpectateTab({ currentQuestion }: QuizSpectateProps) {
         </p>
       </div>
 
-      <div className="space-y-2 text-xs text-zinc-200">
-        <p className="text-[11px] text-zinc-400">
+      <div className="space-y-2 text-sm text-zinc-200">
+        <p className="text-sm text-zinc-400">
           결승 진출자들이 어떤 답을 제출하고 있는지 실시간으로 보여준다부엉!
         </p>
         {error && <p className="text-xs text-red-400">{error}</p>}
         {answers.length === 0 && !error && (
-          <p className="text-xs text-zinc-400">아직 제출된 답이 없습니다.</p>
+          <p className="text-sm text-zinc-400">아직 제출된 답이 없습니다.</p>
         )}
         <ul className="space-y-2">
           {answers.map((a, idx) => (
@@ -651,7 +671,7 @@ function QuizSpectateTab({ currentQuestion }: QuizSpectateProps) {
               key={idx}
               className="flex flex-col rounded-lg bg-zinc-900 px-3 py-2"
             >
-              <span className="text-xs font-semibold text-amber-300">
+              <span className="text-sm font-semibold text-amber-300">
                 {a.nickname}
               </span>
               <span className="mt-1 whitespace-pre-wrap text-sm">

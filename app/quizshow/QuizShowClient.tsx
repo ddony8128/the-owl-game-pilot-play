@@ -30,6 +30,15 @@ function QuizInner() {
   const [usedChance, setUsedChance] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [waitingNext, setWaitingNext] = useState(false);
+  const [liveScores, setLiveScores] = useState<
+    {
+      nickname: string;
+      score: number;
+      chances: { peek: boolean; bet: boolean; safe: boolean };
+      streak: number;
+    }[]
+  >([]);
+  const [liveScoresError, setLiveScoresError] = useState<string | null>(null);
 
   const lastQuestionIdRef = useRef<number | null>(null);
 
@@ -113,6 +122,58 @@ function QuizInner() {
     };
   }, [player?.nickname]);
 
+  // 관전자 모드에서 결승자 점수 실시간 폴링
+  useEffect(() => {
+    if (!player) return;
+    const isFinalist = !!player.is_finalist;
+    if (isFinalist) return;
+
+    let cancelled = false;
+
+    const loadScores = async () => {
+      try {
+        const res = await fetch("/api/quiz/live-scores");
+        const json = (await res.json().catch(() => null)) as
+          | {
+              players: {
+                nickname: string;
+                score: number;
+                chances: { peek: boolean; bet: boolean; safe: boolean };
+                streak: number;
+              }[];
+            }
+          | { error: string }
+          | null;
+
+        if (!res.ok || !json || "error" in json) {
+          throw new Error(
+            (json as { error?: string })?.error ??
+              "점수 정보를 불러오지 못했습니다."
+          );
+        }
+
+        if (cancelled) return;
+        setLiveScores(json.players ?? []);
+        setLiveScoresError(null);
+      } catch (e: unknown) {
+        if (cancelled) return;
+        const message =
+          e instanceof Error ? e.message : "점수 정보를 불러오지 못했습니다.";
+        setLiveScoresError(message);
+      }
+    };
+
+    void loadScores();
+    const id = setInterval(() => {
+      void loadScores();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [player]);
+
   const chances = useMemo(() => {
     type Chances = { peek?: boolean; bet?: boolean; safe?: boolean };
     const raw = quizPlayer?.chances as Chances | null | undefined;
@@ -176,11 +237,21 @@ function QuizInner() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
       {isFinalist ? null : (
-        <p className="mb-2 text-sm font-semibold text-emerald-300">
-          관전자를 위한 페이지다부엉!
-        </p>
+        <div className="mb-2 flex w-full max-w-md flex-col items-center gap-1 text-center">
+          <p className="text-xl font-semibold text-emerald-300">
+            관전자를 위한 페이지다부엉!
+          </p>
+          {liveScoresError && (
+            <p className="text-[11px] text-red-400">{liveScoresError}</p>
+          )}
+        </div>
       )}
-      <QuizShowHeader score={score} chances={chances} />
+      <QuizShowHeader
+        mode={isFinalist ? "finalist" : "spectator"}
+        score={score}
+        chances={chances}
+        liveScores={liveScores}
+      />
 
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <QuizShowTabs

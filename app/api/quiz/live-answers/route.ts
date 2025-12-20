@@ -48,12 +48,12 @@ export async function GET(request: Request) {
     });
   }
 
-  // 해당 문제에 대한 결승 진출자들의 답안 이벤트 조회
+  // 해당 문제에 대한 결승 진출자들의 답안/무응답 이벤트 조회
   const { data: eventsRows, error: eventsError } = await supabase
     .from("quiz_events")
     .select("id, player_id, question_id, event_type, payload, created_at")
     .eq("question_id", questionId)
-    .eq("event_type", "answer_submitted")
+    .in("event_type", ["answer_submitted", "skip"])
     .order("created_at", { ascending: true });
 
   if (eventsError) {

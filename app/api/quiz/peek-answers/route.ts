@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { Player, QuizEvent, QuizPlayerState } from "@/lib/types";
+import type { Player, QuizEvent } from "@/lib/types";
 
 type Body = {
   nickname?: string;
@@ -56,37 +56,12 @@ export async function POST(request: Request) {
 
   const player = playerRow as Player;
 
-  // 찬스 사용 가능 여부 확인 (peek이 이미 사용되었는지 체크)
-  const { data: stateRow, error: stateError } = await supabase
-    .from("quiz_player_state")
-    .select("player_id, score, chances, updated_at")
-    .eq("player_id", player.id)
-    .maybeSingle();
-
-  if (stateError) {
-    return NextResponse.json(
-      { error: stateError.message } as PeekAnswersResponse,
-      { status: 500 }
-    );
-  }
-
-  const current = (stateRow || null) as QuizPlayerState | null;
-  const chances = (current?.chances as Record<string, unknown> | null) || {};
-  const canUsePeek = chances.peek !== false;
-
-  if (!canUsePeek) {
-    return NextResponse.json(
-      { error: "peek chance is already used" } as PeekAnswersResponse,
-      { status: 403 }
-    );
-  }
-
-  // 다른 플레이어들의 답안 조회
+  // 다른 플레이어들의 답안/무응답 조회
   const { data: eventsRows, error: eventsError } = await supabase
     .from("quiz_events")
     .select("id, player_id, question_id, event_type, payload, created_at")
     .eq("question_id", questionId)
-    .eq("event_type", "answer_submitted");
+    .in("event_type", ["answer_submitted", "skip"]);
 
   if (eventsError) {
     return NextResponse.json(
@@ -128,36 +103,15 @@ export async function POST(request: Request) {
     }
   }
 
-  // peek 찬스를 실제로 사용한 것으로 처리 (한 번만 사용 가능)
-  const nextChances = { ...chances, peek: false };
-
-  const { error: updateError } = await supabase
-    .from("quiz_player_state")
-    .upsert(
-      {
-        player_id: player.id,
-        score: current?.score ?? 0,
-        chances: nextChances,
-      },
-      { onConflict: "player_id" }
-    );
-
-  if (updateError) {
-    return NextResponse.json(
-      { error: updateError.message } as PeekAnswersResponse,
-      { status: 500 }
-    );
-  }
-
   const answers = events
     .filter((e) => e.player_id && e.player_id !== player.id)
     .map((e) => {
       const payload = (e.payload || {}) as { answer?: string | null };
-      const answerText = (payload.answer ?? "").trim();
+      const isSkip = e.event_type === "skip";
+      const answerText = isSkip ? "" : (payload.answer ?? "").trim();
       const nickname = nicknameById.get(e.player_id as string) ?? "(이름 없음)";
       return { nickname, answer: answerText };
-    })
-    .filter((a) => a.answer.length > 0);
+    });
 
   return NextResponse.json({ answers } as PeekAnswersResponse, {
     status: 200,

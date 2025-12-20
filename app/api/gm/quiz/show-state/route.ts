@@ -14,6 +14,7 @@ type ShowStateResponse =
       questions: QuizQuestion[];
       subs: QuizSubmission[];
       playerNames: Record<string, string>;
+      streaks: Record<string, number>;
     }
   | { error: string };
 
@@ -131,11 +132,78 @@ export async function GET() {
 
   const subs = Array.from(subsMap.values());
 
+  // 플레이어별 연속 득점(streak) 계산
+  const streaksMap = new Map<string, number>();
+  const safeByPlayerQuestion = new Map<string, Map<number, boolean>>();
+
+  for (const e of events) {
+    const pid = e.player_id;
+    const qid = typeof e.question_id === "number" ? e.question_id : null;
+    if (!pid || !qid) continue;
+    if (e.event_type === "use_safe") {
+      let map = safeByPlayerQuestion.get(pid);
+      if (!map) {
+        map = new Map<number, boolean>();
+        safeByPlayerQuestion.set(pid, map);
+      }
+      map.set(qid, true);
+    }
+  }
+
+  for (const e of events) {
+    const pid = e.player_id;
+    const qid = typeof e.question_id === "number" ? e.question_id : null;
+    if (!pid || !qid) continue;
+    if (e.event_type !== "judge") continue;
+
+    const payload = (e.payload || {}) as { result?: string };
+    const result = payload.result;
+    if (!result) continue;
+
+    const safeMap = safeByPlayerQuestion.get(pid);
+    const safeUsed = safeMap?.get(qid) ?? false;
+
+    let baseDelta = 0;
+    if (result === "correct") {
+      baseDelta = 100;
+    } else if (result === "wrong") {
+      baseDelta = -100;
+    } else if (result === "skip") {
+      baseDelta = 0;
+    }
+
+    let netDelta = baseDelta;
+    if (result === "wrong" && safeUsed) {
+      netDelta = 0;
+    }
+
+    const lostPoints = netDelta < 0;
+
+    let streak = streaksMap.get(pid) ?? 0;
+    if (result === "correct") {
+      streak += 1;
+    } else if (lostPoints) {
+      streak = 0;
+    }
+    streaksMap.set(pid, streak);
+  }
+
+  const streaks: Record<string, number> = {};
+  for (const [pid, value] of streaksMap.entries()) {
+    streaks[pid] = value;
+  }
+
   type PlayerName = Pick<Player, "id" | "nickname">;
   const map: Record<string, string> = {};
   ((namesRes.data || []) as PlayerName[]).forEach((p) => {
     map[p.id] = p.nickname;
   });
 
-  return NextResponse.json({ players, questions, subs, playerNames: map });
+  return NextResponse.json({
+    players,
+    questions,
+    subs,
+    playerNames: map,
+    streaks,
+  });
 }
