@@ -171,14 +171,14 @@ function SubwayInner() {
     setTimeout(() => {
       setScareStep(2);
       setAnimState("shock2");
-    }, 1000);
+    }, 2000);
 
     setTimeout(() => {
       setIsScareActive(false);
       setScareVariant(null);
       setScareStep(0);
       setAnimState("normal");
-    }, 2000);
+    }, 4000);
   }, [isScareActive]);
 
   // 플레이어 상태 + 규칙 + 놀래키기 플래그 폴링
