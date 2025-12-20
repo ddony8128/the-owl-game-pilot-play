@@ -122,12 +122,9 @@ function QuizInner() {
     };
   }, [player?.nickname]);
 
-  // 관전자 모드에서 결승자 점수 실시간 폴링
+  // 결승자/관전자 공통: 결승자 점수 실시간 폴링
   useEffect(() => {
     if (!player) return;
-    const isFinalist = !!player.is_finalist;
-    if (isFinalist) return;
-
     let cancelled = false;
 
     const loadScores = async () => {

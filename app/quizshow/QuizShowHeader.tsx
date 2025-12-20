@@ -24,7 +24,7 @@ export function QuizShowHeader({
           <div className="rounded-full bg-zinc-900 px-4 py-2 text-xl font-mono text-amber-300">
             내 점수 : {score}
           </div>
-          <div className="text-xs text-zinc-400">
+          <div className="text-base text-zinc-400">
             남은 찬스 (컨닝 / 베팅 / 무산):{" "}
             <span className="font-mono">
               {chances.peek ? "O" : "X"} / {chances.bet ? "O" : "X"} /{" "}
@@ -35,13 +35,8 @@ export function QuizShowHeader({
       ) : null}
 
       <div className="mt-2 w-full max-w-md rounded-xl bg-zinc-900 p-3 text-xs text-zinc-200">
-        <p className="mb-1 text-sm font-semibold text-zinc-100">
-          결승 진출자 현재 점수 / 찬스 사용 / 연속 득점
-        </p>
         {liveScores.length === 0 ? (
-          <p className="text-[11px] text-zinc-400">
-            아직 점수 정보가 없습니다.
-          </p>
+          <p className="text-base text-zinc-400">아직 점수 정보가 없습니다.</p>
         ) : (
           <ul className="space-y-1">
             {liveScores.map((p, idx) => (
@@ -51,16 +46,16 @@ export function QuizShowHeader({
               >
                 <div className="flex flex-col text-left">
                   <span className="text-sm">{p.nickname}</span>
-                  <span className="mt-0.5 text-[11px] text-zinc-400">
+                  <span className="mt-0.5 text-sm text-zinc-400">
                     컨닝: {p.chances.peek ? "미사용" : "사용"} / 베팅:{" "}
                     {p.chances.bet ? "미사용" : "사용"} / 무산:{" "}
-                    {p.chances.safe ? "미사용" : "사용"} /{" "}
+                    {p.chances.safe ? "미사용" : "사용"} <br />
                     {p.streak > 0
                       ? `${p.streak}문제째 연속 득점 중!`
                       : "연속 득점 끊김.."}
                   </span>
                 </div>
-                <span className="font-mono text-base text-amber-300">
+                <span className="font-mono text-lg text-amber-300">
                   {p.score}
                 </span>
               </li>
