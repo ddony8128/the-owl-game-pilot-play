@@ -70,7 +70,14 @@ async function recalcScoreForPlayer(
 
   for (const e of events) {
     if (e.event_type === "hidden_bonus") {
-      score += 100;
+      // 더 이상 히든 피스 보너스를 이벤트로 사용하지 않으므로 무시
+      continue;
+    }
+
+    if (e.event_type === "manual_adjust") {
+      const payload = (e.payload || {}) as { delta?: number };
+      const delta = typeof payload.delta === "number" ? payload.delta : 0;
+      score += delta;
       continue;
     }
 
