@@ -15,8 +15,10 @@ export default function DashboardPolicePage() {
   useEffect(() => {
     let cancelled = false;
 
-    const load = async () => {
-      setLoading(true);
+    const load = async (isInitial = false) => {
+      if (isInitial) {
+        setLoading(true);
+      }
       try {
         const res = await fetch("/api/gm/subway/reports");
         const json = (await res.json().catch(() => null)) as
@@ -39,13 +41,21 @@ export default function DashboardPolicePage() {
           setError(message);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && isInitial) setLoading(false);
       }
     };
 
-    void load();
+    // 최초 1회 로딩
+    void load(true);
+
+    // 이후에는 주기적으로 신고 목록을 폴링
+    const id = setInterval(() => {
+      void load(false);
+    }, 3000);
+
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, []);
 
