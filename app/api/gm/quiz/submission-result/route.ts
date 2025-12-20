@@ -45,7 +45,7 @@ async function recalcScoreForPlayer(
 
   for (const e of events) {
     if (e.event_type === "hidden_bonus") {
-      score += 200;
+      score += 100;
       continue;
     }
 

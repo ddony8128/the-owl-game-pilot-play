@@ -30,7 +30,7 @@ export function ShowScoreSection({
                 className="h-6 rounded-full bg-zinc-800 px-2 text-[10px]"
                 onClick={() => onHiddenBonus(p.player_id)}
               >
-                +200
+                +100
               </button>
               <button
                 className="h-6 w-6 rounded-full bg-zinc-800 text-xs"

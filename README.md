@@ -353,10 +353,11 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
 
 구현 파일: `app/dashboard/x9a2k7/show/page.tsx`
 
-- 점수판
-  - `GET /api/gm/quiz/show-state`로 `quiz_player_state` + `players`를 조인한 상태를 로딩
-  - `+/-` 버튼으로 점수 수동 조정 시 `POST /api/gm/quiz/score` 호출 → 서버에서 `quiz_player_state.score` 업데이트
-  - 히든 피스 보너스 버튼(`+200`) 클릭 시 `POST /api/gm/quiz/hidden-bonus` 호출 → `quiz_events`에 `hidden_bonus` 이벤트 기록 후 점수 재계산
+-- 점수판
+
+- `GET /api/gm/quiz/show-state`로 `quiz_player_state` + `players`를 조인한 상태를 로딩
+- `+/-` 버튼으로 점수 수동 조정 시 `POST /api/gm/quiz/score` 호출 → 서버에서 `quiz_player_state.score` 업데이트
+- 히든 피스 보너스 버튼(`+100`) 클릭 시 `POST /api/gm/quiz/hidden-bonus` 호출 → `quiz_events`에 `hidden_bonus` 이벤트 기록 후 점수 재계산
 - 제출 현황/채점
   - `show-state` 응답에서 `quiz_events`를 바탕으로 문제별 제출 리스트 구성(답안/사용 찬스 등 표시)
   - 각 제출에 대해 `correct` / `wrong` / `skip` 버튼으로 `POST /api/gm/quiz/submission-result` 호출
