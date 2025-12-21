@@ -143,10 +143,8 @@ export async function handleAuctionToTrade(
       const pid = p.player_id;
       const betAmount = byPlayerAmount.get(pid) ?? 0;
       if (betAmount <= 0) continue;
-      const nextCash = Math.max(
-        0,
-        (typeof p.cash === "number" ? p.cash : 0) - betAmount
-      );
+      const baseCash = typeof p.cash === "number" ? p.cash : 0;
+      const nextCash = baseCash - betAmount;
       updatedPlayers.push({
         player_id: pid,
         cash: nextCash,
