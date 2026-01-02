@@ -93,6 +93,19 @@ export async function POST(request: Request) {
     }
   }
 
+  // body.nickname 으로 찾지 못한 경우, reporter name(성함/닉네임)으로도 한 번 더 시도
+  if (!playerId && body.name && body.name.trim()) {
+    const { data, error } = await supabase
+      .from("players")
+      .select("id, nickname, created_at")
+      .eq("nickname", body.name.trim())
+      .maybeSingle();
+
+    if (!error && data) {
+      playerId = (data as Player).id;
+    }
+  }
+
   // 기본적으로 신고는 기록해 둔다
   const { data, error: insertError } = await supabase
     .from("subway_reports")
