@@ -217,6 +217,75 @@ function SubwayInner() {
     };
   }, [nickname, router]);
 
+  // 포커스/가시성 변경 시 서버 기준 시간으로 타이머 재계산
+  useEffect(() => {
+    if (!subwayPlayer) return;
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== "undefined") {
+        if (document.visibilityState !== "visible") return;
+      }
+
+      const { timerStart, timerStartAt, totalSeconds, pauseAt } = subwayPlayer;
+
+      const now = Date.now();
+
+      let remainingSeconds = totalSeconds;
+      let isRunning = false;
+
+      if (!pauseAt && !timerStart) {
+        remainingSeconds = totalSeconds;
+        isRunning = false;
+      } else if (timerStart && timerStartAt) {
+        const startMs = new Date(timerStartAt).getTime();
+        if (!Number.isNaN(startMs)) {
+          const elapsed = Math.max(0, Math.floor((now - startMs) / 1000));
+          remainingSeconds = Math.max(0, totalSeconds - elapsed);
+          isRunning = remainingSeconds > 0;
+        }
+      } else if (!timerStart && timerStartAt && pauseAt) {
+        const startMs = new Date(timerStartAt).getTime();
+        const pauseMs = new Date(pauseAt).getTime();
+        if (!Number.isNaN(startMs) && !Number.isNaN(pauseMs)) {
+          const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
+          remainingSeconds = Math.max(0, totalSeconds - elapsed);
+          isRunning = false;
+        }
+      }
+
+      if (remainingSeconds <= 0) {
+        router.replace("/subway/end");
+        return;
+      }
+
+      setTimerState((prev) => {
+        if (
+          prev &&
+          prev.remainingSeconds === remainingSeconds &&
+          prev.isRunning === isRunning
+        ) {
+          return prev;
+        }
+        return { remainingSeconds, isRunning };
+      });
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", handleVisibilityOrFocus);
+      document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", handleVisibilityOrFocus);
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityOrFocus
+        );
+      }
+    };
+  }, [subwayPlayer, router]);
+
   const handleMove = async (direction: "forward" | "back") => {
     if (!nickname) return;
     if (!timerState?.isRunning) return;
