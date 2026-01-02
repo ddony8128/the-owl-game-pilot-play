@@ -13,7 +13,11 @@ type PlayerStatePayload = {
     body: string;
     conditionDescription: string;
   }[];
-  scare?: boolean;
+  // 같은 장소에 있는 다른 플레이어 목록 (자기 자신 제외, 게임 종료 전 상태만)
+  others_at_same_location?: {
+    player_id: string;
+    nickname: string | null;
+  }[];
 };
 
 type StateResponse = PlayerStatePayload | { error: string };
@@ -168,8 +172,6 @@ export async function GET(request: Request) {
       status: 500,
     });
   }
-
-  let scare = false;
   let state: SubwayPlayerState | null = null;
 
   if (!stateRow) {
@@ -219,14 +221,36 @@ export async function GET(request: Request) {
   } else {
     const current = stateRow as SubwayPlayerState;
     state = current;
+  }
 
-    if (current.scare_status) {
-      scare = true;
-      // 일회성 플래그로 소비
-      await supabase
-        .from("subway_player_state")
-        .update({ scare_status: false })
-        .eq("player_id", player.id);
+  // 같은 장소에 있는 다른 플레이어 목록 조회 (자기 자신 제외, 종료되지 않은 플레이어만)
+  let othersAtSameLocation:
+    | {
+        player_id: string;
+        nickname: string | null;
+      }[]
+    | undefined;
+
+  if (state?.current_location) {
+    const { data: others, error: othersError } = await supabase
+      .from("subway_player_state")
+      .select(
+        "player_id, is_finished, current_location, players(nickname)"
+      )
+      .eq("current_location", state.current_location)
+      .eq("is_finished", false)
+      .neq("player_id", player.id);
+
+    if (!othersError && others) {
+      const rows = others as {
+        player_id: string;
+        players?: { nickname?: string | null } | null;
+      }[];
+
+      othersAtSameLocation = rows.map((row) => ({
+        player_id: row.player_id,
+        nickname: row.players?.nickname ?? null,
+      }));
     }
   }
 
@@ -236,7 +260,7 @@ export async function GET(request: Request) {
     {
       state,
       rules,
-      scare,
+      others_at_same_location: othersAtSameLocation,
     } as StateResponse,
     { status: 200 }
   );

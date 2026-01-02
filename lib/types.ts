@@ -10,7 +10,7 @@ export type Player = {
 
 export type GameState = {
   id: number;
-  active_game: string; // 'ready' | 'subway' | 'mafia_tutorial' | 'mafia' | 'vote' | 'quiz' | 'survey'
+  active_game: string; // 'ready' | 'subway' | 'mafia_tutorial' | 'mafia' | 'vote' | 'survey'
   updated_at: string;
   timer_start: boolean | null;
   timer_start_at: string | null;
@@ -18,7 +18,7 @@ export type GameState = {
 };
 
 export type RulesState = {
-  rule_key: string; // intro | subway | hidden_piece | mafia | quiz | quiz_questions ...
+  rule_key: string; // intro | subway | hidden_piece | mafia ...
   is_open: boolean;
   updated_at: string;
 };
@@ -156,52 +156,6 @@ export type MafiaAbilityResult = {
   created_at: string;
 };
 
-// 3게임 – 퀴즈쇼
-export type QuizPhaseState = {
-  id: number;
-  current_question: number | null;
-  updated_at: string;
-};
-
-export type QuizQuestion = {
-  id: number;
-  question: string;
-  options: unknown | null; // jsonb
-  correct_answer: string | null;
-  is_open: boolean;
-  updated_at: string;
-};
-
-export type QuizPlayerState = {
-  player_id: string;
-  score: number;
-  chances: Record<string, unknown> | null; // { peek: boolean, bet: boolean, safe: boolean }
-  updated_at: string;
-};
-
-// 기존 코드와의 호환용 별칭
-export type QuizPlayer = QuizPlayerState;
-
-export type QuizEvent = {
-  id: string;
-  player_id: string | null;
-  question_id: number | null;
-  event_type: string;
-  payload: Record<string, unknown>;
-  created_at: string;
-};
-
-export type QuizSubmission = {
-  id: number;
-  player_id: string | null;
-  question_id: number | null;
-  answer: string;
-  used_chance: string | null;
-  result: string | null;
-  created_at: string;
-};
-
-// 3게임 전 투표
 export type PlayerVote = {
   id: string;
   voter_id: string | null;

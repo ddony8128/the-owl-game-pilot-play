@@ -6,25 +6,6 @@ type Props = {
 };
 
 export function SubwayInteractionSection({ players, onReload }: Props) {
-  const scare = async (playerId: string) => {
-    try {
-      const res = await fetch("/api/gm/subway/scare", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ player_id: playerId }),
-      });
-      if (!res.ok) {
-        // 단순 실패는 알림 없이 무시 (대시보드 보조 기능)
-        return;
-      }
-      onReload();
-    } catch {
-      // noop
-    }
-  };
-
   const triggerRule = async (
     playerId: string,
     trigger: "meeting" | "food" | "report"
@@ -62,12 +43,6 @@ export function SubwayInteractionSection({ players, onReload }: Props) {
               </span>
             </div>
             <div className="flex gap-1">
-              <button
-                className="rounded bg-red-500 px-2 py-0.5 text-[10px] font-semibold text-zinc-950 hover:bg-red-400"
-                onClick={() => scare(p.player_id)}
-              >
-                놀래키기
-              </button>
               <button
                 className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-100 hover:bg-zinc-700"
                 onClick={() => triggerRule(p.player_id, "meeting")}

@@ -63,7 +63,12 @@ export function SubwayCountdownSection() {
   };
 
   useEffect(() => {
-    void reload();
+    // 초기 로딩은 마이크로태스크/타이머 큐로 미루어
+    // effect 본문에서의 동기 setState 호출을 피한다.
+    const initialId = setTimeout(() => {
+      void reload();
+    }, 0);
+
     const tickId = setInterval(() => {
       setState((prev) => ({
         ...prev,
@@ -79,6 +84,7 @@ export function SubwayCountdownSection() {
     }, 5000);
 
     return () => {
+      clearTimeout(initialId);
       clearInterval(tickId);
       clearInterval(syncId);
     };

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-// 1게임 – 이상교통 전역 카운트다운은 항상 50분(3000초)을 기준으로 한다.
-const TOTAL_SECONDS = 50 * 60;
+// 1게임 – 이상교통 전역 카운트다운은 항상 40분(2400초)을 기준으로 한다.
+const TOTAL_SECONDS = 40 * 60;
 
 async function markAllPlayersFinishedOnTimeout() {
   const supabase = createServerSupabaseClient();

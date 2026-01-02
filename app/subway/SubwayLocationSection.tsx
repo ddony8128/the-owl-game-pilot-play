@@ -2,18 +2,13 @@ import Image from "next/image";
 
 type Props = {
   imageSrc: string | null;
-  animState: "normal" | "shock1" | "shock2";
   moving: boolean;
 };
 
-export function SubwayLocationSection({ imageSrc, animState, moving }: Props) {
+export function SubwayLocationSection({ imageSrc, moving }: Props) {
   return (
     <section className="flex flex-1 flex-col">
-      <div
-        className={`flex flex-1 items-center justify-center rounded-2xl bg-zinc-900 ${
-          animState !== "normal" ? "ring-2 ring-red-500/60" : ""
-        }`}
-      >
+      <div className="flex flex-1 items-center justify-center rounded-2xl bg-zinc-900">
         {imageSrc && !moving ? (
           <div className="relative h-full w-full aspect-square overflow-hidden rounded-2xl">
             <Image

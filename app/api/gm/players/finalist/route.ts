@@ -47,17 +47,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (nextFinalist) {
-    await supabase.from("quiz_player_state").upsert(
-      {
-        player_id: body.player_id,
-        score: 0,
-        chances: { peek: true, bet: true, safe: true },
-      },
-      { onConflict: "player_id" }
-    );
-  }
-
   return NextResponse.json(
     { ok: true, player: updated as Player } as FinalistResponse,
     { status: 200 }

@@ -42,18 +42,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         >
           마피아
         </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/quiz"
-        >
-          퀴즈 관리
-        </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/show"
-        >
-          쇼 진행
-        </Link>
+        {/* 3게임(퀴즈쇼) 관련 GM 페이지는 더 이상 사용하지 않음 */}
       </aside>
       <main className="flex flex-1 flex-col px-4 py-4">{children}</main>
     </div>

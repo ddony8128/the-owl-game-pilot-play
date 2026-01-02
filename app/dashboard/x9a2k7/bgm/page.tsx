@@ -39,12 +39,6 @@ const TRACKS = [
     src: "/bgm/subway_announce_03.mp3",
   },
   { id: "mafia_1", name: "자본주의 마피아", src: "/bgm/mafia_bgm_01.mp3" },
-  { id: "quizshow_1", name: "부엉퀴즈쇼", src: "/bgm/quiz_bgm_01.mp3" },
-  {
-    id: "quiz_answer",
-    name: "퀴즈 정답 제출",
-    src: "/bgm/quiz_answer_time.mp3",
-  },
 ];
 
 export default function DashboardBgmPage() {

@@ -108,14 +108,12 @@ export default function IntroPage() {
       case "vote":
         router.push("/vote");
         break;
-      case "quiz":
-        router.push("/quizshow");
-        break;
       case "survey":
         window.open("https://forms.gle/hMm8jEXt2RwF2UYG9", "_blank");
         break;
       default:
-        // ready 또는 알 수 없음
+        // ready, quiz 또는 알 수 없음
+        // 3게임(퀴즈쇼)은 더 이상 사용하지 않으므로 이동하지 않음
         break;
     }
   };

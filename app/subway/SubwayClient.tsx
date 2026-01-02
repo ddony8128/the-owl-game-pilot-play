@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SubwayPlayerState } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
@@ -42,12 +42,9 @@ function SubwayInner() {
   const [hasNewRule, setHasNewRule] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(true);
 
-  const [animState, setAnimState] = useState<"normal" | "shock1" | "shock2">(
-    "normal"
-  );
-  const [isScareActive, setIsScareActive] = useState(false);
-  const [scareVariant, setScareVariant] = useState<1 | 2 | null>(null);
-  const [scareStep, setScareStep] = useState<0 | 1 | 2>(0);
+  const [othersHere, setOthersHere] = useState<
+    { player_id: string; nickname: string | null }[]
+  >([]);
 
   const [timerState, setTimerState] = useState<{
     remainingSeconds: number;
@@ -158,29 +155,6 @@ function SubwayInner() {
     }
   }, [subwayPlayer?.current_location, moving]);
 
-  const triggerShock = useCallback(() => {
-    // 이미 연출 중이면 중복으로 켜지지 않게 무시
-    if (isScareActive) return;
-
-    const variant = Math.random() < 0.5 ? 1 : 2;
-    setIsScareActive(true);
-    setScareVariant(variant);
-    setScareStep(1);
-    setAnimState("shock1");
-
-    setTimeout(() => {
-      setScareStep(2);
-      setAnimState("shock2");
-    }, 2000);
-
-    setTimeout(() => {
-      setIsScareActive(false);
-      setScareVariant(null);
-      setScareStep(0);
-      setAnimState("normal");
-    }, 4000);
-  }, [isScareActive]);
-
   // 플레이어 상태 + 규칙 + 놀래키기 플래그 폴링
   useEffect(() => {
     if (!nickname) return;
@@ -196,7 +170,10 @@ function SubwayInner() {
           | {
               state: SubwayPlayerState | null;
               rules?: SubwayRuleClient[];
-              scare?: boolean;
+              others_at_same_location?: {
+                player_id: string;
+                nickname: string | null;
+              }[];
               error?: string;
             }
           | { error: string }
@@ -218,6 +195,9 @@ function SubwayInner() {
         }
         setSubwayPlayer(state);
 
+        // 같은 장소에 있는 다른 플레이어 목록
+        setOthersHere(json.others_at_same_location ?? []);
+
         const serverRules = json.rules ?? [];
         setRules((prev) => {
           const prevIds = new Set(prev.map((r) => r.id));
@@ -232,10 +212,6 @@ function SubwayInner() {
           }
           return serverRules;
         });
-
-        if (json.scare) {
-          triggerShock();
-        }
 
         setError(null);
       } catch (e: unknown) {
@@ -258,11 +234,11 @@ function SubwayInner() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [nickname, router, triggerShock]);
+  }, [nickname, router]);
 
   const handleMove = async (direction: "forward" | "back") => {
     if (!nickname) return;
-    if (!timerState?.isRunning || isScareActive) return;
+    if (!timerState?.isRunning) return;
     setError(null);
     setMoving(true);
     setDisplayLocation(null);
@@ -332,27 +308,15 @@ function SubwayInner() {
           .padStart(2, "0")}`
       : "--:--";
 
-  const exitLabel = isScareActive ? "엵칠 %#" : "현재 출구";
-  const exitValue = isScareActive ? "666 번" : `${exitNumber} 번`;
+  const exitLabel = "현재 출구";
+  const exitValue = `${exitNumber} 번`;
 
   let imageSrc: string | null = null;
-  if (isScareActive && scareVariant) {
-    if (scareVariant === 1) {
-      imageSrc =
-        scareStep === 2
-          ? "/jump-scare/scare-1-2.png"
-          : "/jump-scare/scare-1-1.png";
-    } else {
-      imageSrc =
-        scareStep === 2
-          ? "/jump-scare/scare-2-2.png"
-          : "/jump-scare/scare-2-1.png";
-    }
-  } else if (locationKey) {
+  if (locationKey) {
     imageSrc = `/subway-location/${locationKey}`;
   }
 
-  const interactionDisabled = isScareActive || !timerState?.isRunning;
+  const interactionDisabled = !timerState?.isRunning;
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
@@ -369,13 +333,40 @@ function SubwayInner() {
         }}
       />
 
+      {/* 현재까지 0번 출구로 돌아간 횟수 (틀린 횟수) */}
+      <div className="mt-3 w-full max-w-md text-right text-xs text-zinc-400">
+        <span>0번 출구로 돌아간 횟수: </span>
+        <span className="font-semibold text-red-300">
+          {(subwayPlayer?.reset_count ?? 0).toString()}회
+        </span>
+      </div>
+
       {/* 장소 이미지 영역 */}
       <main className="mt-6 flex w-full max-w-md flex-1 flex-col gap-4">
-        <SubwayLocationSection
-          imageSrc={imageSrc}
-          animState={animState}
-          moving={moving}
-        />
+        <SubwayLocationSection imageSrc={imageSrc} moving={moving} />
+
+        {/* 같은 장소에 있는 다른 플레이어 목록 */}
+        <section className="rounded-2xl bg-zinc-900/80 px-3 py-2 text-xs text-zinc-100">
+          <div className="mb-1 text-[11px] font-semibold text-zinc-300">
+            같은 장소에 있는 다른 플레이어
+          </div>
+          {othersHere.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {othersHere.map((p) => (
+                <span
+                  key={p.player_id}
+                  className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px]"
+                >
+                  {p.nickname ?? "이름 없음"}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] text-zinc-500">
+              이 장소에 있는 다른 플레이어가 없습니다.
+            </p>
+          )}
+        </section>
 
         {/* 하단 이동 버튼 */}
         <SubwayControlsSection
