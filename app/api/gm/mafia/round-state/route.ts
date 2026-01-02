@@ -83,7 +83,7 @@ export async function GET(request: Request) {
   // 플레이어 기본 정보(닉네임)
   const { data: playerRows, error: playersError } = await supabase
     .from("players")
-    .select("id, nickname, is_finalist, created_at");
+    .select("id, nickname, created_at");
 
   if (playersError) {
     return NextResponse.json(

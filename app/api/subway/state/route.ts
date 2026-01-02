@@ -2,22 +2,16 @@ import { NextResponse } from "next/server";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { Player, SubwayPlayerState, SubwayPlayerEvent } from "@/lib/types";
+import type {
+  Player,
+  SubwayPlayerEvent,
+  SubwayPlayerState,
+  SubwayPlayerStateClient,
+} from "@/lib/types";
 import { SUBWAY_RULES } from "../rules";
 
 type PlayerStatePayload = {
-  state: SubwayPlayerState | null;
-  rules?: {
-    id: number;
-    title: string;
-    body: string;
-    conditionDescription: string;
-  }[];
-  // 같은 장소에 있는 다른 플레이어 목록 (자기 자신 제외, 게임 종료 전 상태만)
-  others_at_same_location?: {
-    player_id: string;
-    nickname: string | null;
-  }[];
+  state: SubwayPlayerStateClient | null;
 };
 
 type StateResponse = PlayerStatePayload | { error: string };
@@ -26,6 +20,7 @@ type SupabaseClient = ReturnType<typeof createServerSupabaseClient>;
 
 const BASE_DIR = path.join(process.cwd(), "public", "subway-location");
 let cachedLocations: string[] | null = null;
+const TOTAL_SECONDS = 40 * 60;
 
 async function getAllLocationKeys(): Promise<string[]> {
   if (cachedLocations) return cachedLocations;
@@ -139,7 +134,7 @@ export async function GET(request: Request) {
 
   const playerRes = await supabase
     .from("players")
-    .select("id, nickname, is_finalist, created_at")
+    .select("id, nickname, created_at")
     .eq("nickname", nickname)
     .maybeSingle();
 
@@ -234,9 +229,7 @@ export async function GET(request: Request) {
   if (state?.current_location) {
     const { data: others, error: othersError } = await supabase
       .from("subway_player_state")
-      .select(
-        "player_id, is_finished, current_location, players(nickname)"
-      )
+      .select("player_id, is_finished, current_location, players(nickname)")
       .eq("current_location", state.current_location)
       .eq("is_finished", false)
       .neq("player_id", player.id);
@@ -256,11 +249,46 @@ export async function GET(request: Request) {
 
   const rules = await getVisibleRulesForPlayer(supabase, player.id);
 
+  // 타이머 상태 조회 (1게임 – 이상교통 전역 카운트다운)
+  const { data: gameRow, error: gameError } = await supabase
+    .from("game_state")
+    .select("timer_start, timer_start_at, pause_at")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (gameError) {
+    return NextResponse.json({ error: gameError.message } as StateResponse, {
+      status: 500,
+    });
+  }
+
+  const timerStart = !!gameRow?.timer_start;
+  const timerStartAt = (gameRow?.timer_start_at as string | null) ?? null;
+  const pauseAt = (gameRow?.pause_at as string | null) ?? null;
+
+  const clientState: SubwayPlayerStateClient | null = state
+    ? {
+        playerId: state.player_id,
+        exitNumber: state.exit_number,
+        currentLocation: state.current_location,
+        timerStart,
+        timerStartAt,
+        pauseAt,
+        totalSeconds: TOTAL_SECONDS,
+        resetCount: state.reset_count,
+        rules,
+        othersAtSameLocation: (othersAtSameLocation ?? []).map((o) => ({
+          playerId: o.player_id,
+          nickname: o.nickname,
+        })),
+        isFinished: state.is_finished,
+        finishedRank: state.finished_rank,
+      }
+    : null;
+
   return NextResponse.json(
     {
-      state,
-      rules,
-      others_at_same_location: othersAtSameLocation,
+      state: clientState,
     } as StateResponse,
     { status: 200 }
   );

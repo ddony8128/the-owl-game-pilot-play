@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { SubwayPlayerState } from "@/lib/types";
+import type { SubwayPlayerStateClient } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
@@ -11,13 +11,7 @@ import { SubwayHeader } from "./SubwayHeader";
 import { SubwayLocationSection } from "./SubwayLocationSection";
 import { SubwayControlsSection } from "./SubwayControlsSection";
 import { SubwayGuideModal } from "./SubwayGuideModal";
-
-export type SubwayRuleClient = {
-  id: number;
-  title: string;
-  body: string;
-  conditionDescription: string;
-};
+import { SubwayFooter } from "./SubwayFooter";
 
 export default function SubwayClient() {
   return (
@@ -31,131 +25,70 @@ function SubwayInner() {
   const router = useRouter();
   const { nickname } = usePlayerAuth();
 
-  const [subwayPlayer, setSubwayPlayer] = useState<SubwayPlayerState | null>(
-    null
-  );
+  const [subwayPlayer, setSubwayPlayer] =
+    useState<SubwayPlayerStateClient | null>(null);
   const [displayLocation, setDisplayLocation] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [rules, setRules] = useState<SubwayRuleClient[]>([]);
   const [hasNewRule, setHasNewRule] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(true);
-
-  const [othersHere, setOthersHere] = useState<
-    { player_id: string; nickname: string | null }[]
-  >([]);
 
   const [timerState, setTimerState] = useState<{
     remainingSeconds: number;
     isRunning: boolean;
   } | null>(null);
 
-  // 서버 타이머 폴링 + 로컬 1초 틱
-  useEffect(() => {
-    if (!nickname) return;
-
-    let cancelled = false;
-
-    const loadTimer = async () => {
-      type ApiTimer = {
-        timerStart: boolean;
-        timerStartAt: string | null;
-        pauseAt: string | null;
-        totalSeconds: number;
-      };
-
-      const computeRemaining = (api: ApiTimer | null, nowMs: number) => {
-        if (!api) {
-          return { remainingSeconds: 50 * 60, isRunning: false } as const;
-        }
-
-        const total = api.totalSeconds || 50 * 60;
-
-        if (!api.timerStart && !api.pauseAt) {
-          return { remainingSeconds: total, isRunning: false } as const;
-        }
-
-        if (api.timerStart && api.timerStartAt) {
-          const startMs = new Date(api.timerStartAt).getTime();
-          if (Number.isNaN(startMs)) {
-            return { remainingSeconds: total, isRunning: false } as const;
-          }
-          const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
-          const remaining = Math.max(0, total - elapsed);
-          return {
-            remainingSeconds: remaining,
-            isRunning: remaining > 0,
-          } as const;
-        }
-
-        if (!api.timerStart && api.timerStartAt && api.pauseAt) {
-          const startMs = new Date(api.timerStartAt).getTime();
-          const pauseMs = new Date(api.pauseAt).getTime();
-          if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
-            return { remainingSeconds: total, isRunning: false } as const;
-          }
-          const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
-          const remaining = Math.max(0, total - elapsed);
-          return { remainingSeconds: remaining, isRunning: false } as const;
-        }
-
-        return { remainingSeconds: total, isRunning: false } as const;
-      };
-      try {
-        const res = await fetch("/api/gm/timers/subway");
-        const json = (await res.json().catch(() => null)) as ApiTimer | null;
-        if (!res.ok || !json || cancelled) return;
-
-        const now = Date.now();
-        const { remainingSeconds, isRunning } = computeRemaining(json, now);
-
-        if (remainingSeconds <= 0) {
-          router.replace("/subway/end");
-          return;
-        }
-
-        setTimerState({
-          remainingSeconds,
-          isRunning,
-        });
-      } catch {
-        // 타이머 오류는 게임 진행을 막지 않음
-      }
-    };
-
-    void loadTimer();
-    const pollId = setInterval(() => {
-      void loadTimer();
-    }, 2000);
-
-    const tickId = setInterval(() => {
-      setTimerState((prev) => {
-        if (!prev) return prev;
-        if (!prev.isRunning || prev.remainingSeconds <= 0) return prev;
-        const next = prev.remainingSeconds - 1;
-        if (next <= 0) {
-          router.replace("/subway/end");
-          return { ...prev, remainingSeconds: 0 };
-        }
-        return { ...prev, remainingSeconds: next };
-      });
-    }, 1000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(pollId);
-      clearInterval(tickId);
-    };
-  }, [nickname, router]);
-
-  useEffect(() => {
-    if (subwayPlayer?.current_location && !moving) {
-      setDisplayLocation(subwayPlayer.current_location);
+  const computeRemaining = (
+    timerStart: boolean,
+    timerStartAt: string | null,
+    totalSeconds: number,
+    pauseAt: string | null,
+    nowMs: number
+  ) => {
+    if (!pauseAt && !timerStart) {
+      return { remainingSeconds: totalSeconds, isRunning: false } as const;
     }
-  }, [subwayPlayer?.current_location, moving]);
 
-  // 플레이어 상태 + 규칙 + 놀래키기 플래그 폴링
+    if (timerStart && timerStartAt) {
+      const startMs = new Date(timerStartAt).getTime();
+      if (Number.isNaN(startMs)) {
+        return {
+          remainingSeconds: totalSeconds,
+          isRunning: false,
+        } as const;
+      }
+      const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+      const remaining = Math.max(0, totalSeconds - elapsed);
+      return {
+        remainingSeconds: remaining,
+        isRunning: remaining > 0,
+      } as const;
+    }
+
+    if (!timerStart && timerStartAt && pauseAt) {
+      const startMs = new Date(timerStartAt).getTime();
+      const pauseMs = new Date(pauseAt).getTime();
+      if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
+        return {
+          remainingSeconds: totalSeconds,
+          isRunning: false,
+        } as const;
+      }
+      const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
+      const remaining = Math.max(0, totalSeconds - elapsed);
+      return { remainingSeconds: remaining, isRunning: false } as const;
+    }
+
+    return { remainingSeconds: totalSeconds, isRunning: false } as const;
+  };
+
+  useEffect(() => {
+    if (subwayPlayer?.currentLocation && !moving) {
+      setDisplayLocation(subwayPlayer.currentLocation);
+    }
+  }, [subwayPlayer?.currentLocation, moving]);
+
   useEffect(() => {
     if (!nickname) return;
 
@@ -168,13 +101,7 @@ function SubwayInner() {
         );
         const json = (await res.json().catch(() => null)) as
           | {
-              state: SubwayPlayerState | null;
-              rules?: SubwayRuleClient[];
-              others_at_same_location?: {
-                player_id: string;
-                nickname: string | null;
-              }[];
-              error?: string;
+              state: SubwayPlayerStateClient | null;
             }
           | { error: string }
           | null;
@@ -186,31 +113,69 @@ function SubwayInner() {
           );
         }
 
-        if (cancelled) return;
+        const now = Date.now();
+        const { remainingSeconds, isRunning } = computeRemaining(
+          json.state?.timerStart ?? false,
+          json.state?.timerStartAt ?? null,
+          json.state?.totalSeconds ?? 40 * 60,
+          json.state?.pauseAt ?? null,
+          now
+        );
 
-        const state = json.state ?? null;
-        if (state?.is_finished) {
+        if (remainingSeconds <= 0) {
           router.replace("/subway/end");
           return;
         }
-        setSubwayPlayer(state);
 
-        // 같은 장소에 있는 다른 플레이어 목록
-        setOthersHere(json.others_at_same_location ?? []);
+        setTimerState({
+          remainingSeconds,
+          isRunning,
+        });
 
-        const serverRules = json.rules ?? [];
-        setRules((prev) => {
-          const prevIds = new Set(prev.map((r) => r.id));
+        if (cancelled) return;
+
+        const rawState = json.state ?? null;
+        if (rawState?.isFinished) {
+          router.replace("/subway/end");
+          return;
+        }
+
+        const serverRules = json.state?.rules ?? [];
+        const othersAtSameLocation = json.state?.othersAtSameLocation ?? [];
+
+        setSubwayPlayer((prev) => {
+          const prevRules = prev?.rules ?? [];
+          const prevRuleIds = new Set(prevRules.map((r) => r.id));
+
           let triggered = false;
           for (const r of serverRules) {
-            if (!prevIds.has(r.id) && r.id !== 0 && r.id !== 8) {
+            if (!prevRuleIds.has(r.id) && r.id !== 0 && r.id !== 8) {
               triggered = true;
+              break;
             }
           }
           if (triggered) {
             setHasNewRule(true);
           }
-          return serverRules;
+
+          if (!rawState) return null;
+
+          const base: SubwayPlayerStateClient = rawState;
+
+          return {
+            playerId: base.playerId,
+            exitNumber: base.exitNumber,
+            currentLocation: base.currentLocation,
+            timerStart: prev?.timerStart ?? false,
+            timerStartAt: prev?.timerStartAt ?? null,
+            pauseAt: prev?.pauseAt ?? null,
+            totalSeconds: prev?.totalSeconds ?? 40 * 60,
+            resetCount: prev?.resetCount ?? 0,
+            rules: serverRules,
+            othersAtSameLocation: othersAtSameLocation,
+            isFinished: base.isFinished,
+            finishedRank: base.finishedRank,
+          } as SubwayPlayerStateClient;
         });
 
         setError(null);
@@ -230,9 +195,23 @@ function SubwayInner() {
       void load();
     }, 2000);
 
+    const tickId = setInterval(() => {
+      setTimerState((prev) => {
+        if (!prev) return prev;
+        if (!prev.isRunning || prev.remainingSeconds <= 0) return prev;
+        const next = prev.remainingSeconds - 1;
+        if (next <= 0) {
+          router.replace("/subway/end");
+          return { ...prev, remainingSeconds: 0 };
+        }
+        return { ...prev, remainingSeconds: next };
+      });
+    }, 1000);
+
     return () => {
       cancelled = true;
       clearInterval(id);
+      clearInterval(tickId);
     };
   }, [nickname, router]);
 
@@ -252,7 +231,7 @@ function SubwayInner() {
       });
 
       const json = (await res.json().catch(() => null)) as {
-        state?: SubwayPlayerState;
+        state?: SubwayPlayerStateClient;
         reason?: string;
         error?: string;
       } | null;
@@ -263,15 +242,33 @@ function SubwayInner() {
         );
       }
 
-      if (json.state?.is_finished) {
+      if (json.state?.isFinished) {
         router.replace("/subway/end");
         return;
       }
 
       if (json.state) {
-        setSubwayPlayer(json.state);
+        setSubwayPlayer((prev) => {
+          const next = json.state!;
+          const prevRules = prev?.rules ?? [];
+          const prevRuleIds = new Set(prevRules.map((r) => r.id));
+          const nextRules = next.rules ?? [];
+
+          let triggered = false;
+          for (const r of nextRules) {
+            if (!prevRuleIds.has(r.id) && r.id !== 0 && r.id !== 8) {
+              triggered = true;
+              break;
+            }
+          }
+          if (triggered) {
+            setHasNewRule(true);
+          }
+
+          return next;
+        });
         setTimeout(() => {
-          setDisplayLocation(json.state!.current_location);
+          setDisplayLocation(json.state!.currentLocation);
           setMoving(false);
         }, 1500);
       }
@@ -294,7 +291,7 @@ function SubwayInner() {
     );
   }
 
-  const exitNumber = subwayPlayer?.exit_number ?? 0;
+  const exitNumber = subwayPlayer?.exitNumber ?? 0;
   const locationKey = displayLocation ?? null;
 
   const totalSeconds = timerState?.remainingSeconds ?? null;
@@ -310,6 +307,7 @@ function SubwayInner() {
 
   const exitLabel = "현재 출구";
   const exitValue = `${exitNumber} 번`;
+  const resetCount = subwayPlayer?.resetCount ?? 0;
 
   let imageSrc: string | null = null;
   if (locationKey) {
@@ -325,6 +323,7 @@ function SubwayInner() {
         timeLabel={timeLabel}
         exitLabel={exitLabel}
         exitValue={exitValue}
+        resetCount={resetCount}
         hasNewRule={hasNewRule}
         interactionDisabled={interactionDisabled}
         onOpenGuide={() => {
@@ -333,40 +332,11 @@ function SubwayInner() {
         }}
       />
 
-      {/* 현재까지 0번 출구로 돌아간 횟수 (틀린 횟수) */}
-      <div className="mt-3 w-full max-w-md text-right text-xs text-zinc-400">
-        <span>0번 출구로 돌아간 횟수: </span>
-        <span className="font-semibold text-red-300">
-          {(subwayPlayer?.reset_count ?? 0).toString()}회
-        </span>
-      </div>
-
       {/* 장소 이미지 영역 */}
       <main className="mt-6 flex w-full max-w-md flex-1 flex-col gap-4">
         <SubwayLocationSection imageSrc={imageSrc} moving={moving} />
 
-        {/* 같은 장소에 있는 다른 플레이어 목록 */}
-        <section className="rounded-2xl bg-zinc-900/80 px-3 py-2 text-xs text-zinc-100">
-          <div className="mb-1 text-[11px] font-semibold text-zinc-300">
-            같은 장소에 있는 다른 플레이어
-          </div>
-          {othersHere.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {othersHere.map((p) => (
-                <span
-                  key={p.player_id}
-                  className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px]"
-                >
-                  {p.nickname ?? "이름 없음"}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[11px] text-zinc-500">
-              이 장소에 있는 다른 플레이어가 없습니다.
-            </p>
-          )}
-        </section>
+        <SubwayFooter others={subwayPlayer?.othersAtSameLocation ?? []} />
 
         {/* 하단 이동 버튼 */}
         <SubwayControlsSection
@@ -379,7 +349,7 @@ function SubwayInner() {
       {/* 안내문 모달 */}
       <SubwayGuideModal
         isOpen={isGuideOpen}
-        rules={rules}
+        rules={subwayPlayer?.rules ?? []}
         onClose={() => {
           setIsGuideOpen(false);
           setHasNewRule(false);

@@ -10,7 +10,7 @@ export async function handlePrepareToAuction(
   supabase: ReturnType<typeof createServerSupabaseClient>,
   current: MafiaPhaseState
 ) {
-  // 튜토리얼(0) 또는 1라운드에서만 현금 30 + 보너스 초기화
+  // 튜토리얼(0) 또는 1라운드에서만 초기 자산을 세팅한다.
   if (current.round_number !== 0 && current.round_number !== 1) {
     return;
   }
@@ -18,7 +18,7 @@ export async function handlePrepareToAuction(
   // 플레이어 전체 조회
   const { data: playerRows, error: playersError } = await supabase
     .from("players")
-    .select("id, nickname, is_finalist, created_at");
+    .select("id, nickname, created_at");
 
   if (playersError || !playerRows) {
     throw new Error(playersError?.message ?? "players 조회에 실패했습니다.");
@@ -29,34 +29,6 @@ export async function handlePrepareToAuction(
   if (players.length === 0) {
     return;
   }
-
-  // 1게임(지하철) 등수 정보 조회
-  const { data: subwayStates, error: subwayError } = await supabase
-    .from("subway_player_state")
-    .select("player_id, finished_rank, is_finished");
-
-  if (subwayError || !subwayStates) {
-    throw new Error(
-      subwayError?.message ?? "subway_player_state 조회에 실패했습니다."
-    );
-  }
-
-  const byPlayerId = new Map<string, SubwayPlayerState>();
-  for (const row of subwayStates as unknown as SubwayPlayerState[]) {
-    if (row.player_id) {
-      byPlayerId.set(row.player_id, row);
-    }
-  }
-
-  // 완료된 플레이어들 중 최대 finished_rank 계산
-  const finishedRanks: number[] = [];
-  for (const state of byPlayerId.values()) {
-    if (typeof state.finished_rank === "number") {
-      finishedRanks.push(state.finished_rank);
-    }
-  }
-  const lastClearedRank =
-    finishedRanks.length > 0 ? Math.max(...finishedRanks) : 0;
 
   // 플레이어별 초기 현금 + 주식(4종목 0주) 설정
   type BonusEntry = {
@@ -75,19 +47,8 @@ export async function handlePrepareToAuction(
   const bonuses: BonusEntry[] = [];
 
   for (const p of players) {
-    const subway = byPlayerId.get(p.id) ?? null;
-    let rank: number;
-    if (subway && typeof subway.finished_rank === "number") {
-      rank = subway.finished_rank;
-    } else {
-      // 통과하지 못한 경우: 마지막 등수 + 1등으로 계산
-      rank = lastClearedRank + 1 || 1;
-    }
-
-    let bonus = 10 - (rank - 1);
-    if (bonus < 0) bonus = 0;
-
-    const cash = 30 + bonus;
+    // 패치: 1게임 성적과 상관없이 모두 30원으로 시작
+    const cash = 30;
     bonuses.push({
       player_id: p.id,
       cash,

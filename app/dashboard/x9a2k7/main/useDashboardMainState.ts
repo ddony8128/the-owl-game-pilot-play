@@ -9,7 +9,6 @@ type MainState = {
   error: string | null;
   changeGame: (value: GameState["active_game"]) => Promise<void>;
   toggleRule: (ruleKey: string, isOpen: boolean) => Promise<void>;
-  toggleFinalist: (playerId: string, isFinalist: boolean) => Promise<void>;
   clearError: () => void;
 };
 
@@ -138,39 +137,6 @@ export function useDashboardMainState(): MainState {
     }
   };
 
-  const toggleFinalist = async (playerId: string, isFinalist: boolean) => {
-    setError(null);
-    try {
-      const res = await fetch("/api/gm/players/finalist", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ player_id: playerId, is_finalist: isFinalist }),
-      });
-      const json = (await res.json().catch(() => null)) as {
-        ok?: true;
-        player?: Player;
-        error?: string;
-      } | null;
-      if (!res.ok || !json?.ok || !json.player) {
-        throw new Error(
-          json?.error ?? "결승 진출자 상태를 변경하지 못했습니다."
-        );
-      }
-
-      setPlayers((prev) =>
-        prev.map((p) => (p.id === playerId ? json.player! : p))
-      );
-    } catch (e: unknown) {
-      const message =
-        e instanceof Error
-          ? e.message
-          : "결승 진출자 상태를 변경하지 못했습니다.";
-      setError(message);
-    }
-  };
-
   return {
     gameState,
     rules,
@@ -179,7 +145,6 @@ export function useDashboardMainState(): MainState {
     error,
     changeGame,
     toggleRule,
-    toggleFinalist,
     clearError,
   };
 }

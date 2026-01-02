@@ -263,12 +263,10 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
 구현 파일: `app/dashboard/x9a2k7/main/page.tsx`
 
 - `game_state.active_game` 선택 박스
-  - ready / subway / mafia_tutorial / mafia / vote / quiz / survey
+  - ready / subway / mafia_tutorial / mafia / vote / survey
 - `rules_state` 리스트
   - 각 `rule_key`에 대해 공개 여부 토글 체크박스
-- 결승 진출자 선정
-  - `players` 전체에서 `is_finalist` 체크박스로 토글
-  - finalist로 변경 시 `quiz_player_state`에 해당 플레이어 row upsert
+- 결승 진출자 정보(현재 버전에서는 별도 상태를 관리하지 않고, 참고용 섹션만 존재)
 
 ### 4.3 `/dashboard/x9a2k7/subway` – 이상교통 현황
 

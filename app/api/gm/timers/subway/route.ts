@@ -28,7 +28,6 @@ async function getGameStateTimer() {
   let isRunning = false;
 
   if (gameRow?.timer_start && gameRow.timer_start_at) {
-    // 실행 중: timer_start_at 기준으로 now까지 경과 시간을 사용
     const startedAt = new Date(gameRow.timer_start_at).getTime();
     if (!Number.isNaN(startedAt)) {
       const now = Date.now();
@@ -41,7 +40,6 @@ async function getGameStateTimer() {
     gameRow?.pause_at &&
     gameRow.timer_start_at
   ) {
-    // 일시정지 상태: timer_start_at ~ pause_at 구간만 경과 시간으로 사용
     const startedAt = new Date(gameRow.timer_start_at).getTime();
     const pausedAt = new Date(gameRow.pause_at).getTime();
     if (!Number.isNaN(startedAt) && !Number.isNaN(pausedAt)) {

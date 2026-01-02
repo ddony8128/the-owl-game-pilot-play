@@ -4,7 +4,6 @@
 export type Player = {
   id: string;
   nickname: string;
-  is_finalist: boolean | null;
   created_at: string;
 };
 
@@ -29,15 +28,38 @@ export type SubwayPlayerState = {
   exit_number: number;
   current_location: string | null;
   reset_count: number;
-  scare_status: boolean;
   is_finished: boolean;
   finished_rank: number | null;
   updated_at: string;
   nickname?: string | null; // GM 대시보드 등에서 보여주기 위한 용도
 };
 
-// 기존 코드와의 호환용 별칭
-export type SubwayPlayer = SubwayPlayerState;
+export type SubwayRuleClient = {
+  id: number;
+  title: string;
+  body: string;
+  conditionDescription: string;
+};
+
+export type SubwayOtherPlayerClient = {
+  playerId: string;
+  nickname: string | null;
+};
+
+export type SubwayPlayerStateClient = {
+  playerId: string;
+  exitNumber: number;
+  currentLocation: string | null;
+  timerStart: boolean;
+  timerStartAt: string | null;
+  pauseAt: string | null;
+  totalSeconds: number;
+  resetCount: number;
+  rules: SubwayRuleClient[];
+  othersAtSameLocation: SubwayOtherPlayerClient[];
+  isFinished: boolean;
+  finishedRank: number | null;
+};
 
 export type SubwayPlayerEvent = {
   id: string;
@@ -113,9 +135,6 @@ export type MafiaPlayerState = {
   stocks: MafiaStocksHolding | null;
   updated_at: string;
 };
-
-// 기존 코드와의 호환용 별칭
-export type MafiaPlayer = MafiaPlayerState;
 
 export type MafiaPlayerSnapshot = {
   id: string;

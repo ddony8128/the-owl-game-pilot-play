@@ -104,7 +104,7 @@ export async function GET(request: Request) {
     // 플레이어 닉네임 매핑
     const { data: nameRows, error: namesError } = await supabase
       .from("players")
-      .select("id, nickname, is_finalist, created_at");
+      .select("id, nickname, created_at");
 
     if (namesError) {
       return NextResponse.json({ error: namesError.message }, { status: 500 });
@@ -156,7 +156,7 @@ export async function GET(request: Request) {
   if (nickname) {
     const playerRes = await supabase
       .from("players")
-      .select("id, nickname, is_finalist, created_at")
+      .select("id, nickname, created_at")
       .eq("nickname", nickname)
       .maybeSingle();
 
@@ -191,7 +191,7 @@ export async function GET(request: Request) {
     // 전체 플레이어 리스트 (능력/투표 대상 선택용)
     const { data: playersRows, error: playersError } = await supabase
       .from("players")
-      .select("id, nickname, is_finalist, created_at");
+      .select("id, nickname, created_at");
 
     if (playersError) {
       return NextResponse.json(

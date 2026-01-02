@@ -28,7 +28,6 @@ export default function DashboardMainPage() {
     error,
     changeGame,
     toggleRule,
-    toggleFinalist,
   } = useDashboardMainState();
 
   useEffect(() => {
@@ -84,7 +83,7 @@ export default function DashboardMainPage() {
 
       <RulesSection rules={rules} onToggleRule={toggleRule} />
 
-      <FinalistsSection players={players} onToggleFinalist={toggleFinalist} />
+      <FinalistsSection players={players} />
 
       <section className="space-y-2 text-xs">
         <div className="flex items-center justify-between">

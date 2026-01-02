@@ -9,7 +9,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("players")
-    .select("id, nickname, is_finalist, created_at")
+    .select("id, nickname, created_at")
     .order("nickname", { ascending: true });
 
   if (error) {

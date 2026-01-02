@@ -20,7 +20,7 @@ export async function GET() {
     supabase.from("rules_state").select("rule_key, is_open, updated_at"),
     supabase
       .from("players")
-      .select("id, nickname, is_finalist, created_at")
+      .select("id, nickname, created_at")
       .order("nickname", { ascending: true }),
   ]);
 

@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from("players")
-    .select("id, nickname, is_finalist, created_at")
+    .select("id, nickname, created_at")
     .eq("nickname", nickname)
     .maybeSingle();
 

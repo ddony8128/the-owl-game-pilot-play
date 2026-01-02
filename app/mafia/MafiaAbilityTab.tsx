@@ -28,8 +28,9 @@ export function MafiaAbilityTab({
   const { player } = usePlayerAuth();
   const [selectedStockKey, setSelectedStockKey] = useState<string | null>(null);
   const [robberTargets, setRobberTargets] = useState<string[]>([]);
-  const [policeTarget, setPoliceTarget] = useState<string | null>(null);
-  const [taxTarget, setTaxTarget] = useState<string | null>(null);
+  const [policeTargets, setPoliceTargets] = useState<string[]>([]);
+  const [taxTargets, setTaxTargets] = useState<string[]>([]);
+  const [ceoTarget, setCeoTarget] = useState<string | null>(null);
   const [mayorPrice, setMayorPrice] = useState<1 | 2 | 3 | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -74,15 +75,18 @@ export function MafiaAbilityTab({
         return { job: "robber", targets: robberTargets as [string, string] };
       }
       case "police": {
-        const t = policeTarget ?? null;
-        return { job: "police", target: t };
-      }
-      case "tax_auditor": {
-        if (!taxTarget) {
-          setError("세무조사 대상을 선택해 주세요.");
+        if (policeTargets.length !== 2) {
+          setError("조사할 두 사람을 정확히 선택해 주세요.");
           return null;
         }
-        return { job: "tax_auditor", target: taxTarget };
+        return { job: "police", targets: policeTargets as [string, string] };
+      }
+      case "tax_auditor": {
+        if (taxTargets.length !== 2) {
+          setError("세무조사 대상 두 명을 선택해 주세요.");
+          return null;
+        }
+        return { job: "tax_auditor", targets: taxTargets as [string, string] };
       }
       case "mayor": {
         if (!mayorPrice) {
@@ -92,7 +96,11 @@ export function MafiaAbilityTab({
         return { job: "mayor", ticket_price: mayorPrice };
       }
       case "ceo":
-        return { job: "ceo" };
+        if (!ceoTarget) {
+          setError("CEO가 5원을 줄 대상을 선택해 주세요.");
+          return null;
+        }
+        return { job: "ceo", target: ceoTarget };
       case "salaryman":
         return { job: "salaryman" };
       default:
@@ -190,22 +198,28 @@ export function MafiaAbilityTab({
         return "이번 라운드에 강도 능력을 사용했습니다.";
       }
       case "police": {
-        const target =
-          typeof payload.target === "string"
-            ? (payload.target as string)
-            : null;
-        if (!target) {
-          return "이번 라운드에는 아무도 조사하지 않기로 선택했습니다.";
+        const targets = payload.targets as unknown;
+        const names =
+          Array.isArray(targets) && targets.length >= 2
+            ? (targets as unknown[]).filter(
+                (t): t is string => typeof t === "string"
+              )
+            : [];
+        if (names.length >= 2) {
+          return `이번 라운드에 경찰 능력으로 ${names[0]}, ${names[1]}을(를) 조사 대상으로 선택했습니다.`;
         }
-        return `이번 라운드에 경찰 능력으로 ${target}을(를) 조사 대상으로 선택했습니다.`;
+        return "이번 라운드에 경찰 능력을 사용했습니다.";
       }
       case "tax_auditor": {
-        const target =
-          typeof payload.target === "string"
-            ? (payload.target as string)
-            : null;
-        if (target) {
-          return `이번 라운드에 세무조사원 능력으로 ${target}의 자산을 조사하기로 선택했습니다.`;
+        const targets = payload.targets as unknown;
+        const names =
+          Array.isArray(targets) && targets.length >= 2
+            ? (targets as unknown[]).filter(
+                (t): t is string => typeof t === "string"
+              )
+            : [];
+        if (names.length >= 2) {
+          return `이번 라운드에 세무조사원 능력으로 ${names[0]}, ${names[1]}의 자산을 조사하기로 선택했습니다.`;
         }
         return "이번 라운드에 세무조사원 능력을 사용했습니다.";
       }
@@ -220,7 +234,7 @@ export function MafiaAbilityTab({
         return "이번 라운드에 시장 능력으로 표 가격을 설정했습니다.";
       }
       case "ceo":
-        return "이번 라운드에 CEO 능력을 사용했습니다. (고정 월급 지급)";
+        return "이번 라운드에 CEO 능력을 사용했습니다.";
       case "salaryman":
         return "이번 라운드에 월급쟁이 능력을 사용했습니다. (고정 월급 지급)";
       default:
@@ -341,11 +355,12 @@ export function MafiaAbilityTab({
       {normalizedJob === "police" && (
         <>
           <p className="text-base text-zinc-400">
-            마피아인지 조사할 대상을 선택해 주세요.
+            마피아인지 조사할 두 사람을 선택해 주세요. 두 사람 중 마피아가 있는지
+            없는지만 알 수 있다부엉!
           </p>
           <div className="grid grid-cols-2 gap-2">
             {otherPlayers.map((p) => {
-              const selected = policeTarget === p.nickname;
+              const selected = policeTargets.includes(p.nickname);
               return (
                 <button
                   key={p.id}
@@ -356,9 +371,15 @@ export function MafiaAbilityTab({
                       : "border-zinc-700 bg-zinc-900 text-zinc-100"
                   }`}
                   onClick={() =>
-                    setPoliceTarget(
-                      selected ? null : (p.nickname as string | null)
-                    )
+                    setPoliceTargets((prev) => {
+                      if (prev.includes(p.nickname)) {
+                        return prev.filter((n) => n !== p.nickname);
+                      }
+                      if (prev.length >= 2) {
+                        return prev;
+                      }
+                      return [...prev, p.nickname];
+                    })
                   }
                 >
                   {p.nickname}
@@ -377,11 +398,11 @@ export function MafiaAbilityTab({
       {normalizedJob === "tax_auditor" && (
         <>
           <p className="text-base text-zinc-400">
-            세무조사를 진행할 대상을 선택해줘부엉! 아주 탈탈 털어보자부엉!
+            세무조사를 진행할 두 명을 선택해줘부엉! 아주 탈탈 털어보자부엉!
           </p>
           <div className="grid grid-cols-2 gap-2">
             {otherPlayers.map((p) => {
-              const selected = taxTarget === p.nickname;
+              const selected = taxTargets.includes(p.nickname);
               return (
                 <button
                   key={p.id}
@@ -392,9 +413,15 @@ export function MafiaAbilityTab({
                       : "border-zinc-700 bg-zinc-900 text-zinc-100"
                   }`}
                   onClick={() =>
-                    setTaxTarget(
-                      selected ? null : (p.nickname as string | null)
-                    )
+                    setTaxTargets((prev) => {
+                      if (prev.includes(p.nickname)) {
+                        return prev.filter((n) => n !== p.nickname);
+                      }
+                      if (prev.length >= 2) {
+                        return prev;
+                      }
+                      return [...prev, p.nickname];
+                    })
                   }
                 >
                   {p.nickname}
@@ -435,10 +462,56 @@ export function MafiaAbilityTab({
       )}
 
       {(normalizedJob === "ceo" || normalizedJob === "salaryman") && (
-        <p className="text-base text-zinc-400">
-          이 직업은 별도로 사용하지 않아도 자동으로 적용된다부엉. 그래도 버튼을
-          눌러서 기분을 내보자부엉!
-        </p>
+        <>
+          {normalizedJob === "ceo" && (
+            <p className="text-base text-zinc-400">
+              CEO는 자신을 제외한 한 사람을 골라 그 사람에게 5원을 줄 수 있다부엉!
+              아래에서 대상을 선택해줘부엉.
+            </p>
+          )}
+          {normalizedJob === "salaryman" && (
+            <p className="text-base text-zinc-400">
+              월급쟁이는 별도로 사용하지 않아도 자동으로 월급이 지급된다부엉!
+            </p>
+          )}
+        </>
+      )}
+
+      {normalizedJob === "ceo" && (
+        <div>
+          <p className="mb-2 text-base text-zinc-400">
+            5원을 줄 대상을 한 명 선택해줘부엉. 선택된 사람은 CEO가 누구인지 알게
+            된다부엉!
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {otherPlayers.map((p) => {
+              const selected = ceoTarget === p.nickname;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`h-10 rounded-lg border text-sm font-semibold ${
+                    selected
+                      ? "border-amber-400 bg-amber-400 text-zinc-950"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-100"
+                  }`}
+                  onClick={() =>
+                    setCeoTarget(
+                      selected ? null : (p.nickname as string | null)
+                    )
+                  }
+                >
+                  {p.nickname}
+                </button>
+              );
+            })}
+            {otherPlayers.length === 0 && (
+              <p className="col-span-2 text-sm text-zinc-500">
+                선택 가능한 다른 플레이어가 없습니다.
+              </p>
+            )}
+          </div>
+        </div>
       )}
 
       <button

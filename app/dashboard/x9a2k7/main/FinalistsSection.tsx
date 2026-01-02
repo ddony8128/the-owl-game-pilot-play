@@ -2,28 +2,17 @@ import type { Player } from "@/lib/types";
 
 type Props = {
   players: Player[];
-  onToggleFinalist: (playerId: string, isFinalist: boolean) => void;
 };
 
-export function FinalistsSection({ players, onToggleFinalist }: Props) {
+// finalist 상태는 DB 등 외부에서 관리하고,
+// 대시보드에서는 읽기 전용으로만 표시합니다.
+export function FinalistsSection({ players }: Props) {
   return (
     <section>
-      <h2 className="mb-2 text-base font-semibold">결승 진출자 선정</h2>
-      <div className="max-h-64 space-y-1 overflow-y-auto text-xs">
-        {players.map((p) => (
-          <label key={p.id} className="flex items-center justify-between gap-2">
-            <span>{p.nickname}</span>
-            <span className="flex items-center gap-2">
-              <span className="text-zinc-400">finalist</span>
-              <input
-                type="checkbox"
-                checked={!!p.is_finalist}
-                onChange={() => onToggleFinalist(p.id, !!p.is_finalist)}
-              />
-            </span>
-          </label>
-        ))}
-      </div>
+      <h2 className="mb-2 text-base font-semibold">결승 진출자</h2>
+      <p className="text-xs text-zinc-400">
+        현재 버전에서는 결승 진출자 정보를 별도로 관리하지 않습니다.
+      </p>
     </section>
   );
 }

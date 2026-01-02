@@ -8,7 +8,6 @@ import { useGameState } from "@/lib/hooks/useGameState";
 export type PageLockOptions = {
   requireLogin?: boolean;
   allowGames?: string[]; // active_game 허용 목록
-  requireFinalist?: boolean;
 };
 
 export function usePageLock(options: PageLockOptions) {
@@ -22,9 +21,9 @@ export function usePageLock(options: PageLockOptions) {
   const isPageActivated =
     !options.allowGames ||
     (activeGame != null && options.allowGames.includes(activeGame));
-  const isRoleAllowed = options.requireFinalist ? !!player?.is_finalist : true;
 
-  const canAccess = isLoggedIn && isPageActivated && isRoleAllowed;
+  // finalist 기반 접근 제한은 더 이상 사용하지 않음
+  const canAccess = isLoggedIn && isPageActivated;
 
   useEffect(() => {
     if (isLoading) return;
@@ -38,6 +37,5 @@ export function usePageLock(options: PageLockOptions) {
     canAccess,
     isLoggedIn,
     isPageActivated,
-    isRoleAllowed,
   } as const;
 }

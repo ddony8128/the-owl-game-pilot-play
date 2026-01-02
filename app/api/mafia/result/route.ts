@@ -22,7 +22,7 @@ export async function GET() {
   const supabase = createServerSupabaseClient();
 
   const [playersRes, stocksRes, mafiaRes, subwayRes] = await Promise.all([
-    supabase.from("players").select("id, nickname, is_finalist, created_at"),
+    supabase.from("players").select("id, nickname, created_at"),
     supabase.from("mafia_stock_state").select("stock_key, price, updated_at"),
     supabase
       .from("mafia_player_state")

@@ -2,6 +2,7 @@ type Props = {
   timeLabel: string;
   exitLabel: string;
   exitValue: string;
+  resetCount: number;
   hasNewRule: boolean;
   interactionDisabled: boolean;
   onOpenGuide: () => void;
@@ -11,6 +12,7 @@ export function SubwayHeader({
   timeLabel,
   exitLabel,
   exitValue,
+  resetCount,
   hasNewRule,
   interactionDisabled,
   onOpenGuide,
@@ -32,10 +34,18 @@ export function SubwayHeader({
         >
           안내문
         </button>
-        <div className="text-right">
-          <div className="text-base text-zinc-400">{exitLabel}</div>
-          <div className="text-lg font-semibold text-amber-300">
-            {exitValue}
+        <div className="text-right space-y-1">
+          <div>
+            <div className="text-base text-zinc-400">{exitLabel}</div>
+            <div className="text-lg font-semibold text-amber-300">
+              {exitValue}
+            </div>
+          </div>
+          <div className="text-xs text-zinc-400">
+            <span>0번 출구로 돌아간 횟수: </span>
+            <span className="font-semibold text-red-300">
+              {resetCount.toString()}회
+            </span>
           </div>
         </div>
       </div>

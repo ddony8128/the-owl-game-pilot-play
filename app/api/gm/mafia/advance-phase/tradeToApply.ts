@@ -64,7 +64,7 @@ export async function handleTradeToApply(
   // 플레이어 기본 정보 (닉네임 매핑용)
   const { data: playerRows, error: playersError } = await supabase
     .from("players")
-    .select("id, nickname, is_finalist, created_at");
+    .select("id, nickname, created_at");
 
   if (playersError || !playerRows) {
     throw new Error(playersError?.message ?? "players 조회에 실패했습니다.");
@@ -156,9 +156,11 @@ export async function handleTradeToApply(
   // 매수/매도량에 따른 기본 주가 변동
   const priceDeltaByStock = new Map<string, number>();
 
+  // 최대 매수/매도 종목 계산용
   const buyEntries = Array.from(buyVolumeByStock.entries()).filter(
     ([, vol]) => vol > 0
   );
+  const maxBuyStocks = new Set<string>();
   if (buyEntries.length > 0) {
     const distinctVolumes = Array.from(
       new Set(buyEntries.map(([, vol]) => vol))
@@ -168,6 +170,7 @@ export async function handleTradeToApply(
 
     for (const [key, vol] of buyEntries) {
       if (vol === top) {
+        maxBuyStocks.add(key);
         priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) + 2);
       } else if (second != null && vol === second) {
         priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) + 1);
@@ -178,10 +181,12 @@ export async function handleTradeToApply(
   const sellEntries = Array.from(sellVolumeByStock.entries()).filter(
     ([, vol]) => vol > 0
   );
+  const maxSellStocks = new Set<string>();
   if (sellEntries.length > 0) {
     const maxSell = Math.max(...sellEntries.map(([, vol]) => vol));
     for (const [key, vol] of sellEntries) {
       if (vol === maxSell) {
+        maxSellStocks.add(key);
         priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) - 1);
       }
     }
@@ -197,7 +202,15 @@ export async function handleTradeToApply(
           case "up_manipulator": {
             const key = ability.stock_key;
             if (!key || !stockMap.has(key) || key === "국채") continue;
-            priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) + 1);
+            let delta = 1;
+            // 최대 매도 종목에 능력을 사용했으면 추가 +1
+            if (maxSellStocks.has(key)) {
+              delta += 1;
+            }
+            priceDeltaByStock.set(
+              key,
+              (priceDeltaByStock.get(key) ?? 0) + delta
+            );
 
             // 능력 결과 기록: 상승 주가조작
             abilityResults.push({
@@ -206,10 +219,12 @@ export async function handleTradeToApply(
               phase: "apply",
               job: "up_manipulator",
               category: "price_manipulation",
-              message: `상승 주가조작 능력으로 ${key} 주가에 영향을 주었습니다.`,
+              message: `상승 주가조작 능력으로 ${key} 주가에 ${
+                delta === 2 ? "2" : "1"
+              } 만큼 상승 효과를 주었습니다.`,
               payload: {
                 stock_key: key,
-                delta: 1,
+                delta,
               },
             });
             break;
@@ -217,7 +232,15 @@ export async function handleTradeToApply(
           case "down_manipulator": {
             const key = ability.stock_key;
             if (!key || !stockMap.has(key) || key === "국채") continue;
-            priceDeltaByStock.set(key, (priceDeltaByStock.get(key) ?? 0) - 2);
+            let delta = -2;
+            // 최대 매수 종목에 능력을 사용했으면 추가 -1
+            if (maxBuyStocks.has(key)) {
+              delta -= 1;
+            }
+            priceDeltaByStock.set(
+              key,
+              (priceDeltaByStock.get(key) ?? 0) + delta
+            );
 
             // 능력 결과 기록: 하락 주가조작
             abilityResults.push({
@@ -226,10 +249,12 @@ export async function handleTradeToApply(
               phase: "apply",
               job: "down_manipulator",
               category: "price_manipulation",
-              message: `하락 주가조작 능력으로 ${key} 주가에 영향을 주었습니다.`,
+              message: `하락 주가조작 능력으로 ${key} 주가에 ${
+                delta === -3 ? "3" : "2"
+              } 만큼 하락 효과를 주었습니다.`,
               payload: {
                 stock_key: key,
-                delta: -2,
+                delta,
               },
             });
             break;
@@ -332,7 +357,8 @@ export async function handleTradeToApply(
   const getBrokerReward = (stockKey: string): number => {
     const total = tradeValueByStock.get(stockKey) ?? 0;
     if (total <= 0) return 0;
-    return Math.floor(total * 0.05);
+    // 패치: 총 거래금액의 10%(버림)
+    return Math.floor(total * 0.1);
   };
 
   // CEO, 월급쟁이, 경찰, 세무조사원, 시장, 증권사 직원 보너스
@@ -405,6 +431,56 @@ export async function handleTradeToApply(
     }
   }
 
+  // CEO 능력: 자신을 제외한 한 사람에게 5원을 지급하고, 대상은 CEO가 누구인지 알게 된다.
+  for (const p of playerStates) {
+    if (p.job !== "ceo") continue;
+    const pid = p.player_id;
+    const abilities = abilitiesByPlayer.get(pid) ?? [];
+    const ceoAbility = abilities.find(
+      (a): a is Extract<MafiaAbilityPayload, { job: "ceo" }> => a.job === "ceo"
+    );
+    if (!ceoAbility) continue;
+
+    const targetName = ceoAbility.target;
+    const targetId = idByNickname.get(targetName) ?? null;
+    if (!targetId || targetId === pid) {
+      // 잘못된 대상 선택은 무시 (자기 자신 등)
+      continue;
+    }
+
+    // 대상 플레이어에게 5원 지급 (능력 수익으로 취급)
+    addCash(
+      targetId,
+      5,
+      true,
+      {
+        job: "ceo",
+        category: "ceo_gift",
+        message: `CEO로부터 5원을 받았습니다. (CEO: ${
+          nicknameById.get(pid) ?? pid
+        })`,
+        payload: {
+          from_ceo_player_id: pid,
+          from_ceo_nickname: nicknameById.get(pid) ?? pid,
+        },
+      }
+    );
+
+    // CEO 본인에게도 누구에게 줬는지 안내 메시지를 남긴다.
+    abilityResults.push({
+      player_id: pid,
+      round_number: current.round_number,
+      phase: "apply",
+      job: "ceo",
+      category: "ceo_gift",
+      message: `이번 라운드에 ${targetName}에게 5원을 지급했습니다.`,
+      payload: {
+        target_nickname: targetName,
+        target_player_id: targetId,
+      },
+    });
+  }
+
   // 경찰 / 세무조사원 능력 결과 메시지
   for (const p of playerStates) {
     const pid = p.player_id;
@@ -438,9 +514,13 @@ export async function handleTradeToApply(
         a.job === "police"
     );
     if (policeAbility) {
-      const targetName = policeAbility.target ?? null;
+      const targetsRaw = policeAbility.targets;
+      const targetNames =
+        Array.isArray(targetsRaw) && targetsRaw.length >= 2
+          ? [...new Set(targetsRaw)].slice(0, 2)
+          : [];
 
-      if (!targetName) {
+      if (targetNames.length !== 2) {
         abilityResults.push({
           player_id: pid,
           round_number: current.round_number,
@@ -448,15 +528,18 @@ export async function handleTradeToApply(
           job: "police",
           category: "police_check",
           message:
-            "이번 라운드에는 아무도 조사하지 않았습니다. (대상을 선택하지 않음)",
+            "경찰 조사 결과: 유효한 두 명을 선택하지 않아 조사가 제대로 진행되지 않았습니다.",
           payload: null,
         });
       } else {
-        const targetId = idByNickname.get(targetName) ?? null;
-        const targetState = targetId
-          ? playerStateById.get(targetId) ?? null
-          : null;
-        const isMafia = !!targetState?.is_mafia;
+        const targetIds: (string | null)[] = targetNames.map(
+          (name) => idByNickname.get(name) ?? null
+        );
+        const hasMafia = targetIds.some((tid) => {
+          if (!tid) return false;
+          const s = playerStateById.get(tid) ?? null;
+          return !!s?.is_mafia;
+        });
 
         abilityResults.push({
           player_id: pid,
@@ -464,13 +547,13 @@ export async function handleTradeToApply(
           phase: "apply",
           job: "police",
           category: "police_check",
-          message: `경찰 조사 결과: ${targetName}은(는) ${
-            isMafia ? "마피아입니다." : "마피아가 아닙니다."
-          }.`,
+          message: `경찰 조사 결과: 선택한 두 사람 중 마피아가 ${
+            hasMafia ? "있습니다." : "없습니다."
+          }`,
           payload: {
-            target_nickname: targetName,
-            target_player_id: targetId,
-            is_mafia: isMafia,
+            target_nicknames: targetNames,
+            target_player_ids: targetIds,
+            has_mafia: hasMafia,
           },
         });
       }
@@ -482,75 +565,114 @@ export async function handleTradeToApply(
         a.job === "tax_auditor"
     );
     if (taxAbility) {
-      const targetName = taxAbility.target;
-      const targetId = idByNickname.get(targetName) ?? null;
-      const targetState = targetId
-        ? playerStateById.get(targetId) ?? null
-        : null;
+      const targetsRaw = taxAbility.targets;
+      const targetNames =
+        Array.isArray(targetsRaw) && targetsRaw.length >= 2
+          ? [...new Set(targetsRaw)].slice(0, 2)
+          : [];
 
-      let message: string;
-
-      if (!targetId || !targetState) {
-        message = `세무조사 결과: ${targetName}의 정보를 찾을 수 없어 조사에 실패했습니다.`;
+      if (targetNames.length !== 2) {
+        abilityResults.push({
+          player_id: pid,
+          round_number: current.round_number,
+          phase: "apply",
+          job: "tax_auditor",
+          category: "tax_audit",
+          message:
+            "세무조사 결과: 유효한 두 명을 선택하지 않아 조사가 제대로 진행되지 않았습니다.",
+          payload: null,
+        });
       } else {
-        const rawStocks = (targetState as unknown as { stocks?: unknown })
-          .stocks;
-        const stocks: Record<string, { amount: number }> =
-          rawStocks && typeof rawStocks === "object"
-            ? { ...(rawStocks as Record<string, { amount: number }>) }
-            : {};
-
-        const trades =
-          tradeByPlayerStock.get(targetId) ?? new Map<string, TradeAgg>();
-
         const lines: string[] = [];
-        const displayName =
-          nicknameById.get(targetId) ?? targetName ?? targetId ?? "알 수 없음";
+        const targetsPayload: {
+          target_nickname: string | null;
+          target_player_id: string | null;
+        }[] = [];
 
-        lines.push(
-          `세무조사 결과: ${displayName}의 보유 주식과 이번 라운드 거래 내역입니다.`
-        );
-        lines.push("");
-        lines.push("보유 주식:");
+        targetNames.forEach((targetName) => {
+          const targetId = idByNickname.get(targetName) ?? null;
+          const targetState = targetId
+            ? playerStateById.get(targetId) ?? null
+            : null;
 
-        const holdingEntries = Object.entries(stocks);
-        if (holdingEntries.length === 0) {
-          lines.push("- 보유 주식 없음");
-        } else {
-          for (const [stockKey, info] of holdingEntries) {
-            const amt =
-              typeof info?.amount === "number" && info.amount > 0
-                ? info.amount
-                : 0;
-            lines.push(`- ${stockKey}: ${amt}주`);
+          if (!targetId || !targetState) {
+            lines.push(
+              `세무조사 결과: ${targetName}의 정보를 찾을 수 없어 조사에 실패했습니다.`
+            );
+            targetsPayload.push({
+              target_nickname: targetName,
+              target_player_id: targetId,
+            });
+            lines.push("");
+            return;
           }
-        }
 
-        lines.push("");
-        lines.push("이번 라운드 매수/매도:");
-        if (trades.size === 0) {
-          lines.push("- 거래 내역 없음");
-        } else {
-          for (const [stockKey, agg] of trades.entries()) {
-            lines.push(`- ${stockKey}: 매수 ${agg.buy} / 매도 ${agg.sell}`);
+          const rawStocks = (targetState as unknown as { stocks?: unknown })
+            .stocks;
+          const stocks: Record<string, { amount: number }> =
+            rawStocks && typeof rawStocks === "object"
+              ? { ...(rawStocks as Record<string, { amount: number }>) }
+              : {};
+
+          const trades =
+            tradeByPlayerStock.get(targetId) ?? new Map<string, TradeAgg>();
+
+          const displayName =
+            nicknameById.get(targetId) ??
+            targetName ??
+            targetId ??
+            "알 수 없음";
+
+          lines.push(
+            `세무조사 결과: ${displayName}의 보유 주식과 이번 라운드 거래 내역입니다.`
+          );
+          lines.push("");
+          lines.push("보유 주식:");
+
+          const holdingEntries = Object.entries(stocks);
+          if (holdingEntries.length === 0) {
+            lines.push("- 보유 주식 없음");
+          } else {
+            for (const [stockKey, info] of holdingEntries) {
+              const amt =
+                typeof info?.amount === "number" && info.amount > 0
+                  ? info.amount
+                  : 0;
+              lines.push(`- ${stockKey}: ${amt}주`);
+            }
           }
-        }
 
-        message = lines.join("\n");
+          lines.push("");
+          lines.push("이번 라운드 매수/매도:");
+          if (trades.size === 0) {
+            lines.push("- 거래 내역 없음");
+          } else {
+            for (const [stockKey, agg] of trades.entries()) {
+              lines.push(`- ${stockKey}: 매수 ${agg.buy} / 매도 ${agg.sell}`);
+            }
+          }
+
+          lines.push("");
+          targetsPayload.push({
+            target_nickname: targetName,
+            target_player_id: targetId,
+          });
+        });
+
+        const message = lines.join("\n");
+
+        abilityResults.push({
+          player_id: pid,
+          round_number: current.round_number,
+          phase: "apply",
+          job: "tax_auditor",
+          category: "tax_audit",
+          message,
+          payload: {
+            targets: targetsPayload,
+          },
+        });
       }
-
-      abilityResults.push({
-        player_id: pid,
-        round_number: current.round_number,
-        phase: "apply",
-        job: "tax_auditor",
-        category: "tax_audit",
-        message,
-        payload: {
-          target_nickname: targetName,
-          target_player_id: targetId ?? null,
-        },
-      });
     }
   }
 
@@ -580,17 +702,20 @@ export async function handleTradeToApply(
       const victimState = playerStateById.get(tid);
       if (!victimState) continue;
 
-      // 시장은 강도 면역: 시장에게는 "강도를 막아냈습니다" 능력 결과를 남긴다.
+      // 시장은 강도 면역: 피해를 받지 않고, 강도가 누구인지 알게 된다.
       if (victimState.job === "mayor") {
+        const robberName =
+          nicknameById.get(pid) ?? (playerStateById.get(pid)?.player_id ?? pid);
         abilityResults.push({
           player_id: tid,
           round_number: current.round_number,
           phase: "apply",
           job: "mayor",
           category: "robber_blocked",
-          message: "강도의 공격을 막아냈습니다.",
+          message: `강도의 공격을 막아냈습니다. 강도는 ${robberName}이었습니다.`,
           payload: {
             from_player_id: pid,
+            from_player_nickname: robberName,
           },
         });
         continue;
@@ -599,25 +724,16 @@ export async function handleTradeToApply(
       const income = roundIncomeForRobber.get(tid) ?? 0;
       if (income <= 0) continue;
 
-      const stolen = Math.floor(income / 2);
+      // 패치: 각 대상의 이번 라운드 수익의 20%(버림)를 빼앗는다.
+      const stolen = Math.floor(income * 0.2);
       if (stolen <= 0) continue;
 
       cashDelta.set(tid, (cashDelta.get(tid) ?? 0) - stolen);
       totalStolen += stolen;
       victimsPayload.push({ player_id: tid, stolen });
 
-      // 피해자 능력결과
-      abilityResults.push({
-        player_id: tid,
-        round_number: current.round_number,
-        phase: "apply",
-        job: victimState.job,
-        category: "robber_loss",
-        message: `강도에게 ${stolen}원을 빼앗겼습니다.`,
-        payload: {
-          from_player_id: pid,
-        },
-      });
+      // 패치 규칙상 강도가 누구를 얼마나 털었는지는 피해자에게 비공개이므로
+      // 피해자에게는 별도의 능력결과 메시지를 남기지 않는다.
     }
 
     if (totalStolen > 0) {

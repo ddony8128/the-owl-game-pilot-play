@@ -106,7 +106,7 @@ export async function handleVoteToEnd(
   // 경제사범 플레이어 찾기 (target_id = players.id)
   const { data: econPlayerRow, error: econPlayerError } = await supabase
     .from("players")
-    .select("id, nickname, is_finalist, created_at")
+    .select("id, nickname, created_at")
     .eq("id", econTargetId)
     .maybeSingle();
 
@@ -137,14 +137,46 @@ export async function handleVoteToEnd(
   }
 
   const econState = econStateRow as MafiaPlayerState;
-  const isMayor = econState.job === "mayor";
   const isMafia = econState.is_mafia;
 
   const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at">[] = [];
 
-  // 벌금 5원 (시장 직업자는 면제)
-  if (!isMayor) {
-    const nextCash = econState.cash - 5;
+  // 현재 국채 가격 조회
+  const { data: bondRow, error: bondError } = await supabase
+    .from("mafia_stock_state")
+    .select("stock_key, price")
+    .eq("stock_key", "국채")
+    .maybeSingle();
+
+  if (bondError) {
+    throw new Error(bondError.message ?? "국채 가격을 조회하지 못했습니다.");
+  }
+
+  let currentBondPrice =
+    bondRow && typeof bondRow.price === "number" ? bondRow.price : 0;
+  if (currentBondPrice <= 0) {
+    currentBondPrice = 5;
+  }
+
+  // 마피아가 경제사범으로 뽑힌 경우: 국채 가격 +1, 경제사범은 (상승한) 국채 가격만큼 벌금,
+  // 그리고 시민/경찰에게 국채 지급
+  if (isMafia) {
+    const newBondPrice = currentBondPrice + 1;
+
+    const { error: updateBondError } = await supabase
+      .from("mafia_stock_state")
+      .update({ price: newBondPrice })
+      .eq("stock_key", "국채");
+
+    if (updateBondError) {
+      throw new Error(
+        updateBondError.message ?? "국채 가격을 1 올리지 못했습니다."
+      );
+    }
+
+    // 경제사범은 (상승한) 국채 가격만큼 벌금
+    const totalFine = newBondPrice;
+    const nextCash = econState.cash - totalFine;
     const { error: updateFineError } = await supabase
       .from("mafia_player_state")
       .update({ cash: nextCash })
@@ -159,16 +191,15 @@ export async function handleVoteToEnd(
       round_number: current.round_number,
       phase: "vote",
       job: econState.job,
-      category: "vote_fine",
-      message: "경제사범으로 지목되어 벌금 5원을 잃었습니다.",
+      category: "vote_fine_bond",
+      message: `경제사범으로 지목되어 (상승한) 국채 가격 ${newBondPrice}원만큼 벌금을 내었습니다.`,
       payload: {
         nickname: econPlayer.nickname,
+        bond_price: newBondPrice,
+        total_fine: totalFine,
       },
     });
-  }
 
-  // 경제사범이 마피아이면 시민에게 국채 1개씩 지급
-  if (isMafia) {
     const { data: citizenRows, error: citizenError } = await supabase
       .from("mafia_player_state")
       .select("player_id, cash, is_mafia, job, stocks, updated_at")
@@ -190,7 +221,9 @@ export async function handleVoteToEnd(
 
       const prevAmount =
         typeof stocks["국채"]?.amount === "number" ? stocks["국채"].amount : 0;
-      stocks["국채"] = { amount: prevAmount + 1 };
+      // 기본 시민 국채 1개 + 경찰 추가 보너스 1개 (경찰은 총 2개)
+      const extraForPolice = row.job === "police" ? 1 : 0;
+      stocks["국채"] = { amount: prevAmount + 1 + extraForPolice };
 
       citizenUpdates.push({
         player_id: row.player_id,
@@ -230,13 +263,37 @@ export async function handleVoteToEnd(
         phase: "vote",
         job: row.job,
         category: "econ_mafia",
-        message: `경제사범으로 지목되었던 ${econPlayer.nickname}은(는) 마피아였습니다. 모든 시민에게 국채가 지급되었습니다.`,
+        message: `경제사범으로 지목되었던 ${econPlayer.nickname}은(는) 마피아였습니다. 국채 가격이 1 오르고, 모든 시민에게 국채가 지급되었습니다.`,
         payload: {
           econ_target_nickname: econPlayer.nickname,
         },
       });
     }
   } else {
+    // 마피아가 아닌 경우: 기본 벌금 5원
+    const baseFine = 5;
+    const nextCash = econState.cash - baseFine;
+    const { error: updateFineError } = await supabase
+      .from("mafia_player_state")
+      .update({ cash: nextCash })
+      .eq("player_id", econPlayer.id);
+
+    if (updateFineError) {
+      throw new Error(updateFineError.message ?? "벌금을 적용하지 못했습니다.");
+    }
+
+    abilityResults.push({
+      player_id: econPlayer.id,
+      round_number: current.round_number,
+      phase: "vote",
+      job: econState.job,
+      category: "vote_fine",
+      message: "경제사범으로 지목되어 벌금 5원을 잃었습니다.",
+      payload: {
+        nickname: econPlayer.nickname,
+      },
+    });
+
     // 경제사범이 마피아가 아니면, 모든 플레이어에게 "마피아가 아니었다"는 안내 메시지를 남긴다.
     const { data: allRows, error: allError } = await supabase
       .from("mafia_player_state")

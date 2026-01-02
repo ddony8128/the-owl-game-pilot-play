@@ -50,7 +50,7 @@ function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
 
 export function SubwayCountdownSection() {
   const [state, setState] = useState<TimerState>({
-    remainingSeconds: 50 * 60,
+    remainingSeconds: 40 * 60,
     isRunning: false,
   });
 

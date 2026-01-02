@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { Player, SubwayPlayerState, SubwayPlayerEvent } from "@/lib/types";
+import type {
+  Player,
+  SubwayPlayerState,
+  SubwayPlayerStateClient,
+  SubwayPlayerEvent,
+  SubwayRuleClient,
+} from "@/lib/types";
+import { SUBWAY_RULES } from "../rules";
 
 type MoveBody = {
   nickname?: string;
@@ -9,7 +16,7 @@ type MoveBody = {
 
 type MoveResponse =
   | {
-      state: SubwayPlayerState;
+      state: SubwayPlayerStateClient | null;
       result: "correct" | "wrong" | "noop";
       reason?: string;
     }
@@ -79,6 +86,7 @@ const ALL_LOCATION_KEYS: string[] = [
 ];
 
 type SupabaseClient = ReturnType<typeof createServerSupabaseClient>;
+const TOTAL_SECONDS = 40 * 60;
 
 async function getOpenedRuleIdsForPlayer(
   supabase: SupabaseClient,
@@ -147,6 +155,71 @@ function getGroupFromLocation(location: string | null): string | null {
   return group || null;
 }
 
+async function buildClientState(
+  supabase: SupabaseClient,
+  base: SubwayPlayerState,
+  playerId: string,
+  rules: SubwayRuleClient[]
+): Promise<SubwayPlayerStateClient> {
+  // 타이머 상태 조회
+  const { data: gameRow } = await supabase
+    .from("game_state")
+    .select("timer_start, timer_start_at, pause_at")
+    .eq("id", 1)
+    .maybeSingle();
+
+  const timerStart = !!gameRow?.timer_start;
+  const timerStartAt = (gameRow?.timer_start_at as string | null) ?? null;
+  const pauseAt = (gameRow?.pause_at as string | null) ?? null;
+
+  // 같은 장소에 있는 다른 플레이어 목록 (자기 자신 제외, 종료되지 않은 플레이어만)
+  let othersAtSameLocation:
+    | {
+        player_id: string;
+        nickname: string | null;
+      }[]
+    | undefined;
+
+  if (base.current_location) {
+    const { data: others, error: othersError } = await supabase
+      .from("subway_player_state")
+      .select("player_id, is_finished, current_location, players(nickname)")
+      .eq("current_location", base.current_location)
+      .eq("is_finished", false)
+      .neq("player_id", playerId);
+
+    if (!othersError && others) {
+      const rows = others as {
+        player_id: string;
+        players?: { nickname?: string | null } | null;
+      }[];
+
+      othersAtSameLocation = rows.map((row) => ({
+        player_id: row.player_id,
+        nickname: row.players?.nickname ?? null,
+      }));
+    }
+  }
+
+  return {
+    playerId: base.player_id,
+    exitNumber: base.exit_number,
+    currentLocation: base.current_location,
+    timerStart,
+    timerStartAt,
+    pauseAt,
+    totalSeconds: TOTAL_SECONDS,
+    resetCount: base.reset_count,
+    rules,
+    othersAtSameLocation: (othersAtSameLocation ?? []).map((o) => ({
+      playerId: o.player_id,
+      nickname: o.nickname,
+    })),
+    isFinished: base.is_finished,
+    finishedRank: base.finished_rank,
+  };
+}
+
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as MoveBody | null;
@@ -176,7 +249,7 @@ export async function POST(request: Request) {
   // 플레이어 조회
   const playerRes = await supabase
     .from("players")
-    .select("id, nickname, is_finalist, created_at")
+    .select("id, nickname, created_at")
     .eq("nickname", nickname)
     .maybeSingle();
 
@@ -270,39 +343,65 @@ export async function POST(request: Request) {
       event_value: { location: initialLocation },
     });
 
-    const initialState = {
-      ...(insertState.data as SubwayPlayerState),
-      nickname: player.nickname,
-    } as SubwayPlayerState;
+    const initialBase = insertState.data as SubwayPlayerState;
+    const initialOpenedIds = await getOpenedRuleIdsForPlayer(
+      supabase,
+      player.id
+    );
+    const initialRules: SubwayRuleClient[] = SUBWAY_RULES.filter(
+      (r) => r.alwaysVisible || initialOpenedIds.has(r.id)
+    ).map((r) => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      conditionDescription: r.conditionDescription,
+    }));
+    const clientState = await buildClientState(
+      supabase,
+      initialBase,
+      player.id,
+      initialRules
+    );
 
     return NextResponse.json(
       {
-        state: initialState,
+        state: clientState,
         result: "noop",
       } as MoveResponse,
       { status: 200 }
     );
   }
 
-  const state = {
-    ...(stateRow as SubwayPlayerState),
-    nickname: player.nickname,
-  };
+  const state = stateRow as SubwayPlayerState;
+
+  // 이미 공개된 규칙 목록 조회 (플레이어별)
+  const openedRuleIds = await getOpenedRuleIdsForPlayer(supabase, player.id);
 
   // 이미 게임을 마친 플레이어는 추가 이동을 허용하지 않음
   if (state.is_finished) {
+    const rules: SubwayRuleClient[] = SUBWAY_RULES.filter(
+      (r) => r.alwaysVisible || openedRuleIds.has(r.id)
+    ).map((r) => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      conditionDescription: r.conditionDescription,
+    }));
+    const clientState = await buildClientState(
+      supabase,
+      state,
+      player.id,
+      rules
+    );
     return NextResponse.json(
       {
-        state,
+        state: clientState,
         result: "noop",
         reason: "already_finished",
       } as MoveResponse,
       { status: 200 }
     );
   }
-
-  // 이미 공개된 규칙 목록 조회 (플레이어별)
-  const openedRuleIds = await getOpenedRuleIdsForPlayer(supabase, player.id);
 
   // 30초 이내 이동 여부 확인
   const { data: lastEnter, error: lastEnterError } = await supabase
@@ -325,7 +424,8 @@ export async function POST(request: Request) {
   let reason = "";
 
   const now = Date.now();
-  if (lastEnter?.created_at) {
+  // 30초 룰은 0번 출구에 있을 때만 적용
+  if (state.exit_number === 0 && lastEnter?.created_at) {
     const enteredAt = new Date(lastEnter.created_at).getTime();
     if (!Number.isNaN(enteredAt)) {
       const effectiveStartMs =
@@ -454,7 +554,7 @@ export async function POST(request: Request) {
     .update(updatePayload)
     .eq("player_id", player.id)
     .select(
-      "player_id, exit_number, current_location, reset_count, scare_status, is_finished, finished_rank, updated_at"
+      "player_id, exit_number, current_location, reset_count, is_finished, finished_rank, updated_at"
     )
     .maybeSingle();
 
@@ -469,10 +569,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const finalState: SubwayPlayerState = {
-    ...(updatedState as SubwayPlayerState),
-    nickname: player.nickname,
-  };
+  const finalState = updatedState as SubwayPlayerState;
 
   // 이동 이벤트 기록
   await supabase.from("subway_player_events").insert([
@@ -497,10 +594,24 @@ export async function POST(request: Request) {
 
   // 규칙 7: 1~6번 규칙이 모두 공개되었는지 확인 후 자동 공개
   await ensureRule7IfComplete(supabase, player.id, openedRuleIds);
+  const finalRules: SubwayRuleClient[] = SUBWAY_RULES.filter(
+    (r) => r.alwaysVisible || openedRuleIds.has(r.id)
+  ).map((r) => ({
+    id: r.id,
+    title: r.title,
+    body: r.body,
+    conditionDescription: r.conditionDescription,
+  }));
+  const clientState = await buildClientState(
+    supabase,
+    finalState,
+    player.id,
+    finalRules
+  );
 
   return NextResponse.json(
     {
-      state: finalState,
+      state: clientState,
       result,
       reason,
     } as MoveResponse,

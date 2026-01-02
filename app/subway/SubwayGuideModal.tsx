@@ -1,4 +1,4 @@
-import type { SubwayRuleClient } from "./SubwayClient";
+import type { SubwayRuleClient } from "@/lib/types";
 
 type Props = {
   isOpen: boolean;
