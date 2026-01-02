@@ -26,10 +26,11 @@ export default function DashboardPolicePage() {
           | { error: string }
           | null;
         if (!res.ok || !json || "error" in json) {
-          throw new Error(
-            (json as { error?: string })?.error ??
-              "신고 목록을 불러오지 못했습니다."
-          );
+          const message =
+            json && "error" in json && typeof json.error === "string"
+              ? json.error
+              : "신고 목록을 불러오지 못했습니다.";
+          throw new Error(message);
         }
         if (cancelled) return;
         setReports(json.reports ?? []);
@@ -59,34 +60,6 @@ export default function DashboardPolicePage() {
     };
   }, []);
 
-  const updateStatus = async (id: string, status: "approved" | "rejected") => {
-    setError(null);
-    try {
-      const res = await fetch("/api/gm/subway/reports", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id, status }),
-      });
-      const json = (await res.json().catch(() => null)) as {
-        ok?: true;
-        error?: string;
-        report?: ReportWithId;
-      } | null;
-      if (!res.ok || !json?.ok || !json.report) {
-        throw new Error(json?.error ?? "신고 상태를 변경하지 못했습니다.");
-      }
-      setReports((prev) =>
-        prev.map((r) => (r.id === id ? (json.report as ReportWithId) : r))
-      );
-    } catch (e: unknown) {
-      const message =
-        e instanceof Error ? e.message : "신고 상태를 변경하지 못했습니다.";
-      setError(message);
-    }
-  };
-
   if (loading) return <LoadingScreen />;
   if (error) {
     return (
@@ -114,20 +87,6 @@ export default function DashboardPolicePage() {
             <p className="whitespace-pre-wrap text-sm text-zinc-100">
               {r.content}
             </p>
-            <div className="mt-1 flex gap-2 text-base">
-              <button
-                className="h-7 rounded bg-emerald-500 px-3 text-xs font-semibold text-zinc-950 hover:bg-emerald-400"
-                onClick={() => updateStatus(r.id, "approved")}
-              >
-                승인
-              </button>
-              <button
-                className="h-7 rounded bg-zinc-700 px-3 text-xs text-zinc-100 hover:bg-zinc-600"
-                onClick={() => updateStatus(r.id, "rejected")}
-              >
-                기각
-              </button>
-            </div>
           </div>
         ))}
         {reports.length === 0 && (

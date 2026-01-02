@@ -112,15 +112,22 @@ export function MafiaAbilityTab({
     if (!player?.nickname || !normalizedJob) return;
     if (submitted) return;
 
-    setSubmitting(true);
     setError(null);
     setInfo(null);
 
     const payload = buildPayload();
     if (!payload) {
-      setSubmitting(false);
       return;
     }
+
+    const confirmed = window.confirm(
+      "능력 사용을 제출하면 이 라운드에서는 다시 변경할 수 없습니다.\n정말 제출하시겠습니까?"
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
       const res = await fetch("/api/mafia/action", {

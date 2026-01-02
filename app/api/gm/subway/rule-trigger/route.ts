@@ -4,7 +4,7 @@ import type { SubwayPlayerEvent } from "@/lib/types";
 
 type Body = {
   player_id?: string;
-  trigger?: "meeting" | "food" | "report";
+  trigger?: "meeting" | "food";
 };
 
 type ResponseBody = { ok: true } | { error: string };
@@ -12,7 +12,6 @@ type ResponseBody = { ok: true } | { error: string };
 const TRIGGER_RULE_MAP: Record<NonNullable<Body["trigger"]>, number> = {
   meeting: 2,
   food: 3,
-  report: 4,
 };
 
 export async function POST(request: Request) {

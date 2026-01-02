@@ -4,18 +4,21 @@ import type { GameState, Player, RulesState } from "@/lib/types";
 type MainState = {
   gameState: GameState | null;
   rules: RulesState[];
-  players: Player[];
+  players: (Player & { feather?: number | null })[];
   loading: boolean;
   error: string | null;
   changeGame: (value: GameState["active_game"]) => Promise<void>;
   toggleRule: (ruleKey: string, isOpen: boolean) => Promise<void>;
+  updateFeather: (playerId: string, delta: -1 | 1) => Promise<void>;
   clearError: () => void;
 };
 
 export function useDashboardMainState(): MainState {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [rules, setRules] = useState<RulesState[]>([]);
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [players, setPlayers] = useState<
+    (Player & { feather?: number | null })[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -30,7 +33,7 @@ export function useDashboardMainState(): MainState {
           | {
               game: GameState | null;
               rules: RulesState[];
-              players: Player[];
+              players: (Player & { feather?: number | null })[];
               error?: undefined;
             }
           | { error: string }
@@ -137,6 +140,37 @@ export function useDashboardMainState(): MainState {
     }
   };
 
+  const updateFeather = async (playerId: string, delta: -1 | 1) => {
+    setError(null);
+    try {
+      const res = await fetch("/api/gm/players/feather", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ playerId, delta }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        ok?: true;
+        error?: string;
+        feather?: number;
+      } | null;
+      if (!res.ok || !json?.ok || typeof json.feather !== "number") {
+        throw new Error(json?.error ?? "부엉깃털을 변경하지 못했습니다.");
+      }
+
+      setPlayers((prev) =>
+        prev.map((p) =>
+          p.id === playerId ? { ...p, feather: json.feather } : p
+        )
+      );
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "부엉깃털을 변경하지 못했습니다.";
+      setError(message);
+    }
+  };
+
   return {
     gameState,
     rules,
@@ -145,6 +179,7 @@ export function useDashboardMainState(): MainState {
     error,
     changeGame,
     toggleRule,
+    updateFeather,
     clearError,
   };
 }

@@ -3,7 +3,11 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { GameState, RulesState, Player } from "@/lib/types";
 
 type MainStateResponse =
-  | { game: GameState | null; rules: RulesState[]; players: Player[] }
+  | {
+      game: GameState | null;
+      rules: RulesState[];
+      players: (Player & { feather?: number | null })[];
+    }
   | { error: string };
 
 export async function GET() {
@@ -20,7 +24,7 @@ export async function GET() {
     supabase.from("rules_state").select("rule_key, is_open, updated_at"),
     supabase
       .from("players")
-      .select("id, nickname, created_at")
+      .select("id, nickname, created_at, feather")
       .order("nickname", { ascending: true }),
   ]);
 
@@ -47,7 +51,9 @@ export async function GET() {
 
   const game = (gameRes.data || null) as GameState | null;
   const rules = (rulesRes.data || []) as RulesState[];
-  const players = (playersRes.data || []) as Player[];
+  const players = (playersRes.data || []) as (Player & {
+    feather?: number | null;
+  })[];
 
   return NextResponse.json({ game, rules, players });
 }

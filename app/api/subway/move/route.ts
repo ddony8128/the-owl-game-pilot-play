@@ -273,7 +273,7 @@ export async function POST(request: Request) {
   const { data: stateRow, error: stateError } = await supabase
     .from("subway_player_state")
     .select(
-      "player_id, exit_number, current_location, reset_count, scare_status, is_finished, finished_rank, updated_at"
+      "player_id, exit_number, current_location, reset_count, is_finished, finished_rank, updated_at"
     )
     .eq("player_id", player.id)
     .maybeSingle();
@@ -317,11 +317,10 @@ export async function POST(request: Request) {
         exit_number: 0,
         current_location: initialLocation,
         reset_count: 0,
-        scare_status: false,
         is_finished: false,
       })
       .select(
-        "player_id, exit_number, current_location, reset_count, scare_status, is_finished, finished_rank, updated_at"
+        "player_id, exit_number, current_location, reset_count, is_finished, finished_rank, updated_at"
       )
       .maybeSingle();
 

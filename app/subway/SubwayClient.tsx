@@ -100,37 +100,17 @@ function SubwayInner() {
           `/api/subway/state?nickname=${encodeURIComponent(nickname)}`
         );
         const json = (await res.json().catch(() => null)) as
-          | {
-              state: SubwayPlayerStateClient | null;
-            }
+          | { state: SubwayPlayerStateClient | null; error?: string }
           | { error: string }
           | null;
 
         if (!res.ok || !json || "error" in json) {
-          throw new Error(
-            (json as { error?: string })?.error ??
-              "플레이어 상태를 불러오지 못했습니다."
-          );
+          const message =
+            json && "error" in json && typeof json.error === "string"
+              ? json.error
+              : "플레이어 상태를 불러오지 못했습니다.";
+          throw new Error(message);
         }
-
-        const now = Date.now();
-        const { remainingSeconds, isRunning } = computeRemaining(
-          json.state?.timerStart ?? false,
-          json.state?.timerStartAt ?? null,
-          json.state?.totalSeconds ?? 40 * 60,
-          json.state?.pauseAt ?? null,
-          now
-        );
-
-        if (remainingSeconds <= 0) {
-          router.replace("/subway/end");
-          return;
-        }
-
-        setTimerState({
-          remainingSeconds,
-          isRunning,
-        });
 
         if (cancelled) return;
 
@@ -162,20 +142,42 @@ function SubwayInner() {
 
           const base: SubwayPlayerStateClient = rawState;
 
+          if (
+            prev?.timerStart !== base.timerStart ||
+            prev?.timerStartAt !== base.timerStartAt ||
+            prev?.pauseAt !== base.pauseAt ||
+            prev?.totalSeconds !== base.totalSeconds
+          ) {
+            const now = Date.now();
+            const { remainingSeconds, isRunning } = computeRemaining(
+              base.timerStart,
+              base.timerStartAt,
+              base.totalSeconds,
+              base.pauseAt,
+              now
+            );
+
+            if (remainingSeconds <= 0) {
+              router.replace("/subway/end");
+            } else {
+              setTimerState((current) => {
+                if (
+                  current &&
+                  current.remainingSeconds === remainingSeconds &&
+                  current.isRunning === isRunning
+                ) {
+                  return current;
+                }
+                return { remainingSeconds, isRunning };
+              });
+            }
+          }
+
           return {
-            playerId: base.playerId,
-            exitNumber: base.exitNumber,
-            currentLocation: base.currentLocation,
-            timerStart: prev?.timerStart ?? false,
-            timerStartAt: prev?.timerStartAt ?? null,
-            pauseAt: prev?.pauseAt ?? null,
-            totalSeconds: prev?.totalSeconds ?? 40 * 60,
-            resetCount: prev?.resetCount ?? 0,
+            ...base,
             rules: serverRules,
-            othersAtSameLocation: othersAtSameLocation,
-            isFinished: base.isFinished,
-            finishedRank: base.finishedRank,
-          } as SubwayPlayerStateClient;
+            othersAtSameLocation,
+          };
         });
 
         setError(null);

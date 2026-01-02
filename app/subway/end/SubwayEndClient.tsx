@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { SubwayPlayerState } from "@/lib/types";
+import type { SubwayPlayerStateClient } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { SubwayEndContent } from "./SubwayEndContent";
@@ -10,7 +10,7 @@ import { SubwayEndContent } from "./SubwayEndContent";
 export default function SubwayEndClient() {
   const router = useRouter();
   const { nickname, isLoading } = usePlayerAuth();
-  const [state, setState] = useState<SubwayPlayerState | null>(null);
+  const [state, setState] = useState<SubwayPlayerStateClient | null>(null);
   const [loadingState, setLoadingState] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,14 +25,15 @@ export default function SubwayEndClient() {
           `/api/subway/state?nickname=${encodeURIComponent(nickname)}`
         );
         const json = (await res.json().catch(() => null)) as
-          | { state: SubwayPlayerState | null; error?: string }
+          | { state: SubwayPlayerStateClient | null; error?: string }
           | { error: string }
           | null;
         if (!res.ok || !json || "error" in json) {
-          throw new Error(
-            (json as { error?: string })?.error ??
-              "플레이어 상태를 불러오지 못했습니다."
-          );
+          const message =
+            json && "error" in json && typeof json.error === "string"
+              ? json.error
+              : "플레이어 상태를 불러오지 못했습니다.";
+          throw new Error(message);
         }
         if (cancelled) return;
         setState(json.state ?? null);
@@ -65,7 +66,7 @@ export default function SubwayEndClient() {
     );
   }
 
-  const finishedRank = state?.finished_rank ?? null;
+  const finishedRank = state?.finishedRank ?? null;
 
   return (
     <SubwayEndContent

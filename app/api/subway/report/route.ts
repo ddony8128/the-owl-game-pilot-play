@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { Player, SubwayReport } from "@/lib/types";
+import type {
+  Player,
+  SubwayPlayerEvent,
+  SubwayReport,
+  SubwayPlayerState,
+} from "@/lib/types";
 
 type ReportBody = {
   nickname?: string;
@@ -9,7 +14,7 @@ type ReportBody = {
 };
 
 type ReportPostResponse =
-  | { ok: true; id: number; status: SubwayReport["status"] }
+  | { ok: true; id: SubwayReport["id"]; status: SubwayReport["status"] }
   | { error: string };
 
 type ReportGetResponse =
@@ -88,6 +93,7 @@ export async function POST(request: Request) {
     }
   }
 
+  // 기본적으로 신고는 기록해 둔다
   const { data, error: insertError } = await supabase
     .from("subway_reports")
     .insert({
@@ -109,12 +115,81 @@ export async function POST(request: Request) {
     );
   }
 
+  // 추가 규칙: 신고된 플레이어가 03_capture_monster 에 있으면 규칙 4 공개
+  let shouldApprove = false;
+
+  if (playerId) {
+    const { data: stateRow } = await supabase
+      .from("subway_player_state")
+      .select("player_id, current_location")
+      .eq("player_id", playerId)
+      .maybeSingle();
+
+    const currentLocation = (
+      stateRow as Pick<SubwayPlayerState, "current_location"> | null
+    )?.current_location;
+
+    if (currentLocation && currentLocation.includes("03_capture_monster")) {
+      // 이미 규칙 4가 열려있는지 확인
+      const { data: openedRows } = await supabase
+        .from("subway_player_events")
+        .select("event_value")
+        .eq("player_id", playerId)
+        .eq("event_type", "rule_opened");
+
+      let hasRule4 = false;
+      for (const row of (openedRows ?? []) as Pick<
+        SubwayPlayerEvent,
+        "event_value"
+      >[]) {
+        const v = row.event_value as { rule_id?: number } | null;
+        if (v && v.rule_id === 4) {
+          hasRule4 = true;
+          break;
+        }
+      }
+
+      if (!hasRule4) {
+        await supabase.from("subway_player_events").insert({
+          player_id: playerId,
+          event_type: "rule_opened",
+          event_value: { rule_id: 4, source: "report" },
+        } as Partial<SubwayPlayerEvent>);
+      }
+
+      shouldApprove = true;
+    }
+  }
+
   const row = data as Pick<SubwayReport, "id" | "status">;
-  const numericId =
-    typeof row.id === "number" ? row.id : (row.id as unknown as number);
+  const id = row.id;
+
+  // 승인/기각 상태 자동 반영
+  const nextStatus: SubwayReport["status"] = shouldApprove
+    ? "approved"
+    : "rejected";
+
+  const { error: statusError } = await supabase
+    .from("subway_reports")
+    .update({
+      status: nextStatus,
+      decided_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (statusError) {
+    return NextResponse.json(
+      {
+        error:
+          statusError.message ??
+          "신고 상태를 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      } as ReportPostResponse,
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json(
-    { ok: true, id: numericId, status: row.status } as ReportPostResponse,
+    { ok: true, id, status: nextStatus } as ReportPostResponse,
     { status: 200 }
   );
 }

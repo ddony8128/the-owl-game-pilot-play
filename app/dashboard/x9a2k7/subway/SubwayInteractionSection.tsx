@@ -8,7 +8,7 @@ type Props = {
 export function SubwayInteractionSection({ players, onReload }: Props) {
   const triggerRule = async (
     playerId: string,
-    trigger: "meeting" | "food" | "report"
+    trigger: "meeting" | "food"
   ) => {
     try {
       const res = await fetch("/api/gm/subway/rule-trigger", {
@@ -54,12 +54,6 @@ export function SubwayInteractionSection({ players, onReload }: Props) {
                 onClick={() => triggerRule(p.player_id, "food")}
               >
                 음식
-              </button>
-              <button
-                className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-100 hover:bg-zinc-700"
-                onClick={() => triggerRule(p.player_id, "report")}
-              >
-                신고
               </button>
             </div>
           </div>

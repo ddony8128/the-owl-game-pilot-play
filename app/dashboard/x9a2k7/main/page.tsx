@@ -5,7 +5,7 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { GameStateSection } from "./GameStateSection";
 import { RulesSection } from "./RulesSection";
-import { FinalistsSection } from "./FinalistsSection";
+import { FeatherSection } from "./FeatherSection";
 import { useDashboardMainState } from "./useDashboardMainState";
 
 export default function DashboardMainPage() {
@@ -28,6 +28,7 @@ export default function DashboardMainPage() {
     error,
     changeGame,
     toggleRule,
+    updateFeather,
   } = useDashboardMainState();
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function DashboardMainPage() {
 
       <RulesSection rules={rules} onToggleRule={toggleRule} />
 
-      <FinalistsSection players={players} />
+      <FeatherSection players={players} onChangeFeather={updateFeather} />
 
       <section className="space-y-2 text-xs">
         <div className="flex items-center justify-between">

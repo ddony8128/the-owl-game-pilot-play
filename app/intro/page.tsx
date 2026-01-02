@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
+import type { SubwayPlayerStateClient } from "@/lib/types";
 import { useGameState } from "@/lib/hooks/useGameState";
 import { HiddenPieceModal } from "@/app/intro/HiddenPieceModal";
 import { IntroHeader } from "./IntroHeader";
@@ -41,17 +42,14 @@ export default function IntroPage() {
           `/api/subway/state?nickname=${encodeURIComponent(nickname)}`
         );
         const json = (await res.json().catch(() => null)) as
-          | {
-              state: { finished_rank?: number | null } | null;
-              error?: string;
-            }
+          | { state: SubwayPlayerStateClient | null; error?: string }
           | { error: string }
           | null;
         if (!res.ok || !json || "error" in json) {
           return;
         }
         if (cancelled) return;
-        const rank = json.state?.finished_rank ?? null;
+        const rank = json.state?.finishedRank ?? null;
         setHasClearedSubway(typeof rank === "number");
       } catch {
         // 인트로 진입 시 subway 상태 조회 실패는 치명적이지 않으므로 무시
