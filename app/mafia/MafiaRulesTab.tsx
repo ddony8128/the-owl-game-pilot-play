@@ -2,7 +2,7 @@
 
 export function MafiaRulesTab() {
   return (
-    <div className="space-y-3 text-sm leading-relaxed text-zinc-300">
+    <div className="space-y-3 text-base leadingrelaxed text-zinc-300">
       <p>자본주의 마피아 규칙 요약이다부엉!</p>
 
       <div className="space-y-3">
@@ -39,8 +39,8 @@ export function MafiaRulesTab() {
           <br />
           <li>
             <span className="font-semibold">라운드 종료</span>: 투표에서 뽑힌
-            사람은 벌금을 지불합니다. 마피아가 경제사범으로 뽑히면 국채 가격이
-            1 오르고, 경제사범은 (상승한) 국채 가격만큼 벌금을 냅니다. 그때 모든
+            사람은 벌금을 지불합니다. 마피아가 경제사범으로 뽑히면 국채 가격이 1
+            오르고, 경제사범은 (상승한) 국채 가격만큼 벌금을 냅니다. 그때 모든
             시민은 국채를 1개씩 얻습니다. 다음 라운드로 넘어가거나 게임을
             종료합니다. 총 5라운드입니다.
           </li>
@@ -52,14 +52,14 @@ export function MafiaRulesTab() {
         <ul className="list-disc pl-4">
           <li>
             <span className="font-semibold">상승 주가조작범 (마피아)</span>:
-            국채를 제외한 한 종목의 주가를 1 올립니다. 그 종목이 이번 라운드 최대
-            매도 종목이라면 1이 추가로 상승합니다.
+            국채를 제외한 한 종목의 주가를 1 올립니다. 그 종목이 이번 라운드
+            최대 매도 종목이라면 1이 추가로 상승합니다.
           </li>
           <br />
           <li>
             <span className="font-semibold">하락 주가조작범 (마피아)</span>:
-            국채를 제외한 한 종목의 주가를 2 내립니다. 그 종목이 이번 라운드 최대
-            매수 종목이라면 1이 추가로 하락합니다.
+            국채를 제외한 한 종목의 주가를 2 내립니다. 그 종목이 이번 라운드
+            최대 매수 종목이라면 1이 추가로 하락합니다.
           </li>
           <br />
           <li>

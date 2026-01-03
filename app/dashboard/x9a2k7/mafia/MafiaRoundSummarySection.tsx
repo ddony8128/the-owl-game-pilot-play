@@ -305,9 +305,9 @@ export function MafiaRoundSummarySection({ currentRound }: Props) {
               </p>
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
-                {data.stockSummary.map((s) => (
+                {data.stockSummary.map((s, idx) => (
                   <div
-                    key={s.stock_key}
+                    key={`${s.stock_key}-${idx}`}
                     className="space-y-1 rounded-lg border border-zinc-800 bg-zinc-900 p-3"
                   >
                     <div className="flex items-center justify-between text-[11px]">

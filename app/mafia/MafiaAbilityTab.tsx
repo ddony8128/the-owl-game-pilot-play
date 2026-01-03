@@ -49,10 +49,10 @@ export function MafiaAbilityTab({
     [stocks]
   );
 
-  const otherPlayers = useMemo(
-    () => players.filter((p) => p.nickname && p.nickname !== player?.nickname),
-    [players, player?.nickname]
-  );
+  const otherPlayers = useMemo(() => {
+    if (!player?.nickname) return [];
+    return players.filter((p) => p.nickname && p.nickname !== player?.nickname);
+  }, [players, player?.nickname]);
 
   const buildPayload = (): MafiaAbilityPayload | null => {
     if (!normalizedJob) return null;
@@ -362,8 +362,8 @@ export function MafiaAbilityTab({
       {normalizedJob === "police" && (
         <>
           <p className="text-base text-zinc-400">
-            마피아인지 조사할 두 사람을 선택해 주세요. 두 사람 중 마피아가 있는지
-            없는지만 알 수 있다부엉!
+            마피아인지 조사할 두 사람을 선택해 주세요. 두 사람 중 마피아가
+            있는지 없는지만 알 수 있다부엉!
           </p>
           <div className="grid grid-cols-2 gap-2">
             {otherPlayers.map((p) => {
@@ -472,8 +472,8 @@ export function MafiaAbilityTab({
         <>
           {normalizedJob === "ceo" && (
             <p className="text-base text-zinc-400">
-              CEO는 자신을 제외한 한 사람을 골라 그 사람에게 5원을 줄 수 있다부엉!
-              아래에서 대상을 선택해줘부엉.
+              CEO는 자신을 제외한 한 사람을 골라 그 사람에게 5원을 줄 수
+              있다부엉! 아래에서 대상을 선택해줘부엉.
             </p>
           )}
           {normalizedJob === "salaryman" && (
@@ -487,8 +487,8 @@ export function MafiaAbilityTab({
       {normalizedJob === "ceo" && (
         <div>
           <p className="mb-2 text-base text-zinc-400">
-            5원을 줄 대상을 한 명 선택해줘부엉. 선택된 사람은 CEO가 누구인지 알게
-            된다부엉!
+            5원을 줄 대상을 한 명 선택해줘부엉. 선택된 사람은 CEO가 누구인지
+            알게 된다부엉!
           </p>
           <div className="grid grid-cols-2 gap-2">
             {otherPlayers.map((p) => {

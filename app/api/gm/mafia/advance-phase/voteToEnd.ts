@@ -10,6 +10,27 @@ export async function handleVoteToEnd(
   supabase: ReturnType<typeof createServerSupabaseClient>,
   current: MafiaPhaseState
 ) {
+  // 이미 이 라운드의 경제사범 처리(국채 조정/벌금/안내 메시지 등)를 한 번 수행했다면
+  // 같은 라운드에 대해 중복으로 호출되더라도 두 번째부터는 아무 작업도 하지 않는다.
+  const { data: existingResults, error: existingError } = await supabase
+    .from("mafia_ability_results")
+    .select("id, category")
+    .eq("round_number", current.round_number)
+    .eq("phase", "vote")
+    .in("category", ["econ_mafia", "econ_not_mafia", "vote_no_econ"]);
+
+  if (existingError) {
+    throw new Error(
+      existingError.message ??
+        "경제사범 결과 여부 확인을 위해 능력 결과를 조회하지 못했습니다."
+    );
+  }
+
+  if ((existingResults ?? []).length > 0) {
+    // 이 라운드는 이미 경제사범 처리 로직을 한 번 수행한 상태이므로 재실행하지 않는다.
+    return;
+  }
+
   // 현재 라운드 투표 집계
   const { data: voteRows, error: votesError } = await supabase
     .from("mafia_votes")
@@ -171,6 +192,27 @@ export async function handleVoteToEnd(
     if (updateBondError) {
       throw new Error(
         updateBondError.message ?? "국채 가격을 1 올리지 못했습니다."
+      );
+    }
+
+    // 투표 결과(경제사범이 마피아인 경우)에 의해 변경된 국채 가격을
+    // 주가 히스토리에도 남겨 둔다.
+    const { error: historyError } = await supabase
+      .from("mafia_stock_history")
+      .insert({
+        stock_key: "국채",
+        round_number: current.round_number,
+        price_before: currentBondPrice,
+        price_after: newBondPrice,
+        meta: {
+          source: "vote_econ_mafia",
+        },
+      });
+
+    if (historyError) {
+      throw new Error(
+        historyError.message ??
+          "경제사범 투표 결과로 인한 국채 가격 변동 히스토리를 기록하지 못했습니다."
       );
     }
 

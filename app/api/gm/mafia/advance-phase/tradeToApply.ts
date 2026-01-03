@@ -732,8 +732,20 @@ export async function handleTradeToApply(
       totalStolen += stolen;
       victimsPayload.push({ player_id: tid, stolen });
 
-      // 패치 규칙상 강도가 누구를 얼마나 털었는지는 피해자에게 비공개이므로
-      // 피해자에게는 별도의 능력결과 메시지를 남기지 않는다.
+      // 피해자에게도 이번 라운드에 강도로 인해 얼마를 잃었는지 알려준다.
+      const victimName = nicknameById.get(tid) ?? tid;
+      abilityResults.push({
+        player_id: tid,
+        round_number: current.round_number,
+        phase: "apply",
+        job: victimState.job,
+        category: "robber_victim",
+        message: `이번 라운드에 강도로부터 ${stolen}원을 빼앗겼습니다.`,
+        payload: {
+          nickname: victimName,
+          stolen,
+        },
+      });
     }
 
     if (totalStolen > 0) {

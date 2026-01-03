@@ -55,11 +55,28 @@ export function SubwayCountdownSection() {
   });
 
   const reload = async () => {
-    const res = await fetch("/api/gm/timers/subway");
-    const json = (await res.json().catch(() => null)) as ApiTimer | null;
-    if (!json) return;
-    const now = Date.now();
-    setState(computeRemaining(json, now));
+    try {
+      const res = await fetch("/api/gm/timers/subway");
+      if (!res.ok) {
+        throw new Error(
+          `Failed to load subway timer: ${res.status} ${res.statusText}`
+        );
+      }
+
+      const json = (await res.json().catch(() => null)) as ApiTimer | null;
+      if (!json) {
+        throw new Error("Invalid subway timer payload");
+      }
+
+      const now = Date.now();
+      setState(computeRemaining(json, now));
+    } catch (e) {
+      console.error("[SubwayCountdownSection] reload failed", e);
+      setState((prev) => ({
+        ...prev,
+        isRunning: false,
+      }));
+    }
   };
 
   useEffect(() => {
@@ -91,12 +108,22 @@ export function SubwayCountdownSection() {
   }, []);
 
   const sendAction = async (action: "start" | "pause" | "reset") => {
-    await fetch("/api/gm/timers/subway", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    }).catch(() => undefined);
-    void reload();
+    try {
+      const res = await fetch("/api/gm/timers/subway", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        throw new Error(
+          `Failed to update subway timer: ${res.status} ${res.statusText}`
+        );
+      }
+    } catch (e) {
+      console.error("[SubwayCountdownSection] sendAction failed", e);
+    } finally {
+      void reload();
+    }
   };
 
   const minutes = Math.floor(state.remainingSeconds / 60)

@@ -218,11 +218,20 @@ export async function GET(request: Request) {
         ? { ...(rawStocks as Record<string, { amount: number }>) }
         : null;
 
+    const job =
+      (snap as unknown as { job?: string | null })?.job ?? null;
+    // 스냅샷에는 is_mafia 필드를 별도로 저장하지 않으므로,
+    // 직업 기준으로 마피아 여부를 다시 계산한다.
+    const isMafia =
+      job === "up_manipulator" ||
+      job === "down_manipulator" ||
+      job === "robber";
+
     summary = {
       player_id: playerId,
       nickname: nicknameById.get(playerId) ?? null,
-      job: (snap as unknown as { job?: string | null })?.job ?? null,
-      is_mafia: (snap as unknown as { is_mafia?: boolean })?.is_mafia ?? false,
+      job,
+      is_mafia: isMafia,
       cash:
         typeof (snap as unknown as { cash?: number | null })?.cash === "number"
           ? ((snap as unknown as { cash?: number | null }).cash as number)
@@ -384,6 +393,8 @@ export async function GET(request: Request) {
   );
 
   // 주가 요약: 히스토리 + 집계된 거래/능력 요인
+  // 한 라운드 안에서 같은 종목에 대해 여러 번 가격 변동이 발생할 수 있으므로
+  // (예: trade 단계 적용, vote 단계 국채 조정 등) 히스토리 행을 그대로 모두 노출한다.
   const stockSummary = histories.map((h) => {
     const key = h.stock_key ?? "";
     return {

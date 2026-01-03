@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Player } from "@/lib/types";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { ErrorMessage } from "@/components/ErrorMessage";
@@ -87,9 +87,14 @@ export function MafiaVoteTab({
     setCount("1");
   };
 
-  const otherPlayers = players.filter(
-    (p) => p.nickname && p.nickname !== player?.nickname
-  );
+  const myNickname = player?.nickname ?? null;
+
+  // 내 닉네임을 아직 모를 때는 선택지를 아예 비워 두고,
+  // 닉네임이 준비된 뒤에만 "나를 제외한 다른 플레이어들"을 노출한다.
+  const otherPlayers = useMemo(() => {
+    if (!myNickname) return [];
+    return players.filter((p) => p.nickname && p.nickname !== myNickname);
+  }, [players, myNickname]);
 
   const currentTotalSpent = myVoteSummary?.reduce(
     (sum, v) => sum + v.total_spent,
