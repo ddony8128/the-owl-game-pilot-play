@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 // 디펜스 딜레마 전역 카운트다운 기본 시간 (초)
-// 필요에 따라 GM과 협의해 조정 가능.
-const TOTAL_SECONDS = 10 * 60;
+// 라운드당 5분
+const TOTAL_SECONDS = 5 * 60;
 
 async function getGameStateTimer() {
   const supabase = createServerSupabaseClient();

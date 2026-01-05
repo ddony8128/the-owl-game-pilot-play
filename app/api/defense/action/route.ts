@@ -202,11 +202,62 @@ export async function POST(request: Request) {
         ? body.training_to_slot
         : null;
 
-    if (fromSlot == null || toSlot == null || fromSlot === toSlot) {
+    if (fromSlot == null || toSlot == null) {
       return NextResponse.json(
         {
           error:
-            "training 행동에는 서로 다른 training_from_slot, training_to_slot이 필요합니다.",
+            "training 행동에는 training_from_slot, training_to_slot이 모두 필요합니다.",
+        } as ResponseBody,
+        { status: 400 }
+      );
+    }
+
+    // fromSlot: 현재 활성화된 카드만 선택 가능
+    const { data: fromCardRow, error: fromCardError } = await supabase
+      .from("defense_card_state")
+      .select("player_id, card_slot, card_value, is_active")
+      .eq("player_id", player.id)
+      .eq("card_slot", fromSlot)
+      .maybeSingle();
+
+    if (fromCardError) {
+      return NextResponse.json(
+        { error: fromCardError.message } as ResponseBody,
+        { status: 500 }
+      );
+    }
+
+    const fromCard = (fromCardRow || null) as DefenseCardState | null;
+    if (!fromCard || !fromCard.is_active) {
+      return NextResponse.json(
+        {
+          error:
+            "훈련에서 비활성화할 카드는 현재 활성화된 카드여야 합니다.",
+        } as ResponseBody,
+        { status: 400 }
+      );
+    }
+
+    // toSlot: 존재하기만 하면 되며, 활성/비활성 무관, fromSlot과 같아도 허용
+    const { data: toCardRow, error: toCardError } = await supabase
+      .from("defense_card_state")
+      .select("player_id, card_slot, card_value, is_active")
+      .eq("player_id", player.id)
+      .eq("card_slot", toSlot)
+      .maybeSingle();
+
+    if (toCardError) {
+      return NextResponse.json(
+        { error: toCardError.message } as ResponseBody,
+        { status: 500 }
+      );
+    }
+
+    const toCard = (toCardRow || null) as DefenseCardState | null;
+    if (!toCard) {
+      return NextResponse.json(
+        {
+          error: "훈련으로 강화할 카드를 찾을 수 없습니다.",
         } as ResponseBody,
         { status: 400 }
       );

@@ -48,11 +48,23 @@ export function usePlayerAuth() {
           if (cancelled) return;
 
           if (!res.ok || !json || "error" in json || !("player" in json)) {
-            setError(
+            const message =
               (json as { error?: string } | null)?.error ??
-                "플레이어 정보를 불러오지 못했습니다."
-            );
-            setPlayer(null);
+              "플레이어 정보를 불러오지 못했습니다.";
+
+            // 서버에 확인했을 때 닉네임이 존재하지 않는 경우(403)이면
+            // 로컬스토리지에 저장된 닉네임을 비우고 다시 로그인하도록 유도한다.
+            if (res.status === 403) {
+              setNicknameState(null);
+              setPlayer(null);
+              if (typeof window !== "undefined") {
+                localStorage.removeItem(NICKNAME_KEY);
+              }
+            } else {
+              setPlayer(null);
+            }
+
+            setError(message);
           } else {
             setError(null);
             setPlayer(json.player ?? null);

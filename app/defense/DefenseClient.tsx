@@ -95,7 +95,6 @@ function DefenseInner() {
   const [defenseState, setDefenseState] = useState<DefenseState | null>(null);
   const [timerState, setTimerState] = useState<TimerState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
 
   const loadState = useCallback(async () => {
@@ -119,12 +118,8 @@ function DefenseInner() {
       setError(null);
     } catch (e: unknown) {
       const message =
-        e instanceof Error
-          ? e.message
-          : "디펜스 상태를 불러오지 못했습니다.";
+        e instanceof Error ? e.message : "디펜스 상태를 불러오지 못했습니다.";
       setError(message);
-    } finally {
-      setLoading(false);
     }
   }, [player?.nickname]);
 
@@ -249,7 +244,7 @@ function DefenseInner() {
     }
   }, [activeTab, tabsDef]);
 
-  if (loading || !player) return <LoadingScreen />;
+  if (!player) return <LoadingScreen />;
   if (error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 px-4 text-zinc-50">
@@ -264,8 +259,13 @@ function DefenseInner() {
     if (r === 0) return "준비";
     if (r === 1) return "튜토리얼 1라운드";
     if (r === 2) return "튜토리얼 2라운드";
-    const gameRound = r - 2;
-    return `${gameRound}라운드`;
+    if (r === 3) return "튜토리얼 결과";
+    if (r >= 4 && r <= 13) {
+      const gameRound = r - 3; // 4~13 -> 1~10라운드
+      return `${gameRound}라운드`;
+    }
+    if (r === 14) return "게임 종료";
+    return `알 수 없음 (DB round ${r})`;
   };
 
   const totalSeconds = timerState?.remainingSeconds ?? null;
@@ -274,22 +274,28 @@ function DefenseInner() {
   const seconds = totalSeconds != null ? totalSeconds % 60 : null;
 
   const roundLabel = getRoundLabel(roundNumber);
+  const isInitialLoading = !defenseState;
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
-      <DefenseHeader minutes={minutes} seconds={seconds} roundLabel={roundLabel} />
+      <DefenseHeader
+        minutes={minutes}
+        seconds={seconds}
+        roundLabel={roundLabel}
+      />
 
-      <p className="mt-2 text-sm text-zinc-400">
+      <p className="mt-2 text-base text-red-300">
         이 화면은 다른 플레이어에게 보여주면 안 됩니다.
       </p>
 
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <TabLayout tabs={tabsDef} activeKey={activeTab} onChange={setActiveTab}>
-          {activeTab === "info" && defenseState && (
+          {activeTab === "info" && (
             <DefenseInfoTab
-              monsters={defenseState.monsters}
-              cards={defenseState.cards}
-              score={defenseState.score}
+              monsters={defenseState?.monsters ?? []}
+              cards={defenseState?.cards ?? []}
+              score={defenseState?.score ?? 0}
+              isLoading={isInitialLoading}
             />
           )}
           {activeTab === "action" && defenseState && (
@@ -311,5 +317,3 @@ function DefenseInner() {
     </div>
   );
 }
-
-

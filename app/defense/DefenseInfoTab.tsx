@@ -21,67 +21,71 @@ type MonsterProps = {
     isActive: boolean;
   }[];
   score: number;
+  isLoading: boolean;
 };
 
-export function DefenseInfoTab({ monsters, cards, score }: MonsterProps) {
+export function DefenseInfoTab({
+  monsters,
+  cards,
+  score,
+  isLoading,
+}: MonsterProps) {
   const sortedMonsters = [...monsters].sort(
     (a, b) => a.slotIndex - b.slotIndex
   );
 
-  const sortedCards = [...cards].sort(
-    (a, b) => a.cardSlot - b.cardSlot
-  );
+  const sortedCards = [...cards].sort((a, b) => a.cardSlot - b.cardSlot);
 
   return (
     <div className="space-y-4 text-base text-zinc-200">
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">대기열 몬스터</h2>
-        <p className="text-sm text-zinc-400">
-          현재 대기열에 있는 몬스터와 체력 / 잔여 시간 / 포인트를 보여줍니다.
-        </p>
-        {sortedMonsters.length === 0 ? (
+        {isLoading ? (
+          // 1) 서버 응답 전: 로딩 상태
+          <p className="text-sm text-zinc-400">몬스터들이 습격 중입니다!</p>
+        ) : sortedMonsters.length === 0 ? (
+          // 3) 서버 응답 후, 대기열이 비어 있음 = 게임 종료
           <p className="text-sm text-zinc-500">
             모든 몬스터를 무찔렀습니다! 게임이 종료되었습니다.
           </p>
         ) : (
-          <div className="grid gap-3">
-            {sortedMonsters.map((m) => (
-              <div
-                key={m.instanceId}
-                className="flex gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-2"
-              >
-                {m.image && (
-                  <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded bg-zinc-800">
-                    <Image
-                      src={m.image}
-                      alt={m.name}
-                      fill
-                      sizes="56px"
-                      className="object-cover"
-                    />
-                  </div>
-                )}
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div className="text-base font-semibold">{m.name}</div>
-                    <div className="text-sm text-amber-300">
-                      +{m.points}점
+          // 2) 서버 응답 후, 대기열에 몬스터가 있음
+          <>
+            <div className="grid gap-3">
+              {sortedMonsters.map((m) => (
+                <div
+                  key={m.instanceId}
+                  className="flex gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-2"
+                >
+                  {m.image && (
+                    <div className="relative h-30 w-30 shrink-0 overflow-hidden rounded bg-zinc-800">
+                      <Image
+                        src={m.image}
+                        alt={m.name}
+                        fill
+                        sizes="120px"
+                        className="object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="text-2xl font-semibold">{m.name}</div>
+                      <div className="text-2xl text-amber-300">
+                        +{m.points}점
+                      </div>
+                    </div>
+                    <p className="text-sm text-zinc-400">{m.description}</p>
+                    <div className="flex items-center justify-between text-base">
+                      HP {m.currentHp}/{m.maxHp}
+                      <br />
+                      잔여 시간: {m.remainingTime}
                     </div>
                   </div>
-                  <p className="text-sm text-zinc-400">
-                    {m.description}
-                  </p>
-                  <div className="flex items-center justify-between text-sm">
-                    <span>
-                      HP {m.currentHp}/{m.maxHp}
-                    </span>
-                    <span>잔여 시간: {m.remainingTime} 라운드</span>
-                    <span>대기열: {m.slotIndex + 1}번 칸</span>
-                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </section>
 
@@ -104,15 +108,12 @@ export function DefenseInfoTab({ monsters, cards, score }: MonsterProps) {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-base font-semibold">
-                  슬롯 {c.cardSlot}
-                </span>
-                <span className="text-base font-bold text-amber-300">
+                <span className="text-2xl font-bold text-amber-300">
                   {c.cardValue}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-zinc-400">
-                상태: {c.isActive ? "활성" : "비활성"}
+              <p className="mt-1 text-base text-zinc-400">
+                {c.isActive ? "활성" : "비활성"}
               </p>
             </div>
           ))}
@@ -121,5 +122,3 @@ export function DefenseInfoTab({ monsters, cards, score }: MonsterProps) {
     </div>
   );
 }
-
-

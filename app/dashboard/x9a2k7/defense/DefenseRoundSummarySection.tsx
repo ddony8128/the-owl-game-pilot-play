@@ -182,7 +182,7 @@ export function DefenseRoundSummarySection() {
                           {p.action.trainingFromValue != null
                             ? p.action.trainingFromValue
                             : "?"}
-                          {"  "}카드를 희생해 숫자{" "}
+                          {"  "}카드를 비활성화해 숫자{" "}
                           {p.action.trainingToBeforeValue != null
                             ? p.action.trainingToBeforeValue
                             : "?"}

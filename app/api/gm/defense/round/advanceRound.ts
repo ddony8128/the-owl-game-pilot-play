@@ -7,13 +7,28 @@ import type {
   DefenseScore,
   Player,
 } from "@/lib/types";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { DEFENSE_MONSTERS, DEFENSE_MONSTERS_BY_ID } from "@/lib/defense/monsters";
+import type { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  DEFENSE_MONSTERS,
+  DEFENSE_MONSTERS_BY_ID,
+} from "@/lib/defense/monsters";
+import { randomUUID } from "crypto";
 
-type AnyClient = SupabaseClient<any, string, any>;
+function getRoundLabelForLog(round: number): string {
+  if (round === 0) return "준비";
+  if (round === 1) return "튜토리얼 1라운드";
+  if (round === 2) return "튜토리얼 2라운드";
+  if (round === 3) return "튜토리얼 결과";
+  if (round >= 4 && round <= 13) {
+    const gameRound = round - 3; // 4~13 -> 1~10라운드
+    return `${gameRound}라운드`;
+  }
+  if (round === 14) return "게임 종료";
+  return `알 수 없음 (DB round ${round})`;
+}
 
 export async function handleDefenseAdvanceRound(
-  supabase: AnyClient,
+  supabase: ReturnType<typeof createServerSupabaseClient>,
   current: DefensePhaseState,
   nextRound: number
 ) {
@@ -34,12 +49,8 @@ export async function handleDefenseAdvanceRound(
         .select(
           "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
         ),
-      supabase
-        .from("defense_score")
-        .select("player_id, points"),
-      supabase
-        .from("players")
-        .select("id, nickname, created_at"),
+      supabase.from("defense_score").select("player_id, points"),
+      supabase.from("players").select("id, nickname, created_at"),
     ]);
 
   if (actionsRes.error) throw new Error(actionsRes.error.message);
@@ -74,13 +85,32 @@ export async function handleDefenseAdvanceRound(
   const playerById = new Map<string, Player>();
   players.forEach((p) => playerById.set(p.id, p));
 
-  const activeMonsters = monsters.filter((m) => m.status === "active");
-
   // 2. 액션 처리: 휴식/훈련/전투
   // 2-1. 휴식: 모든 카드 활성화
-  const restPlayers = actions
+  // - 명시적으로 휴식 선택한 플레이어 + 이번 라운드에 아무 행동도 선택하지 않은 플레이어
+  const explicitRestPlayers = actions
     .filter((a) => a.action_type === "rest")
     .map((a) => a.player_id);
+
+  const playersWithAction = new Set(actions.map((a) => a.player_id));
+  const implicitRestPlayers = players
+    .filter((p) => !playersWithAction.has(p.id))
+    .map((p) => p.id);
+
+  // 행동을 선택하지 않은 플레이어는 자동으로 휴식 행동을 기록한다.
+  if (implicitRestPlayers.length > 0) {
+    await supabase.from("defense_action").insert(
+      implicitRestPlayers.map((pid) => ({
+        round: current.round,
+        player_id: pid,
+        action_type: "rest",
+      }))
+    );
+  }
+
+  const restPlayers = Array.from(
+    new Set([...explicitRestPlayers, ...implicitRestPlayers])
+  );
 
   if (restPlayers.length > 0) {
     await supabase
@@ -92,26 +122,25 @@ export async function handleDefenseAdvanceRound(
     const restLogs = restPlayers.map((pid) => ({
       player_id: pid,
       round: current.round,
-      log: `[라운드 ${current.round}] 휴식: 모든 숫자 카드를 다시 활성화했습니다.`,
+      log: `휴식: 모든 숫자 카드를 다시 활성화했습니다.`,
     }));
     await supabase.from("defense_player_log").insert(restLogs);
   }
 
-  // 2-2. 훈련: 선택한 카드 비활성 + 다른 카드 값 +1
-  const trainingActions = actions.filter(
-    (a) => a.action_type === "training"
-  );
+  // 2-2. 훈련: 선택한 활성 카드 비활성 + (어떤 카드든) 값 +1
+  const trainingActions = actions.filter((a) => a.action_type === "training");
 
   for (const a of trainingActions) {
     const fromSlot = a.training_from_slot;
     const toSlot = a.training_to_slot;
-    if (fromSlot == null || toSlot == null || fromSlot === toSlot) continue;
+    if (fromSlot == null || toSlot == null) continue;
 
     const playerCards = cardsByPlayer.get(a.player_id) ?? [];
     const fromCard = playerCards.find((c) => c.card_slot === fromSlot);
     const toCard = playerCards.find((c) => c.card_slot === toSlot);
 
-    if (fromCard && toCard) {
+    // fromCard는 반드시 활성 카드여야 하며, toCard는 존재만 하면 됨 (활성/비활성 무관, 동일 슬롯 허용)
+    if (fromCard && fromCard.is_active && toCard) {
       const fromValue = fromCard.card_value;
       const beforeValue = toCard.card_value;
       const afterValue = beforeValue + 1;
@@ -131,7 +160,7 @@ export async function handleDefenseAdvanceRound(
       await supabase.from("defense_player_log").insert({
         player_id: a.player_id,
         round: current.round,
-        log: `[라운드 ${current.round}] 훈련: 값 ${fromValue} 카드를 희생해 값 ${beforeValue} 카드를 ${afterValue}로 강화했습니다.`,
+        log: `훈련: 값 ${fromValue} 카드를 비활성화하고 값 ${beforeValue} 카드를 ${afterValue}로 강화했습니다.`,
       });
     }
   }
@@ -171,10 +200,7 @@ export async function handleDefenseAdvanceRound(
     const monster = monstersById.get(monsterId);
     if (!monster || monster.status !== "active") continue;
 
-    const totalDamage = entries.reduce(
-      (sum, e) => sum + e.card_value,
-      0
-    );
+    const totalDamage = entries.reduce((sum, e) => sum + e.card_value, 0);
 
     const def = DEFENSE_MONSTERS_BY_ID[monster.monster_id] ?? null;
     const beforeHp = monster.current_hp;
@@ -194,8 +220,7 @@ export async function handleDefenseAdvanceRound(
 
       const points = def?.points ?? 0;
       const n = entries.length;
-      const perPlayer =
-        n > 0 ? Math.floor(points / n) : 0;
+      const perPlayer = n > 0 ? Math.floor(points / n) : 0;
 
       if (perPlayer > 0) {
         for (const e of entries) {
@@ -203,21 +228,18 @@ export async function handleDefenseAdvanceRound(
           const next = prev + perPlayer;
           scoreMap.set(e.player_id, next);
 
-          await supabase
-            .from("defense_score")
-            .upsert(
-              {
-                player_id: e.player_id,
-                points: next,
-              } as DefenseScore,
-              { onConflict: "player_id" }
-            );
+          await supabase.from("defense_score").upsert(
+            {
+              player_id: e.player_id,
+              points: next,
+            } as DefenseScore,
+            { onConflict: "player_id" }
+          );
 
-          const p = playerById.get(e.player_id);
           await supabase.from("defense_player_log").insert({
             player_id: e.player_id,
             round: current.round,
-            log: `[라운드 ${current.round}] 전투: ${
+            log: `전투: ${
               def?.name ?? `몬스터 ${monster.monster_id}`
             } 처치에 참여해 ${perPlayer}점을 획득했습니다.`,
           });
@@ -227,7 +249,7 @@ export async function handleDefenseAdvanceRound(
           await supabase.from("defense_player_log").insert({
             player_id: e.player_id,
             round: current.round,
-            log: `[라운드 ${current.round}] 전투: ${
+            log: `전투: ${
               def?.name ?? `몬스터 ${monster.monster_id}`
             } 처치에 참여했지만 분배 가능한 점수가 없어 포인트는 얻지 못했습니다.`,
           });
@@ -243,7 +265,7 @@ export async function handleDefenseAdvanceRound(
         await supabase.from("defense_player_log").insert({
           player_id: e.player_id,
           round: current.round,
-          log: `[라운드 ${current.round}] 전투: ${
+          log: `전투: ${
             def?.name ?? `몬스터 ${monster.monster_id}`
           }에게 총 ${totalDamage} 피해를 입혔습니다. (남은 HP: ${afterHp})`,
         });
@@ -272,8 +294,8 @@ export async function handleDefenseAdvanceRound(
     throw new Error(activeAfterCombatRes.error.message);
   }
 
-  const activeAfterCombat =
-    (activeAfterCombatRes.data || []) as DefenseMonsterInstance[];
+  const activeAfterCombat = (activeAfterCombatRes.data ||
+    []) as DefenseMonsterInstance[];
 
   const expiredMonsters: DefenseMonsterInstance[] = [];
 
@@ -315,8 +337,7 @@ export async function handleDefenseAdvanceRound(
           throw new Error(playerCardsRes.error.message);
         }
 
-        const smallest =
-          (playerCardsRes.data || []) as DefenseCardState[];
+        const smallest = (playerCardsRes.data || []) as DefenseCardState[];
         if (smallest.length === 0) continue;
 
         const card = smallest[0];
@@ -330,7 +351,7 @@ export async function handleDefenseAdvanceRound(
         await supabase.from("defense_player_log").insert({
           player_id: card.player_id,
           round: current.round,
-          log: `[라운드 ${current.round}] ${
+          log: `${
             def?.name ?? `몬스터 ${m.monster_id}`
           }의 시간이 만료되어, 가장 작은 활성 카드(값 ${value})가 비활성화되었습니다.`,
         });
@@ -360,6 +381,7 @@ export async function handleDefenseAdvanceRound(
   activeNow.forEach((m) => activeBySlot.set(m.slot_index, m));
 
   const newInstances: {
+    id: string;
     monster_id: number;
     current_hp: number;
     remaining_time: number;
@@ -381,6 +403,7 @@ export async function handleDefenseAdvanceRound(
     if (!chosen) break;
 
     newInstances.push({
+      id: randomUUID(),
       monster_id: chosen.id,
       current_hp: chosen.maxHp,
       remaining_time: chosen.baseTime,
@@ -392,16 +415,28 @@ export async function handleDefenseAdvanceRound(
   }
 
   if (newInstances.length > 0) {
-    await supabase.from("defense_monster_instance").insert(newInstances);
+    const { error: insertError } = await supabase
+      .from("defense_monster_instance")
+      .insert(newInstances);
+
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
 
     const updatedCounts = DEFENSE_MONSTERS.map((m) => ({
       id: m.id,
       count: countsMap.get(m.id) ?? 0,
     }));
 
-    await supabase.from("defense_monster_count").upsert(updatedCounts, {
-      onConflict: "id",
-    });
+    const { error: updateCountsError } = await supabase
+      .from("defense_monster_count")
+      .upsert(updatedCounts, {
+        onConflict: "id",
+      });
+
+    if (updateCountsError) {
+      throw new Error(updateCountsError.message);
+    }
   }
 
   // 5. 점수/몬스터 스냅샷 저장 (현재 라운드 기준)
@@ -428,8 +463,8 @@ export async function handleDefenseAdvanceRound(
     )
     .eq("status", "active");
   if (finalMonstersRes.error) throw new Error(finalMonstersRes.error.message);
-  const finalMonsters =
-    (finalMonstersRes.data || []) as DefenseMonsterInstance[];
+  const finalMonsters = (finalMonstersRes.data ||
+    []) as DefenseMonsterInstance[];
 
   if (finalMonsters.length > 0) {
     await supabase.from("defense_monster_snapshot").insert(
@@ -444,5 +479,3 @@ export async function handleDefenseAdvanceRound(
     );
   }
 }
-
-

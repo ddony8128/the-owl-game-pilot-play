@@ -21,8 +21,13 @@ export async function POST(request: Request) {
   }
 
   const nextRound = body.round;
-  // DB round 기준: 0=준비, 1=튜토리얼1, 2=튜토리얼2, 3~12=본게임 1~10라운드
-  if (nextRound < 0 || nextRound > 12) {
+  // DB round 기준:
+  // 0: 준비
+  // 1~2: 튜토리얼 1, 2라운드
+  // 3: 튜토리얼 결과
+  // 4~13: 본게임 1~10라운드
+  // 14: 본게임 결과 (게임 종료)
+  if (nextRound < 0 || nextRound > 14) {
     return NextResponse.json(
       { error: "round must be between 0 and 12" } as ResponseBody,
       { status: 400 }
@@ -62,14 +67,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    // 0->1, 2->3 전환 시 초기화 로직 실행
+    // 초기화 라운드 전환: 0->1 (튜토 시작), 3->4 (본게임 시작)
     if (
       (current.round === 0 && nextRound === 1) ||
-      (current.round === 2 && nextRound === 3)
+      (current.round === 3 && nextRound === 4)
     ) {
       await handleDefenseInitRound(supabase, current, nextRound);
-    } else if (current.round !== 0 && current.round !== 2) {
-      // 준비(0)와 튜토리얼2(2)를 제외한 나머지 라운드에서 공통 전환 로직 실행
+    } else if (
+      // 그 외 1->2, 2->3, 4->5, ..., 12->13, 13->14는 공통 전환 로직 실행
+      current.round >= 1 &&
+      current.round <= 13 &&
+      nextRound === current.round + 1
+    ) {
       await handleDefenseAdvanceRound(supabase, current, nextRound);
     }
   } catch (e: unknown) {
