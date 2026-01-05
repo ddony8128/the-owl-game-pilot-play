@@ -9,7 +9,7 @@ export type Player = {
 
 export type GameState = {
   id: number;
-  active_game: string; // 'ready' | 'subway' | 'mafia_tutorial' | 'mafia' | 'vote' | 'survey'
+  active_game: string; // 'ready' | 'subway' | 'mafia_tutorial' | 'mafia' | 'defense' | 'vote' | 'survey'
   updated_at: string;
   timer_start: boolean | null;
   timer_start_at: string | null;
@@ -187,3 +187,74 @@ export type PlayerVote = {
 export type ApiResult<T> =
   | { data: T; error: null }
   | { data: null; error: string };
+
+// 3게임 – 디펜스 딜레마
+export type DefensePhaseState = {
+  id: number;
+  round: number;
+  updated_at: string;
+};
+
+export type DefenseMonsterCount = {
+  id: number; // 1~6
+  count: number;
+};
+
+export type DefenseMonsterInstanceStatus = "active" | "defeated" | "expired";
+
+export type DefenseMonsterInstance = {
+  id: string; // uuid
+  monster_id: number; // 1~6
+  current_hp: number;
+  remaining_time: number;
+  slot_index: number; // 0~3
+  status: DefenseMonsterInstanceStatus;
+  spawned_round: number;
+  removed_round: number | null;
+};
+
+export type DefenseMonsterSnapshot = {
+  instance_id: string;
+  monster_id: number;
+  round: number; // 1~12
+  current_hp: number;
+  remaining_time: number;
+  slot_index: number;
+};
+
+export type DefenseCardState = {
+  player_id: string;
+  card_slot: number; // 1~4
+  card_value: number;
+  is_active: boolean;
+};
+
+export type DefenseActionType = "combat" | "rest" | "training";
+
+export type DefenseAction = {
+  round: number; // 1~12
+  player_id: string;
+  action_type: DefenseActionType;
+  target_monster_id: string | null;
+  used_card_slot: number | null;
+  training_from_slot: number | null;
+  training_to_slot: number | null;
+};
+
+export type DefenseScore = {
+  player_id: string;
+  points: number;
+};
+
+export type DefenseScoreSnapshot = {
+  player_id: string;
+  round: number; // 1~12
+  points: number;
+};
+
+export type DefensePlayerLog = {
+  player_id: string;
+  round: number; // 1~12
+  log: string;
+  created_at: string;
+};

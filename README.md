@@ -98,10 +98,11 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
   - 부엉이: 좌/우 날개 클릭으로 각각 토글
   - `규칙 보기` 버튼 → `/rules`로 이동
   - 메인 액션 버튼: `game_state.active_game`에 따라 문구 및 이동 경로 변경
-    - `subway` → `/subway`
-    - `mafia_tutorial`/`mafia` → `/mafia`
-    - `vote` → `/vote`
-    - `quiz` → `/quizshow`
+  - `subway` → `/subway`
+  - `mafia_tutorial`/`mafia` → `/mafia`
+  - `defense` → `/defense`
+  - `vote` → `/vote`
+  - `quiz` → `/quizshow`
     - 그 외(`ready` 등) → 비활성/“곧 시작됩니다”
 - **히든 피스**
   - 조건: `sunLevel === 0` && `owlLeftWing === true` && `owlRightWing === true`
@@ -116,12 +117,13 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
 구현 파일: `app/rules/page.tsx`
 
 - `rules_state` 테이블에서 `is_open = true`인 rule만 버튼으로 노출
-- rule 키 예시: `intro`, `subway`, `hidden_piece`, `mafia`, `quiz`, `quiz_questions`
+- rule 키 예시: `intro`, `subway`, `hidden_piece`, `mafia`, `defense`, `quiz`, `quiz_questions`
 - 버튼 동작
   - `intro` → 정적 PDF 룰북 `/rulebook/intro.pdf` 새 창으로 열기
   - `hidden_piece` → `/rulebook/hidden.pdf`
   - `subway` → `/rulebook/subway.pdf`
   - `mafia` → `/rulebook/mafia.pdf`
+  - `defense` → `/rulebook/defense.pdf` (더미 주소)
   - `quiz` → `/rulebook/quizshow.pdf`
   - `quiz_questions` → `/rules/quiz-questions` 페이지로 이동
 

@@ -105,6 +105,9 @@ export default function IntroPage() {
       case "mafia":
         router.push("/mafia");
         break;
+      case "defense":
+        router.push("/defense");
+        break;
       case "vote":
         router.push("/vote");
         break;

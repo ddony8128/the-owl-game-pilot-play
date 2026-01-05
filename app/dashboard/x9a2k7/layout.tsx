@@ -32,15 +32,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </Link>
         <Link
           className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/police"
-        >
-          신고 관리
-        </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
           href="/dashboard/x9a2k7/mafia"
         >
           마피아
+        </Link>
+        <Link
+          className="text-zinc-200 hover:text-amber-300"
+          href="/dashboard/x9a2k7/defense"
+        >
+          디펜스
+        </Link>
+        <Link
+          className="text-zinc-200 hover:text-amber-300"
+          href="/dashboard/x9a2k7/police"
+        >
+          신고 관리
         </Link>
         {/* 3게임(퀴즈쇼) 관련 GM 페이지는 더 이상 사용하지 않음 */}
       </aside>

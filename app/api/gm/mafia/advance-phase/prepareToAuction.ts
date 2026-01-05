@@ -1,9 +1,4 @@
-import type {
-  MafiaPhaseState,
-  MafiaStocksHolding,
-  Player,
-  SubwayPlayerState,
-} from "@/lib/types";
+import type { MafiaPhaseState, MafiaStocksHolding, Player } from "@/lib/types";
 import type { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function handlePrepareToAuction(

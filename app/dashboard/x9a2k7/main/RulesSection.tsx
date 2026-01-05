@@ -5,6 +5,7 @@ const RULE_LABELS: Record<string, string> = {
   subway: "이상교통 8번출구",
   hidden_piece: "히든 피스",
   mafia: "자본주의 마피아",
+  defense: "디펜스 딜레마",
 };
 
 type Props = {

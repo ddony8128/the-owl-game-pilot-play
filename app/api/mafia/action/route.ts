@@ -198,9 +198,7 @@ export async function POST(request: Request) {
       }
 
       const currentCash =
-        stateRow && typeof stateRow.cash === "number" && stateRow.cash >= 0
-          ? stateRow.cash
-          : 0;
+        stateRow && typeof stateRow.cash === "number" ? stateRow.cash : 0;
 
       if (amount > currentCash) {
         return NextResponse.json(
@@ -313,10 +311,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const currentCash =
-      typeof stateRow.cash === "number" && stateRow.cash >= 0
-        ? stateRow.cash
-        : 0;
+    const currentCash = typeof stateRow.cash === "number" ? stateRow.cash : 0;
     const rawStocks = (stateRow as unknown as { stocks?: unknown }).stocks;
     const stocks: Record<string, { amount: number }> =
       rawStocks && typeof rawStocks === "object"

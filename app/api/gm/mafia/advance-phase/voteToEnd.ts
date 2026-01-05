@@ -312,8 +312,8 @@ export async function handleVoteToEnd(
       });
     }
   } else {
-    // 마피아가 아닌 경우: 기본 벌금 5원
-    const baseFine = 5;
+    // 마피아가 아닌 경우: 현재 국채 가격만큼 벌금
+    const baseFine = currentBondPrice;
     const nextCash = econState.cash - baseFine;
     const { error: updateFineError } = await supabase
       .from("mafia_player_state")
@@ -330,7 +330,7 @@ export async function handleVoteToEnd(
       phase: "vote",
       job: econState.job,
       category: "vote_fine",
-      message: "경제사범으로 지목되어 벌금 5원을 잃었습니다.",
+      message: `경제사범으로 지목되어 국채 가격 ${baseFine}원만큼 벌금을 잃었습니다.`,
       payload: {
         nickname: econPlayer.nickname,
       },

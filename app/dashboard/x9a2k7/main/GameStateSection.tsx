@@ -5,6 +5,7 @@ const GAME_OPTIONS: GameState["active_game"][] = [
   "subway",
   "mafia_tutorial",
   "mafia",
+  "defense",
   "vote",
   "survey",
 ];

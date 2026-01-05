@@ -34,6 +34,7 @@ export function IntroActions({
           {activeGame === "subway" && "이상교통 8번출구"}
           {activeGame === "mafia_tutorial" && "자본주의 마피아 튜토리얼"}
           {activeGame === "mafia" && "자본주의 마피아"}
+          {activeGame === "defense" && "디펜스 딜레마"}
           {activeGame === "vote" && "투표"}
           {/* 3게임(퀴즈쇼)은 더 이상 사용하지 않음 */}
           {activeGame === "survey" && "후기 작성"}

@@ -449,22 +449,17 @@ export async function handleTradeToApply(
     }
 
     // 대상 플레이어에게 5원 지급 (능력 수익으로 취급)
-    addCash(
-      targetId,
-      5,
-      true,
-      {
-        job: "ceo",
-        category: "ceo_gift",
-        message: `CEO로부터 5원을 받았습니다. (CEO: ${
-          nicknameById.get(pid) ?? pid
-        })`,
-        payload: {
-          from_ceo_player_id: pid,
-          from_ceo_nickname: nicknameById.get(pid) ?? pid,
-        },
-      }
-    );
+    addCash(targetId, 5, true, {
+      job: "ceo",
+      category: "ceo_gift",
+      message: `CEO로부터 5원을 받았습니다. (CEO: ${
+        nicknameById.get(pid) ?? pid
+      })`,
+      payload: {
+        from_ceo_player_id: pid,
+        from_ceo_nickname: nicknameById.get(pid) ?? pid,
+      },
+    });
 
     // CEO 본인에게도 누구에게 줬는지 안내 메시지를 남긴다.
     abilityResults.push({
@@ -547,9 +542,9 @@ export async function handleTradeToApply(
           phase: "apply",
           job: "police",
           category: "police_check",
-          message: `경찰 조사 결과: 선택한 두 사람 중 마피아가 ${
-            hasMafia ? "있습니다." : "없습니다."
-          }`,
+          message: `경찰 조사 결과: 선택한 두 사람 ${targetNames.join(
+            ", "
+          )} 중 마피아가 ${hasMafia ? "있습니다." : "없습니다."}`,
           payload: {
             target_nicknames: targetNames,
             target_player_ids: targetIds,
@@ -705,7 +700,7 @@ export async function handleTradeToApply(
       // 시장은 강도 면역: 피해를 받지 않고, 강도가 누구인지 알게 된다.
       if (victimState.job === "mayor") {
         const robberName =
-          nicknameById.get(pid) ?? (playerStateById.get(pid)?.player_id ?? pid);
+          nicknameById.get(pid) ?? playerStateById.get(pid)?.player_id ?? pid;
         abilityResults.push({
           player_id: tid,
           round_number: current.round_number,
@@ -724,8 +719,8 @@ export async function handleTradeToApply(
       const income = roundIncomeForRobber.get(tid) ?? 0;
       if (income <= 0) continue;
 
-      // 패치: 각 대상의 이번 라운드 수익의 20%(버림)를 빼앗는다.
-      const stolen = Math.floor(income * 0.2);
+      // 패치: 각 대상의 이번 라운드 수익의 25%(버림)를 빼앗는다.
+      const stolen = Math.floor(income * 0.25);
       if (stolen <= 0) continue;
 
       cashDelta.set(tid, (cashDelta.get(tid) ?? 0) - stolen);
