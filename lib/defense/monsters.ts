@@ -23,7 +23,7 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
     id: 2,
     points: 6,
     maxHp: 7,
-    baseTime: 3,
+    baseTime: 4,
     name: "종이 연구원",
     description:
       "전에 봤던 수배범입니다! 괴물 제작 연구를 하며, 그림으로 스스로를 복제합니다.",

@@ -90,45 +90,7 @@ export async function handleDefenseAdvanceRound(
   // - 휴식 효과(비활성 카드 최대 3장 활성화)는 /api/defense/action에서 즉시 적용된다.
   // - 여기서는 자동 휴식 처리나 추가 카드 변경을 하지 않는다.
 
-  // 2-2. 훈련: 선택한 활성 카드 비활성 + (어떤 카드든) 값 +1
-  const trainingActions = actions.filter((a) => a.action_type === "training");
-
-  for (const a of trainingActions) {
-    const fromSlot = a.training_from_slot;
-    const toSlot = a.training_to_slot;
-    if (fromSlot == null || toSlot == null) continue;
-
-    const playerCards = cardsByPlayer.get(a.player_id) ?? [];
-    const fromCard = playerCards.find((c) => c.card_slot === fromSlot);
-    const toCard = playerCards.find((c) => c.card_slot === toSlot);
-
-    // fromCard는 반드시 활성 카드여야 하며, toCard는 존재만 하면 됨 (활성/비활성 무관, 동일 슬롯 허용)
-    if (fromCard && fromCard.is_active && toCard) {
-      const fromValue = fromCard.card_value;
-      const beforeValue = toCard.card_value;
-      const afterValue = beforeValue + 1;
-
-      await supabase
-        .from("defense_card_state")
-        .update({ is_active: false })
-        .eq("player_id", a.player_id)
-        .eq("card_slot", fromSlot);
-
-      await supabase
-        .from("defense_card_state")
-        .update({ card_value: afterValue })
-        .eq("player_id", a.player_id)
-        .eq("card_slot", toSlot);
-
-      await supabase.from("defense_player_log").insert({
-        player_id: a.player_id,
-        round: current.round,
-        log: `훈련: 값 ${fromValue} 카드를 비활성화하고 값 ${beforeValue} 카드를 ${afterValue}로 강화했습니다.`,
-      });
-    }
-  }
-
-  // 2-3. 전투: 몬스터별로 피해량 합산 후 처리
+  // 2-2. 전투: 몬스터별로 피해량 합산 후 처리
   const combatActions = actions.filter(
     (a) => a.action_type === "combat" && a.target_monster_id
   );
@@ -257,15 +219,6 @@ export async function handleDefenseAdvanceRound(
         });
       }
     }
-
-    // 전투에 사용된 카드는 비활성화
-    for (const e of entries) {
-      await supabase
-        .from("defense_card_state")
-        .update({ is_active: false })
-        .eq("player_id", e.player_id)
-        .eq("card_slot", e.used_card_slot);
-    }
   }
 
   // 3. 몬스터 잔여 시간 감소 및 만료 처리
@@ -305,43 +258,44 @@ export async function handleDefenseAdvanceRound(
     }
   }
 
-  // 만료된 몬스터마다, 모든 플레이어의 가장 큰 활성 카드 하나 비활성화
+  // 만료된 몬스터가 하나라도 있다면, 모든 플레이어의 가장 큰 활성 카드 하나만 비활성화
   if (expiredMonsters.length > 0) {
-    for (const m of expiredMonsters) {
-      const def = DEFENSE_MONSTERS_BY_ID[m.monster_id] ?? null;
-      for (const p of players) {
-        const playerCardsRes = await supabase
-          .from("defense_card_state")
-          .select("player_id, card_slot, card_value, is_active")
-          .eq("player_id", p.id)
-          .eq("is_active", true)
-          .order("card_value", { ascending: false })
-          .order("card_slot", { ascending: false })
-          .limit(1);
+    // 대표 몬스터 하나를 로그에 사용 (이 라운드에 도망친 몬스터가 있다는 의미만 전달)
+    const firstExpired = expiredMonsters[0];
+    const def = DEFENSE_MONSTERS_BY_ID[firstExpired.monster_id] ?? null;
 
-        if (playerCardsRes.error) {
-          throw new Error(playerCardsRes.error.message);
-        }
+    for (const p of players) {
+      const playerCardsRes = await supabase
+        .from("defense_card_state")
+        .select("player_id, card_slot, card_value, is_active")
+        .eq("player_id", p.id)
+        .eq("is_active", true)
+        .order("card_value", { ascending: false })
+        .order("card_slot", { ascending: false })
+        .limit(1);
 
-        const biggest = (playerCardsRes.data || []) as DefenseCardState[];
-        if (biggest.length === 0) continue;
-
-        const card = biggest[0];
-        const value = card.card_value;
-        await supabase
-          .from("defense_card_state")
-          .update({ is_active: false })
-          .eq("player_id", card.player_id)
-          .eq("card_slot", card.card_slot);
-
-        await supabase.from("defense_player_log").insert({
-          player_id: card.player_id,
-          round: current.round,
-          log: `${
-            def?.name ?? `몬스터 ${m.monster_id}`
-          }의 시간이 만료되어, 가장 큰 활성 카드(값 ${value})가 비활성화되었습니다.`,
-        });
+      if (playerCardsRes.error) {
+        throw new Error(playerCardsRes.error.message);
       }
+
+      const biggest = (playerCardsRes.data || []) as DefenseCardState[];
+      if (biggest.length === 0) continue;
+
+      const card = biggest[0];
+      const value = card.card_value;
+      await supabase
+        .from("defense_card_state")
+        .update({ is_active: false })
+        .eq("player_id", card.player_id)
+        .eq("card_slot", card.card_slot);
+
+      await supabase.from("defense_player_log").insert({
+        player_id: card.player_id,
+        round: current.round,
+        log: `${
+          def?.name ?? `몬스터 ${firstExpired.monster_id}`
+        }의 시간이 만료되어, 가장 큰 활성 카드(값 ${value})가 비활성화되었습니다.`,
+      });
     }
   }
 

@@ -36,11 +36,11 @@ export async function GET(request: Request) {
   const roundParam = searchParams.get("round");
   const round = roundParam ? Number(roundParam) : NaN;
 
-  // 디펜스 라운드: 튜토리얼 1(1), 튜토리얼 2(2), 튜토리얼 결과(3), 본게임 1~10라운드(4~13)
-  if (!Number.isInteger(round) || round < 1 || round > 13) {
+  // 디펜스 라운드: 튜토리얼 1(1), 튜토리얼 2(2), 튜토리얼 결과(3), 본게임 1~12라운드(4~15)
+  if (!Number.isInteger(round) || round < 1 || round > 15) {
     return NextResponse.json(
       {
-        error: "round must be an integer between 1 and 13",
+        error: "round must be an integer between 1 and 15",
       } as BoardStateResponse,
       { status: 400 }
     );

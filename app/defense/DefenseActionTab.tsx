@@ -217,7 +217,7 @@ export function DefenseActionTab({
               setStep("trainingChooseFrom");
             }}
           >
-            훈련 <br /> (한 카드를 비활성화해 다른 카드를 강화)
+            훈련 <br /> (한 카드를 비활성화해 한 카드를 강화)
           </button>
         </div>
       </section>
@@ -228,8 +228,7 @@ export function DefenseActionTab({
             휴식 – 다시 활성화할 카드를 선택하세요.
           </p>
           <p className="text-sm text-zinc-400">
-            비활성화된 숫자 카드 중 최대 3장을 선택해 이번 라운드에 바로
-            활성화합니다.
+            비활성화된 숫자 카드 중 최대 3장을 선택해 활성화합니다.
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {state.cards
@@ -272,8 +271,7 @@ export function DefenseActionTab({
           </div>
           {state.cards.filter((c) => !c.isActive).length === 0 && (
             <p className="mt-2 text-sm text-zinc-500">
-              비활성화된 숫자 카드가 없습니다. 휴식을 선택해도 변화가 거의 없을
-              수 있습니다.
+              비활성화된 숫자 카드가 없습니다.
             </p>
           )}
           <div className="mt-3 flex items-center justify-between gap-2">
@@ -353,6 +351,12 @@ export function DefenseActionTab({
                 </button>
               ))}
           </div>
+          {state.cards.filter((c) => c.isActive).length === 0 && (
+            <p className="mt-2 text-sm text-zinc-500">
+              활성화된 숫자 카드가 없습니다. 훈련을 선택해도 변화가 거의 없을 수
+              있습니다.
+            </p>
+          )}
           <div className="mt-3 flex justify-end">
             <button
               type="button"

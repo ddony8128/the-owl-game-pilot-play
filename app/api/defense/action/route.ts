@@ -195,6 +195,13 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // 전투에 사용한 카드는 즉시 비활성화 처리
+    await supabase
+      .from("defense_card_state")
+      .update({ is_active: false })
+      .eq("player_id", player.id)
+      .eq("card_slot", usedSlot);
   } else if (actionType === "training") {
     const fromSlot =
       typeof body.training_from_slot === "number"
@@ -261,6 +268,29 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // 훈련 효과를 즉시 적용: from 카드 비활성화 + to 카드 값 +1
+    const fromValue = fromCard.card_value;
+    const beforeValue = toCard.card_value;
+    const afterValue = beforeValue + 1;
+
+    await supabase
+      .from("defense_card_state")
+      .update({ is_active: false })
+      .eq("player_id", player.id)
+      .eq("card_slot", fromSlot);
+
+    await supabase
+      .from("defense_card_state")
+      .update({ card_value: afterValue })
+      .eq("player_id", player.id)
+      .eq("card_slot", toSlot);
+
+    await supabase.from("defense_player_log").insert({
+      player_id: player.id,
+      round: currentRound,
+      log: `훈련: 값 ${fromValue} 카드를 비활성화하고 값 ${beforeValue} 카드를 ${afterValue}로 강화했습니다.`,
+    });
   } else if (actionType === "rest") {
     const rawSlots = Array.isArray(body.rest_slots) ? body.rest_slots : [];
     const uniqueSlots = Array.from(

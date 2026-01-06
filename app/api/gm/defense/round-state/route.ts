@@ -54,9 +54,11 @@ export async function GET(request: Request) {
   const roundParam = searchParams.get("round");
   const round = roundParam ? Number(roundParam) : NaN;
 
-  if (!Number.isInteger(round) || round < 1 || round > 12) {
+  // 디펜스 DB 라운드: 튜토리얼 1(1), 튜토리얼 2(2), 튜토리얼 결과(3),
+  // 본게임 1~12라운드의 전투/스냅샷(4~15)까지 요약 조회 가능
+  if (!Number.isInteger(round) || round < 1 || round > 15) {
     return NextResponse.json(
-      { error: "round must be an integer between 1 and 12" } as RoundStateResponse,
+      { error: "round must be an integer between 1 and 15" } as RoundStateResponse,
       { status: 400 }
     );
   }
@@ -212,8 +214,10 @@ export async function GET(request: Request) {
         base.trainingFromValue = fromCard.card_value;
       }
       if (toCard) {
-        base.trainingToBeforeValue = toCard.card_value;
-        base.trainingToAfterValue = toCard.card_value + 1;
+        // 훈련 효과는 /api/defense/action에서 이미 적용되어 card_value가 +1 된 상태이므로,
+        // before는 현재 값 - 1, after는 현재 값을 사용한다.
+        base.trainingToAfterValue = toCard.card_value;
+        base.trainingToBeforeValue = toCard.card_value - 1;
       }
     } else if (a.action_type === "rest" && a.rest_card_slot) {
       const nums = a.rest_card_slot
