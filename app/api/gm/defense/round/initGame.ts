@@ -13,10 +13,10 @@ export async function handleDefenseInitRound(
   current: DefensePhaseState,
   nextRound: number
 ) {
-  // 몬스터 카운트 초기화 (각 4마리)
+  // 몬스터 카운트 초기화 (각 몬스터의 baseCount 값 사용)
   const initialCounts: DefenseMonsterCount[] = DEFENSE_MONSTERS.map((m) => ({
     id: m.id,
-    count: 4,
+    count: m.baseCount,
   }));
 
   await supabase.from("defense_monster_count").upsert(initialCounts, {

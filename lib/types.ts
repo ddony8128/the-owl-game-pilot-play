@@ -236,10 +236,10 @@ export type DefenseAction = {
   player_id: string;
   action_type: DefenseActionType;
   target_monster_id: string | null;
-  used_card_slot: number | null;
-  training_from_slot: number | null;
-  training_to_slot: number | null;
-  rest_card_slot: string | null;
+  used_card_value: number | null;
+  training_from: number | null;
+  training_to: number | null;
+  rest_card: string | null;
 };
 
 export type DefenseScore = {

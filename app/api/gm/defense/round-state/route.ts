@@ -81,19 +81,21 @@ export async function GET(request: Request) {
 
   const [monstersSnapRes, actionsRes, cardsRes, scoresSnapRes, monstersAllRes] =
     await Promise.all([
-    supabase
-      .from("defense_monster_snapshot")
-      .select("instance_id, monster_id, round, current_hp, remaining_time, slot_index")
-      .eq("round", round),
-    supabase
-      .from("defense_action")
-      .select(
-        "round, player_id, action_type, target_monster_id, used_card_slot, training_from_slot, training_to_slot, rest_card_slot"
-      )
-      .eq("round", round),
-    supabase
-      .from("defense_card_state")
-      .select("player_id, card_slot, card_value, is_active"),
+      supabase
+        .from("defense_monster_snapshot")
+        .select(
+          "instance_id, monster_id, round, current_hp, remaining_time, slot_index"
+        )
+        .eq("round", round),
+      supabase
+        .from("defense_action")
+        .select(
+          "round, player_id, action_type, target_monster_id, used_card_value, training_from, training_to, rest_card"
+        )
+        .eq("round", round),
+      supabase
+        .from("defense_card_state")
+        .select("player_id, card_slot, card_value, is_active"),
       supabase
         .from("defense_score_snapshot")
         .select("player_id, round, points")
@@ -195,32 +197,18 @@ export async function GET(request: Request) {
           def = DEFENSE_MONSTERS_BY_ID[monsterId] ?? null;
         }
       }
-      const usedCard =
-        a.used_card_slot != null
-          ? playerCards.find((c) => c.card_slot === a.used_card_slot) ?? null
-          : null;
       base.targetMonsterName = def?.name ?? null;
-      base.usedCardValue = usedCard?.card_value ?? null;
+      base.usedCardValue = a.used_card_value;
     } else if (a.action_type === "training") {
-      const fromCard =
-        a.training_from_slot != null
-          ? playerCards.find((c) => c.card_slot === a.training_from_slot) ?? null
-          : null;
-      const toCard =
-        a.training_to_slot != null
-          ? playerCards.find((c) => c.card_slot === a.training_to_slot) ?? null
-          : null;
-      if (fromCard) {
-        base.trainingFromValue = fromCard.card_value;
+      if (typeof a.training_from === "number") {
+        base.trainingFromValue = a.training_from;
       }
-      if (toCard) {
-        // 훈련 효과는 /api/defense/action에서 이미 적용되어 card_value가 +1 된 상태이므로,
-        // before는 현재 값 - 1, after는 현재 값을 사용한다.
-        base.trainingToAfterValue = toCard.card_value;
-        base.trainingToBeforeValue = toCard.card_value - 1;
+      if (typeof a.training_to === "number") {
+        base.trainingToBeforeValue = a.training_to;
+        base.trainingToAfterValue = a.training_to + 1;
       }
-    } else if (a.action_type === "rest" && a.rest_card_slot) {
-      const nums = a.rest_card_slot
+    } else if (a.action_type === "rest" && a.rest_card) {
+      const nums = a.rest_card
         .split(/[,\s]+/)
         .map((s) => Number(s))
         .filter((n) => Number.isFinite(n));
@@ -242,18 +230,15 @@ export async function GET(request: Request) {
 
   for (const a of actions) {
     if (a.action_type !== "combat" || !a.target_monster_id) continue;
-    const playerCards = cardsByPlayer.get(a.player_id) ?? [];
-    const usedCard =
-      a.used_card_slot != null
-        ? playerCards.find((c) => c.card_slot === a.used_card_slot) ?? null
-        : null;
-
     const arr = attackersByInstance.get(a.target_monster_id) ?? [];
+    const value =
+      typeof a.used_card_value === "number" ? a.used_card_value : null;
+
     arr.push({
       player_id: a.player_id,
       nickname: nicknameById.get(a.player_id) ?? null,
-      usedCardSlot: a.used_card_slot ?? null,
-      usedCardValue: usedCard?.card_value ?? null,
+      usedCardSlot: null,
+      usedCardValue: value,
     });
     attackersByInstance.set(a.target_monster_id, arr);
   }

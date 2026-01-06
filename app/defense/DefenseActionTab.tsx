@@ -28,9 +28,9 @@ type DefenseStateForAction = {
     round: number;
     actionType: string;
     targetMonsterId: string | null;
-    usedCardSlot: number | null;
-    trainingFromSlot: number | null;
-    trainingToSlot: number | null;
+    usedCardValue: number | null;
+    trainingFrom: number | null;
+    trainingTo: number | null;
   } | null;
 };
 
@@ -126,22 +126,11 @@ export function DefenseActionTab({
     if (a.actionType === "rest") {
       description = "이번 라운드에 휴식을 선택했습니다.";
     } else if (a.actionType === "training") {
-      const fromSlot = a.trainingFromSlot;
-      const toSlot = a.trainingToSlot;
-      const fromCard =
-        fromSlot != null
-          ? state.cards.find((c) => c.cardSlot === fromSlot) ?? null
-          : null;
-      const toCard =
-        toSlot != null
-          ? state.cards.find((c) => c.cardSlot === toSlot) ?? null
-          : null;
-
-      if (fromCard && toCard) {
-        const fromValue = fromCard.cardValue;
-        const toValue = toCard.cardValue;
-        description = `이번 라운드에 훈련을 선택했습니다. 숫자 ${fromValue} 카드를 비활성화하고 숫자 ${toValue} 카드를 ${
-          toValue + 1
+      if (a.trainingFrom != null && a.trainingTo != null) {
+        description = `이번 라운드에 훈련을 선택했습니다. 숫자 ${
+          a.trainingFrom
+        } 카드를 비활성화하고 숫자 ${a.trainingTo} 카드를 ${
+          a.trainingTo + 1
         }로 강화했습니다.`;
       } else {
         description =
@@ -151,15 +140,11 @@ export function DefenseActionTab({
       const monster = a.targetMonsterId
         ? state.monsters.find((m) => m.instanceId === a.targetMonsterId) ?? null
         : null;
-      const card =
-        a.usedCardSlot != null
-          ? state.cards.find((c) => c.cardSlot === a.usedCardSlot) ?? null
-          : null;
 
-      if (monster && card) {
+      if (monster && a.usedCardValue != null) {
         description = `이번 라운드에 대기열 ${monster.slotIndex + 1}번 몬스터 ${
           monster.name
-        }에게 숫자 ${card.cardValue} 카드를 사용했습니다.`;
+        }에게 숫자 ${a.usedCardValue} 카드를 사용했습니다.`;
       } else {
         description = "이번 라운드에 전투를 선택했습니다.";
       }

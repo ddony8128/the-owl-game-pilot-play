@@ -2,13 +2,15 @@ type Score = {
   playerId: string;
   nickname: string | null;
   points: number;
+  damage: number;
 };
 
 type Props = {
   scores: Score[];
+  showDamage?: boolean;
 };
 
-export function DefenseBoardScores({ scores }: Props) {
+export function DefenseBoardScores({ scores, showDamage }: Props) {
   if (scores.length === 0) {
     return (
       <p className="text-base text-zinc-400">아직 점수 정보가 없습니다.</p>
@@ -26,9 +28,16 @@ export function DefenseBoardScores({ scores }: Props) {
             key={s.playerId}
             className="flex items-center justify-between rounded-md bg-zinc-950 px-3 py-2"
           >
-            <span className="text-2xl font-semibold">
-              {s.nickname ?? s.playerId}
-            </span>
+            <div className="flex flex-col">
+              <span className="text-2xl font-semibold">
+                {s.nickname ?? s.playerId}
+              </span>
+              {showDamage && (
+                <span className="text-base text-zinc-400">
+                  누적 피해: {s.damage}
+                </span>
+              )}
+            </div>
             <span className="text-2xl font-bold text-amber-300">
               {s.points}점
             </span>

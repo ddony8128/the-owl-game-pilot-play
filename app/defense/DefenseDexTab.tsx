@@ -9,6 +9,7 @@ type Props = {
     baseTime: number;
     points: number;
     remainingCount: number;
+    totalCount: number;
     image: string;
   }[];
 };
@@ -50,6 +51,7 @@ export function DefenseDexTab({ dex }: Props) {
                 <span>HP {m.maxHp}</span>
                 <span>잔여 시간 {m.baseTime}</span>
                 <span>포인트 +{m.points}</span>
+                <span>전체 {m.totalCount}마리</span>
               </div>
             </div>
           </div>

@@ -88,6 +88,7 @@ export function DefenseBoardClient() {
         playerId: string;
         nickname: string | null;
         points: number;
+        damage: number;
       }[]
     >
   >(() => new Map());
@@ -181,6 +182,7 @@ export function DefenseBoardClient() {
                 playerId: string;
                 nickname: string | null;
                 points: number;
+                damage: number;
               }[];
             }
           | { error: string }
@@ -200,6 +202,7 @@ export function DefenseBoardClient() {
               playerId: string;
               nickname: string | null;
               points: number;
+              damage: number;
             }[];
           };
           setScoresByRound((prev) => {
@@ -289,6 +292,7 @@ export function DefenseBoardClient() {
           ) : (
             <DefenseBoardScores
               scores={scoresByRound.get(currentRound) ?? []}
+              showDamage={currentRound === 16}
             />
           )
         ) : loading && !currentData ? (

@@ -38,7 +38,7 @@ export async function handleDefenseAdvanceRound(
       supabase
         .from("defense_action")
         .select(
-          "round, player_id, action_type, target_monster_id, used_card_slot, training_from_slot, training_to_slot"
+          "round, player_id, action_type, target_monster_id, used_card_value, training_from, training_to"
         )
         .eq("round", current.round),
       supabase
@@ -97,7 +97,6 @@ export async function handleDefenseAdvanceRound(
 
   type CombatEntry = {
     player_id: string;
-    used_card_slot: number;
     card_value: number;
   };
 
@@ -105,18 +104,13 @@ export async function handleDefenseAdvanceRound(
 
   for (const a of combatActions) {
     const monsterId = a.target_monster_id as string;
-    const usedSlot = a.used_card_slot;
-    if (!monsterId || usedSlot == null) continue;
-
-    const playerCards = cardsByPlayer.get(a.player_id) ?? [];
-    const card = playerCards.find((c) => c.card_slot === usedSlot);
-    if (!card) continue;
+    if (!monsterId) continue;
+    if (typeof a.used_card_value !== "number") continue;
 
     const list = combatsByMonster.get(monsterId) ?? [];
     list.push({
       player_id: a.player_id,
-      used_card_slot: usedSlot,
-      card_value: card.card_value,
+      card_value: a.used_card_value,
     });
     combatsByMonster.set(monsterId, list);
   }

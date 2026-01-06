@@ -38,9 +38,9 @@ type DefenseActionClient = {
   round: number;
   actionType: string;
   targetMonsterId: string | null;
-  usedCardSlot: number | null;
-  trainingFromSlot: number | null;
-  trainingToSlot: number | null;
+  usedCardValue: number | null;
+  trainingFrom: number | null;
+  trainingTo: number | null;
 } | null;
 
 type DefenseDexEntry = {
@@ -51,6 +51,7 @@ type DefenseDexEntry = {
   baseTime: number;
   points: number;
   remainingCount: number;
+  totalCount: number;
   image: string;
 };
 

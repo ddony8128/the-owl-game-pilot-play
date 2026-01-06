@@ -125,8 +125,11 @@ export async function POST(request: Request) {
     );
   }
 
-  // 타입별 검증 및 부가 정보 (예: 휴식으로 활성화한 카드 값)
+  // 타입별 검증 및 부가 정보 (예: 휴식으로 활성화한 카드 값, 전투에서 사용한 카드 값, 훈련 값)
   let restCardSlotText: string | null = null;
+  let usedCardValue: number | null = null;
+  let trainingFromValue: number | null = null;
+  let trainingToValue: number | null = null;
 
   // 타입별 검증
   if (actionType === "combat") {
@@ -197,6 +200,7 @@ export async function POST(request: Request) {
     }
 
     // 전투에 사용한 카드는 즉시 비활성화 처리
+    usedCardValue = card.card_value;
     await supabase
       .from("defense_card_state")
       .update({ is_active: false })
@@ -273,6 +277,9 @@ export async function POST(request: Request) {
     const fromValue = fromCard.card_value;
     const beforeValue = toCard.card_value;
     const afterValue = beforeValue + 1;
+
+    trainingFromValue = fromValue;
+    trainingToValue = beforeValue;
 
     await supabase
       .from("defense_card_state")
@@ -363,17 +370,10 @@ export async function POST(request: Request) {
       actionType === "combat"
         ? (body.target_monster_id as string | null)
         : null,
-    used_card_slot:
-      actionType === "combat" ? (body.used_card_slot as number | null) : null,
-    training_from_slot:
-      actionType === "training"
-        ? (body.training_from_slot as number | null)
-        : null,
-    training_to_slot:
-      actionType === "training"
-        ? (body.training_to_slot as number | null)
-        : null,
-    rest_card_slot: actionType === "rest" ? restCardSlotText : null,
+    used_card_value: actionType === "combat" ? usedCardValue : null,
+    training_from: actionType === "training" ? trainingFromValue : null,
+    training_to: actionType === "training" ? trainingToValue : null,
+    rest_card: actionType === "rest" ? restCardSlotText : null,
   };
 
   const { error: insertError } = await supabase

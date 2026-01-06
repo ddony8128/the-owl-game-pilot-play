@@ -62,6 +62,7 @@ type DefensePlayerStateResponse =
         baseTime: number;
         points: number;
         remainingCount: number;
+        totalCount: number;
         image: string;
       }[];
       logs: {
@@ -160,7 +161,7 @@ export async function GET(request: Request) {
     supabase
       .from("defense_action")
       .select(
-        "round, player_id, action_type, target_monster_id, used_card_slot, training_from_slot, training_to_slot"
+        "round, player_id, action_type, target_monster_id, used_card_value, training_from, training_to"
       )
       .eq("player_id", player.id)
       .order("round", { ascending: false })
@@ -273,6 +274,7 @@ export async function GET(request: Request) {
       baseTime: m.baseTime,
       points: m.points,
       remainingCount: row?.count ?? 0,
+      totalCount: m.baseCount,
       image: m.image,
     };
   });
@@ -288,9 +290,9 @@ export async function GET(request: Request) {
         round: lastAction.round,
         actionType: lastAction.action_type,
         targetMonsterId: lastAction.target_monster_id,
-        usedCardSlot: lastAction.used_card_slot,
-        trainingFromSlot: lastAction.training_from_slot,
-        trainingToSlot: lastAction.training_to_slot,
+        usedCardValue: lastAction.used_card_value,
+        trainingFrom: lastAction.training_from,
+        trainingTo: lastAction.training_to,
       }
     : null;
 
