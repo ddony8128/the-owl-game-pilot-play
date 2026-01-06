@@ -39,6 +39,12 @@ const TRACKS = [
     src: "/bgm/subway_announce_03.mp3",
   },
   { id: "mafia_1", name: "자본주의 마피아", src: "/bgm/mafia_bgm_01.mp3" },
+  { id: "defense_1", name: "디펜스 딜레마 1", src: "/bgm/defense_bgm_01.mp3" },
+  { id: "defense_2", name: "디펜스 딜레마 2", src: "/bgm/defense_bgm_02.mp3" },
+  { id: "defense_3", name: "디펜스 딜레마 3", src: "/bgm/defense_bgm_03.mp3" },
+  { id: "defense_4", name: "디펜스 딜레마 4", src: "/bgm/defense_bgm_04.mp3" },
+  { id: "defense_5", name: "디펜스 딜레마 5", src: "/bgm/defense_bgm_05.mp3" },
+  { id: "defense_6", name: "디펜스 딜레마 6", src: "/bgm/defense_bgm_06.mp3" },
 ];
 
 export default function DashboardBgmPage() {

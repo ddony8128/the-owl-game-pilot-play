@@ -82,6 +82,21 @@ export async function handleDefenseAdvanceRound(
     monstersById.set(m.id, m);
   });
 
+  // 1-B. 몬스터 스냅샷: 라운드 시작 시점의 active 몬스터 상태를 저장
+  const activeAtStart = monsters.filter((m) => m.status === "active");
+  if (activeAtStart.length > 0) {
+    await supabase.from("defense_monster_snapshot").insert(
+      activeAtStart.map((m) => ({
+        instance_id: m.id,
+        monster_id: m.monster_id,
+        round: current.round,
+        current_hp: m.current_hp,
+        remaining_time: m.remaining_time,
+        slot_index: m.slot_index,
+      }))
+    );
+  }
+
   const playerById = new Map<string, Player>();
   players.forEach((p) => playerById.set(p.id, p));
 
@@ -207,6 +222,8 @@ export async function handleDefenseAdvanceRound(
     const afterHp = Math.max(0, beforeHp - totalDamage);
     const defeated = totalDamage >= beforeHp;
 
+    const participantIds = new Set(entries.map((e) => e.player_id));
+
     if (defeated) {
       // 몬스터 제거 및 점수 분배
       await supabase
@@ -241,7 +258,7 @@ export async function handleDefenseAdvanceRound(
             round: current.round,
             log: `전투: ${
               def?.name ?? `몬스터 ${monster.monster_id}`
-            } 처치에 참여해 ${perPlayer}점을 획득했습니다.`,
+            } 처치에 참여해, 총 ${n}명이 나누어 1인당 ${perPlayer}점을 획득했습니다.`,
           });
         }
       } else {
@@ -251,9 +268,19 @@ export async function handleDefenseAdvanceRound(
             round: current.round,
             log: `전투: ${
               def?.name ?? `몬스터 ${monster.monster_id}`
-            } 처치에 참여했지만 분배 가능한 점수가 없어 포인트는 얻지 못했습니다.`,
+            } 처치에 참여했지만, 분배 가능한 점수가 없어 포인트는 얻지 못했습니다.`,
           });
         }
+      }
+
+      // 참여하지 않은 플레이어에게도 몬스터 처치 결과 로그 제공 (개인 전투 로그와 명확히 구분되도록 '전투:' 접두사는 붙이지 않음)
+      for (const p of players) {
+        if (participantIds.has(p.id)) continue;
+        await supabase.from("defense_player_log").insert({
+          player_id: p.id,
+          round: current.round,
+          log: `${def?.name ?? `몬스터 ${monster.monster_id}`}이(가) 쓰러졌습니다.`,
+        });
       }
     } else {
       await supabase
@@ -261,6 +288,7 @@ export async function handleDefenseAdvanceRound(
         .update({ current_hp: afterHp })
         .eq("id", monsterId);
 
+      // 전투에 참여한 플레이어들: 지금처럼 상세 피해 로그 유지
       for (const e of entries) {
         await supabase.from("defense_player_log").insert({
           player_id: e.player_id,
@@ -268,6 +296,16 @@ export async function handleDefenseAdvanceRound(
           log: `전투: ${
             def?.name ?? `몬스터 ${monster.monster_id}`
           }에게 총 ${totalDamage} 피해를 입혔습니다. (남은 HP: ${afterHp})`,
+        });
+      }
+
+      // 참여하지 않은 플레이어에게도 해당 몬스터의 피해 결과 로그 제공 (개인 전투 로그와 구분되도록 '전투:' 접두사 없이)
+      for (const p of players) {
+        if (participantIds.has(p.id)) continue;
+        await supabase.from("defense_player_log").insert({
+          player_id: p.id,
+          round: current.round,
+          log: `${def?.name ?? `몬스터 ${monster.monster_id}`}이(가) 이번 라운드에 총 ${totalDamage} 피해를 입고 남은 HP가 ${afterHp}가 되었습니다.`,
         });
       }
     }
@@ -456,26 +494,4 @@ export async function handleDefenseAdvanceRound(
     );
   }
 
-  const finalMonstersRes = await supabase
-    .from("defense_monster_instance")
-    .select(
-      "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
-    )
-    .eq("status", "active");
-  if (finalMonstersRes.error) throw new Error(finalMonstersRes.error.message);
-  const finalMonsters = (finalMonstersRes.data ||
-    []) as DefenseMonsterInstance[];
-
-  if (finalMonsters.length > 0) {
-    await supabase.from("defense_monster_snapshot").insert(
-      finalMonsters.map((m) => ({
-        instance_id: m.id,
-        monster_id: m.monster_id,
-        round: current.round,
-        current_hp: m.current_hp,
-        remaining_time: m.remaining_time,
-        slot_index: m.slot_index,
-      }))
-    );
-  }
 }

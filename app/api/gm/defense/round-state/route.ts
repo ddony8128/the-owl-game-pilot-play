@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type {
   DefenseMonsterSnapshot,
+  DefenseMonsterInstance,
   DefenseAction,
   DefenseCardState,
   DefenseScoreSnapshot,
@@ -76,12 +77,8 @@ export async function GET(request: Request) {
   const nicknameById = new Map<string, string | null>();
   players.forEach((p) => nicknameById.set(p.id, p.nickname));
 
-  const [
-    monstersSnapRes,
-    actionsRes,
-    cardsRes,
-    scoresSnapRes,
-  ] = await Promise.all([
+  const [monstersSnapRes, actionsRes, cardsRes, scoresSnapRes, monstersAllRes] =
+    await Promise.all([
     supabase
       .from("defense_monster_snapshot")
       .select("instance_id, monster_id, round, current_hp, remaining_time, slot_index")
@@ -95,11 +92,14 @@ export async function GET(request: Request) {
     supabase
       .from("defense_card_state")
       .select("player_id, card_slot, card_value, is_active"),
-    supabase
-      .from("defense_score_snapshot")
-      .select("player_id, round, points")
-      .eq("round", round),
-  ]);
+      supabase
+        .from("defense_score_snapshot")
+        .select("player_id, round, points")
+        .eq("round", round),
+      supabase
+        .from("defense_monster_instance")
+        .select("id, monster_id"),
+    ]);
 
   if (monstersSnapRes.error) {
     return NextResponse.json(
@@ -125,6 +125,12 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
+  if (monstersAllRes.error) {
+    return NextResponse.json(
+      { error: monstersAllRes.error.message } as RoundStateResponse,
+      { status: 500 }
+    );
+  }
 
   const monstersSnap =
     (monstersSnapRes.data || []) as DefenseMonsterSnapshot[];
@@ -132,6 +138,13 @@ export async function GET(request: Request) {
   const cards = (cardsRes.data || []) as DefenseCardState[];
   const scoresSnap =
     (scoresSnapRes.data || []) as DefenseScoreSnapshot[];
+  const monstersAll =
+    (monstersAllRes.data || []) as DefenseMonsterInstance[];
+
+  const monsterIdByInstance = new Map<string, number>();
+  monstersAll.forEach((m) => {
+    monsterIdByInstance.set(m.id, m.monster_id);
+  });
 
   const cardsByPlayer = new Map<string, DefenseCardState[]>();
   cards.forEach((c) => {
@@ -171,12 +184,13 @@ export async function GET(request: Request) {
     const playerCards = cardsByPlayer.get(a.player_id) ?? [];
 
     if (a.action_type === "combat") {
-      const def =
-        a.target_monster_id && monstersSnap.find((m) => m.instance_id === a.target_monster_id)
-          ? DEFENSE_MONSTERS_BY_ID[
-              monstersSnap.find((m) => m.instance_id === a.target_monster_id)!.monster_id
-            ] ?? null
-          : null;
+      let def = null;
+      if (a.target_monster_id) {
+        const monsterId = monsterIdByInstance.get(a.target_monster_id) ?? null;
+        if (monsterId != null) {
+          def = DEFENSE_MONSTERS_BY_ID[monsterId] ?? null;
+        }
+      }
       const usedCard =
         a.used_card_slot != null
           ? playerCards.find((c) => c.card_slot === a.used_card_slot) ?? null

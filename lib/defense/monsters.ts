@@ -14,8 +14,9 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
     points: 2,
     maxHp: 3,
     baseTime: 1,
-    name: "경계병",
-    description: "가장 약하지만 빠르게 다가오는 기본 몬스터입니다.",
+    name: "스컬 스파이더",
+    description:
+      "빠르고 작고 징그럽습니다. 실험에 쓰고 남은 두개골들로 만들었다고 합니다.",
     image: "/defense/monster_1.png",
   },
   {
@@ -23,17 +24,18 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
     points: 6,
     maxHp: 7,
     baseTime: 2,
-    name: "돌격병",
-    description: "적당한 체력과 보상을 가진 전열 몬스터입니다.",
+    name: "종이 연구원",
+    description:
+      "전에 봤던 수배범입니다! 괴물 제작 연구를 하며, 그림으로 스스로를 복제합니다.",
     image: "/defense/monster_2.png",
   },
   {
     id: 3,
-    points: 8,
+    points: 9,
     maxHp: 9,
     baseTime: 2,
-    name: "중갑병",
-    description: "높은 체력으로 장기전에 강한 몬스터입니다.",
+    name: "복싱 팩맨",
+    description: "눈이 마주치면 남녀노소 가리지 않고 복싱 시합을 요구합니다.",
     image: "/defense/monster_3.png",
   },
   {
@@ -41,8 +43,9 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
     points: 10,
     maxHp: 10,
     baseTime: 3,
-    name: "파수꾼",
-    description: "공수 밸런스가 좋은 중간 보스급 몬스터입니다.",
+    name: "슬렌더맨",
+    description:
+      "신사적이고 예의바르지만, 귀를 기울이지 마십시오. 신성모독 단체 포교 경력이 있습니다.",
     image: "/defense/monster_4.png",
   },
   {
@@ -50,8 +53,8 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
     points: 12,
     maxHp: 12,
     baseTime: 3,
-    name: "정예병",
-    description: "높은 체력과 보상을 가진 강력한 몬스터입니다.",
+    name: "문어의 악마",
+    description: "두족류의 원수인 인간을 산채로 요리하고 싶어합니다.",
     image: "/defense/monster_5.png",
   },
   {
@@ -59,19 +62,15 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
     points: 18,
     maxHp: 15,
     baseTime: 4,
-    name: "보스 몬스터",
-    description: "최대 체력과 보상을 가진 최종 보스급 몬스터입니다.",
+    name: "서브웨이맨",
+    description:
+      "힘을 합쳐 물리쳐야 하는 보스 몬스터입니다! 지하철보다 훨씬 느립니다.",
     image: "/defense/monster_6.png",
   },
 ];
 
 export const DEFENSE_MONSTERS_BY_ID: Record<number, DefenseMonsterDefinition> =
-  DEFENSE_MONSTERS.reduce(
-    (acc, m) => {
-      acc[m.id] = m;
-      return acc;
-    },
-    {} as Record<number, DefenseMonsterDefinition>
-  );
-
-
+  DEFENSE_MONSTERS.reduce((acc, m) => {
+    acc[m.id] = m;
+    return acc;
+  }, {} as Record<number, DefenseMonsterDefinition>);
