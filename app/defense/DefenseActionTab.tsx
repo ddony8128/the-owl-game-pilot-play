@@ -42,7 +42,7 @@ type Props = {
 
 type Step =
   | "chooseAction"
-  | "confirmRest"
+  | "restChooseCards"
   | "trainingChooseFrom"
   | "trainingChooseTo"
   | "combatChooseMonster"
@@ -67,6 +67,7 @@ export function DefenseActionTab({
   const [selectedCardSlot, setSelectedCardSlot] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedRestSlots, setSelectedRestSlots] = useState<number[]>([]);
 
   const hasActionThisRound =
     state.action != null && state.action.round === state.round;
@@ -79,6 +80,7 @@ export function DefenseActionTab({
     used_card_slot?: number | null;
     training_from_slot?: number | null;
     training_to_slot?: number | null;
+    rest_slots?: number[];
   }) => {
     setSubmitting(true);
     setError(null);
@@ -179,7 +181,7 @@ export function DefenseActionTab({
           전투 / 휴식 / 훈련 중 어느 것을 선택하시겠습니까?
         </h2>
         <p className="text-base text-zinc-400">
-          선택하지 않으면 휴식으로 자동 결정됩니다.
+          라운드당 한 번만 행동을 선택할 수 있습니다.
         </p>
         <div className="flex flex-col gap-2">
           <button
@@ -199,11 +201,12 @@ export function DefenseActionTab({
             disabled={submitting}
             onClick={() => {
               setPendingAction("rest");
-              setStep("confirmRest");
+              setSelectedRestSlots([]);
+              setStep("restChooseCards");
             }}
           >
             휴식
-            <br /> (모든 숫자 카드 다시 활성화)
+            <br /> (비활성 숫자 카드 최대 3장 활성화)
           </button>
           <button
             type="button"
@@ -219,37 +222,100 @@ export function DefenseActionTab({
         </div>
       </section>
 
-      {step === "confirmRest" && pendingAction === "rest" && (
+      {step === "restChooseCards" && pendingAction === "rest" && (
         <section className="space-y-2 rounded-lg bg-zinc-900 p-3 text-base">
-          <p>정말 휴식을 선택하시겠습니까?</p>
-          <p className="text-sm text-zinc-400">
-            이번 라운드에는 다른 행동을 할 수 없고, 다음 라운드에서 모든 카드가
-            활성화된 상태로 시작합니다.
+          <p className="font-semibold">
+            휴식 – 다시 활성화할 카드를 선택하세요.
           </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              className="h-9 flex-1 rounded-full bg-zinc-800 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
-              disabled={submitting}
-              onClick={() => {
-                setPendingAction(null);
-                setStep("chooseAction");
-              }}
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              className="h-9 flex-1 rounded-full bg-amber-400 text-sm font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-50"
-              disabled={submitting}
-              onClick={() =>
-                submitAction({
-                  action_type: "rest",
-                })
-              }
-            >
-              휴식 확정
-            </button>
+          <p className="text-sm text-zinc-400">
+            비활성화된 숫자 카드 중 최대 3장을 선택해 이번 라운드에 바로
+            활성화합니다.
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {state.cards
+              .filter((c) => !c.isActive)
+              .map((c) => {
+                const selected = selectedRestSlots.includes(c.cardSlot);
+                const disabledSelection =
+                  !selected && selectedRestSlots.length >= 3;
+                return (
+                  <button
+                    key={c.cardSlot}
+                    type="button"
+                    className={`rounded-lg border px-3 py-2 text-base ${
+                      selected
+                        ? "border-amber-400 bg-zinc-800"
+                        : "border-zinc-700 bg-zinc-950 hover:bg-zinc-900"
+                    }`}
+                    disabled={submitting || disabledSelection}
+                    onClick={() => {
+                      setSelectedRestSlots((prev) => {
+                        if (prev.includes(c.cardSlot)) {
+                          return prev.filter((s) => s !== c.cardSlot);
+                        }
+                        if (prev.length >= 3) return prev;
+                        return [...prev, c.cardSlot];
+                      });
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-amber-300">
+                        {c.cardValue}
+                      </span>
+                    </div>
+                    <p className="text-sm text-zinc-400">
+                      현재 상태: {c.isActive ? "활성" : "비활성"}
+                    </p>
+                  </button>
+                );
+              })}
+          </div>
+          {state.cards.filter((c) => !c.isActive).length === 0 && (
+            <p className="mt-2 text-sm text-zinc-500">
+              비활성화된 숫자 카드가 없습니다. 휴식을 선택해도 변화가 거의 없을
+              수 있습니다.
+            </p>
+          )}
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <p className="text-sm text-zinc-400">
+              선택한 카드:{" "}
+              {selectedRestSlots.length > 0
+                ? selectedRestSlots
+                    .map(
+                      (slot) =>
+                        state.cards.find((c) => c.cardSlot === slot)?.cardValue
+                    )
+                    .filter((v) => v != null)
+                    .join(", ")
+                : "없음"}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="h-8 rounded-full bg-zinc-800 px-3 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
+                disabled={submitting}
+                onClick={() => {
+                  setPendingAction(null);
+                  setSelectedRestSlots([]);
+                  setStep("chooseAction");
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="h-8 rounded-full bg-amber-400 px-3 text-sm font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-50"
+                disabled={submitting || selectedRestSlots.length === 0}
+                onClick={() => {
+                  void submitAction({
+                    action_type: "rest",
+                    rest_slots: selectedRestSlots,
+                  });
+                }}
+              >
+                휴식 확정
+              </button>
+            </div>
           </div>
         </section>
       )}

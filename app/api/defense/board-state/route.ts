@@ -102,7 +102,12 @@ export async function GET(request: Request) {
         } else {
           statusAfter = "missing";
         }
-        hpAfter = 0;
+        // 처치(defeated)는 HP 0으로, 만료(expired)는 도망치기 직전 HP를 유지
+        if (inst.status === "defeated") {
+          hpAfter = 0;
+        } else {
+          hpAfter = inst ? inst.current_hp : s.current_hp;
+        }
         remainingTimeAfter = 0;
       } else {
         // 이 라운드 이후에도 남아 있거나, 더 뒤 라운드에서 정리된 몬스터는

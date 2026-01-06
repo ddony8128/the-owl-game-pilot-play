@@ -15,6 +15,7 @@ type Body = {
   used_card_slot?: number | null;
   training_from_slot?: number | null;
   training_to_slot?: number | null;
+  rest_slots?: number[] | null;
 };
 
 type ResponseBody = { ok: true } | { error: string };
@@ -41,10 +42,9 @@ export async function POST(request: Request) {
   const actionType = body.action_type;
 
   if (!nickname) {
-    return NextResponse.json(
-      { error: "invalid nickname" } as ResponseBody,
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "invalid nickname" } as ResponseBody, {
+      status: 400,
+    });
   }
 
   // 현재 라운드 조회
@@ -55,10 +55,9 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (phaseError) {
-    return NextResponse.json(
-      { error: phaseError.message } as ResponseBody,
-      { status: 500 }
-    );
+    return NextResponse.json({ error: phaseError.message } as ResponseBody, {
+      status: 500,
+    });
   }
 
   const phase = (phaseRow || null) as DefensePhaseState | null;
@@ -112,10 +111,9 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (existingError) {
-    return NextResponse.json(
-      { error: existingError.message } as ResponseBody,
-      { status: 500 }
-    );
+    return NextResponse.json({ error: existingError.message } as ResponseBody, {
+      status: 500,
+    });
   }
 
   if (existingAction) {
@@ -126,6 +124,9 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+
+  // 타입별 검증 및 부가 정보 (예: 휴식으로 활성화한 카드 값)
+  let restCardSlotText: string | null = null;
 
   // 타입별 검증
   if (actionType === "combat") {
@@ -139,7 +140,8 @@ export async function POST(request: Request) {
     if (!targetId || usedSlot == null) {
       return NextResponse.json(
         {
-          error: "combat 행동에는 target_monster_id와 used_card_slot이 필요합니다.",
+          error:
+            "combat 행동에는 target_monster_id와 used_card_slot이 필요합니다.",
         } as ResponseBody,
         { status: 400 }
       );
@@ -163,7 +165,9 @@ export async function POST(request: Request) {
     const monster = (monsterRow || null) as DefenseMonsterInstance | null;
     if (!monster || monster.status !== "active") {
       return NextResponse.json(
-        { error: "선택한 몬스터가 존재하지 않거나 이미 제거되었습니다." } as ResponseBody,
+        {
+          error: "선택한 몬스터가 존재하지 않거나 이미 제거되었습니다.",
+        } as ResponseBody,
         { status: 400 }
       );
     }
@@ -176,10 +180,9 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (cardError) {
-      return NextResponse.json(
-        { error: cardError.message } as ResponseBody,
-        { status: 500 }
-      );
+      return NextResponse.json({ error: cardError.message } as ResponseBody, {
+        status: 500,
+      });
     }
 
     const card = (cardRow || null) as DefenseCardState | null;
@@ -198,9 +201,7 @@ export async function POST(request: Request) {
         ? body.training_from_slot
         : null;
     const toSlot =
-      typeof body.training_to_slot === "number"
-        ? body.training_to_slot
-        : null;
+      typeof body.training_to_slot === "number" ? body.training_to_slot : null;
 
     if (fromSlot == null || toSlot == null) {
       return NextResponse.json(
@@ -231,8 +232,7 @@ export async function POST(request: Request) {
     if (!fromCard || !fromCard.is_active) {
       return NextResponse.json(
         {
-          error:
-            "훈련에서 비활성화할 카드는 현재 활성화된 카드여야 합니다.",
+          error: "훈련에서 비활성화할 카드는 현재 활성화된 카드여야 합니다.",
         } as ResponseBody,
         { status: 400 }
       );
@@ -247,10 +247,9 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (toCardError) {
-      return NextResponse.json(
-        { error: toCardError.message } as ResponseBody,
-        { status: 500 }
-      );
+      return NextResponse.json({ error: toCardError.message } as ResponseBody, {
+        status: 500,
+      });
     }
 
     const toCard = (toCardRow || null) as DefenseCardState | null;
@@ -262,6 +261,68 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+  } else if (actionType === "rest") {
+    const rawSlots = Array.isArray(body.rest_slots) ? body.rest_slots : [];
+    const uniqueSlots = Array.from(
+      new Set(
+        rawSlots.filter(
+          (s): s is number => typeof s === "number" && Number.isInteger(s)
+        )
+      )
+    ).slice(0, 3);
+
+    if (uniqueSlots.length === 0) {
+      return NextResponse.json(
+        {
+          error: "휴식으로 활성화할 비활성 카드가 1장 이상 선택되어야 합니다.",
+        } as ResponseBody,
+        { status: 400 }
+      );
+    }
+
+    const { data: cardsRows, error: cardsError } = await supabase
+      .from("defense_card_state")
+      .select("player_id, card_slot, card_value, is_active")
+      .eq("player_id", player.id)
+      .in("card_slot", uniqueSlots);
+
+    if (cardsError) {
+      return NextResponse.json({ error: cardsError.message } as ResponseBody, {
+        status: 500,
+      });
+    }
+
+    const inactiveCards = (cardsRows || [])
+      .filter((c) => !c.is_active)
+      .slice(0, 3);
+
+    const inactiveSlots = inactiveCards.map((c) => c.card_slot);
+
+    if (inactiveSlots.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "선택한 카드가 이미 모두 활성화되어 있어 휴식을 적용할 수 없습니다.",
+        } as ResponseBody,
+        { status: 400 }
+      );
+    }
+
+    await supabase
+      .from("defense_card_state")
+      .update({ is_active: true })
+      .eq("player_id", player.id)
+      .in("card_slot", inactiveSlots);
+
+    const values = inactiveCards.map((c) => c.card_value).sort((a, b) => a - b);
+    const valuesLabel = values.join(", ");
+    restCardSlotText = values.join(",");
+
+    await supabase.from("defense_player_log").insert({
+      player_id: player.id,
+      round: currentRound,
+      log: `휴식: ${valuesLabel} 카드를 다시 활성화했습니다.`,
+    });
   }
 
   const insertBody = {
@@ -273,9 +334,7 @@ export async function POST(request: Request) {
         ? (body.target_monster_id as string | null)
         : null,
     used_card_slot:
-      actionType === "combat"
-        ? (body.used_card_slot as number | null)
-        : null,
+      actionType === "combat" ? (body.used_card_slot as number | null) : null,
     training_from_slot:
       actionType === "training"
         ? (body.training_from_slot as number | null)
@@ -284,6 +343,7 @@ export async function POST(request: Request) {
       actionType === "training"
         ? (body.training_to_slot as number | null)
         : null,
+    rest_card_slot: actionType === "rest" ? restCardSlotText : null,
   };
 
   const { error: insertError } = await supabase
@@ -291,13 +351,10 @@ export async function POST(request: Request) {
     .insert(insertBody);
 
   if (insertError) {
-    return NextResponse.json(
-      { error: insertError.message } as ResponseBody,
-      { status: 500 }
-    );
+    return NextResponse.json({ error: insertError.message } as ResponseBody, {
+      status: 500,
+    });
   }
 
   return NextResponse.json({ ok: true } as ResponseBody, { status: 200 });
 }
-
-

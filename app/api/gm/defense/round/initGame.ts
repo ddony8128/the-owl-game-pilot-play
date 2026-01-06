@@ -1,6 +1,7 @@
 import type {
   DefensePhaseState,
   DefenseMonsterCount,
+  DefenseMonsterInstance,
   Player,
 } from "@/lib/types";
 import type { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -131,14 +132,23 @@ export async function handleDefenseInitRound(
     spawned_round: number;
   }[] = [];
 
-  for (let slot = 0; slot < 4; slot += 1) {
-    const available = DEFENSE_MONSTERS.filter(
-      (m) => (countsMap.get(m.id) ?? 0) > 0
-    );
-    if (available.length === 0) break;
+  const newlyChosenTypes = new Set<number>();
 
-    const chosen =
-      available[Math.floor(Math.random() * available.length)] ?? null;
+  for (let slot = 0; slot < 4; slot += 1) {
+    const forbidden = new Set<number>([...newlyChosenTypes]);
+
+    let pool = DEFENSE_MONSTERS.filter(
+      (m) => (countsMap.get(m.id) ?? 0) > 0 && !forbidden.has(m.id)
+    );
+
+    // 남은 겹치지 않는 몬스터가 없다면, 단순히 남은 몬스터 중에서 선택
+    if (pool.length === 0) {
+      pool = DEFENSE_MONSTERS.filter((m) => (countsMap.get(m.id) ?? 0) > 0);
+    }
+
+    if (pool.length === 0) break;
+
+    const chosen = pool[Math.floor(Math.random() * pool.length)] ?? null;
     if (!chosen) break;
 
     instancesToInsert.push({
@@ -151,6 +161,7 @@ export async function handleDefenseInitRound(
       spawned_round: nextRound,
     });
     countsMap.set(chosen.id, (countsMap.get(chosen.id) ?? 0) - 1);
+    newlyChosenTypes.add(chosen.id);
   }
 
   if (instancesToInsert.length > 0) {
@@ -176,6 +187,40 @@ export async function handleDefenseInitRound(
 
     if (updateCountsError) {
       throw new Error(updateCountsError.message);
+    }
+
+    // 새 라운드 시작 시점의 몬스터 스냅샷 저장 (nextRound 기준)
+    const { data: activeForSnapshot, error: activeError } = await supabase
+      .from("defense_monster_instance")
+      .select(
+        "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
+      )
+      .eq("status", "active");
+
+    if (activeError) {
+      throw new Error(activeError.message);
+    }
+
+    const active =
+      (activeForSnapshot || []) as DefenseMonsterInstance[];
+
+    if (active.length > 0) {
+      const { error: snapError } = await supabase
+        .from("defense_monster_snapshot")
+        .insert(
+          active.map((m) => ({
+            instance_id: m.id,
+            monster_id: m.monster_id,
+            round: nextRound,
+            current_hp: m.current_hp,
+            remaining_time: m.remaining_time,
+            slot_index: m.slot_index,
+          }))
+        );
+
+      if (snapError) {
+        throw new Error(snapError.message);
+      }
     }
   }
 }

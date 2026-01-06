@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   MafiaAbilityResult,
   MafiaLog,
@@ -260,6 +260,7 @@ function MafiaInner() {
     remainingSeconds: number;
     isRunning: boolean;
   } | null>(null);
+  const timerMetaRef = useRef<MafiaTimerApi | null>(null);
 
   type MafiaTimerApi = {
     phase: string | null;
@@ -324,8 +325,28 @@ function MafiaInner() {
           .json()
           .catch(() => null)) as MafiaTimerApi | null;
         if (!res.ok || !json || cancelled) return;
+
+        const api = json;
+        const prevMeta = timerMetaRef.current;
+
+        // 타이머 메타데이터(phase, timerStart, timerStartAt, pauseAt, totalSeconds)가
+        // 바뀌었을 때에만 서버 기준으로 남은 시간을 재계산한다.
+        if (
+          prevMeta &&
+          prevMeta.phase === api.phase &&
+          prevMeta.timerStart === api.timerStart &&
+          prevMeta.timerStartAt === api.timerStartAt &&
+          prevMeta.pauseAt === api.pauseAt &&
+          prevMeta.totalSeconds === api.totalSeconds
+        ) {
+          // 아무 변화가 없으면 로컬 1초 틱만 사용 (타이머 튐 방지)
+          return;
+        }
+
         const now = Date.now();
-        setTimerState(computeRemaining(json, now));
+        const nextState = computeRemaining(api, now);
+        timerMetaRef.current = api;
+        setTimerState(nextState);
       } catch {
         // 타이머 오류는 게임 진행을 막지 않음
       }

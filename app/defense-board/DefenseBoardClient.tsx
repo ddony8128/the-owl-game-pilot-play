@@ -6,11 +6,59 @@ import { DefenseBoardControls } from "./DefenseBoardControls";
 import { DefenseBoardGrid } from "./DefenseBoardGrid";
 import { DefenseBoardScores } from "./DefenseBoardScores";
 
+type ViewKind = "ready" | "snapshot" | "result" | "score";
+
 type StepState = {
-  step: number; // 0 = 준비, 1 = round1 스냅샷, 2 = round1 결과, 3 = round2 스냅샷, ...
+  step: number; // TIMELINE 인덱스
 };
 
-const MAX_ROUND = 14;
+// 중계 타임라인 정의:
+// - 0: 준비
+// - 각 전투 라운드: 스냅샷 -> 전투 결과
+// - 지정된 라운드 후: 점수 발표(score)
+const TIMELINE: { round: number | null; kind: ViewKind }[] = [
+  { round: null, kind: "ready" }, // 0
+  // 튜토리얼 1, 2라운드
+  { round: 1, kind: "snapshot" }, // 1
+  { round: 1, kind: "result" }, // 2
+  { round: 2, kind: "snapshot" }, // 3
+  { round: 2, kind: "result" }, // 4
+  // 튜토리얼 결과: 점수 발표
+  { round: 3, kind: "score" }, // 5
+  // 본게임 1~3라운드
+  { round: 4, kind: "snapshot" }, // 6
+  { round: 4, kind: "result" }, // 7
+  { round: 5, kind: "snapshot" }, // 8
+  { round: 5, kind: "result" }, // 9
+  { round: 6, kind: "snapshot" }, // 10
+  { round: 6, kind: "result" }, // 11
+  // 본게임 4라운드 결과 후 점수 발표
+  { round: 7, kind: "snapshot" }, // 12
+  { round: 7, kind: "result" }, // 13
+  { round: 7, kind: "score" }, // 14
+  // 본게임 5~7라운드
+  { round: 8, kind: "snapshot" }, // 15
+  { round: 8, kind: "result" }, // 16
+  { round: 9, kind: "snapshot" }, // 17
+  { round: 9, kind: "result" }, // 18
+  { round: 10, kind: "snapshot" }, // 19
+  { round: 10, kind: "result" }, // 20
+  // 본게임 8라운드 결과 후 점수 발표
+  { round: 11, kind: "snapshot" }, // 21
+  { round: 11, kind: "result" }, // 22
+  { round: 11, kind: "score" }, // 23
+  // 본게임 9~12라운드
+  { round: 12, kind: "snapshot" }, // 24
+  { round: 12, kind: "result" }, // 25
+  { round: 13, kind: "snapshot" }, // 26
+  { round: 13, kind: "result" }, // 27
+  { round: 14, kind: "snapshot" }, // 28
+  { round: 14, kind: "result" }, // 29
+  { round: 15, kind: "snapshot" }, // 30
+  { round: 15, kind: "result" }, // 31
+  // 게임 종료: 최종 점수 발표
+  { round: 16, kind: "score" }, // 32
+];
 
 function getRoundLabel(round: number | null): string {
   if (round == null) return "-";
@@ -18,11 +66,11 @@ function getRoundLabel(round: number | null): string {
   if (round === 1) return "튜토리얼 1라운드";
   if (round === 2) return "튜토리얼 2라운드";
   if (round === 3) return "튜토리얼 결과";
-  if (round >= 4 && round <= 13) {
-    const gameRound = round - 3; // 4~13 -> 1~10라운드
+  if (round >= 4 && round <= 15) {
+    const gameRound = round - 3; // 4~15 -> 1~12라운드
     return `${gameRound}라운드`;
   }
-  if (round === 14) return "게임 종료";
+  if (round === 16) return "게임 종료";
   return `알 수 없음 (DB round ${round})`;
 }
 
@@ -46,12 +94,15 @@ export function DefenseBoardClient() {
   const [scoresLoading, setScoresLoading] = useState(false);
   const [scoresError, setScoresError] = useState<string | null>(null);
 
-  const currentRound =
-    stepState.step <= 0
-      ? 0
-      : Math.min(MAX_ROUND, Math.ceil(stepState.step / 2));
-  const isResultView = stepState.step > 0 && stepState.step % 2 === 0;
-  const isScoreRound = currentRound === 3 || currentRound === 14;
+  const currentStep = Math.max(
+    0,
+    Math.min(stepState.step, TIMELINE.length - 1)
+  );
+  const currentEntry = TIMELINE[currentStep];
+  const currentRound = currentEntry.round ?? 0;
+  const viewKind = currentEntry.kind;
+  const isResultView = viewKind === "result";
+  const isScoreRound = viewKind === "score";
 
   const currentData = useMemo(() => {
     if (currentRound <= 0) return null;
@@ -59,8 +110,8 @@ export function DefenseBoardClient() {
   }, [currentRound, dataByRound]);
 
   useEffect(() => {
-    if (currentRound <= 0 || currentRound > 13) return;
-    if (dataByRound.has(currentRound)) return;
+    if (currentRound <= 0 || currentRound > 15) return;
+    if (viewKind === "score" || viewKind === "ready") return;
 
     let cancelled = false;
     const load = async () => {
@@ -108,12 +159,11 @@ export function DefenseBoardClient() {
     return () => {
       cancelled = true;
     };
-  }, [currentRound, dataByRound]);
+  }, [currentRound, viewKind]);
 
   // 튜토리얼 결과(3), 게임 종료(14)에서는 점수판을 보여주기 위해 별도 스코어 데이터 로드
   useEffect(() => {
     if (!isScoreRound || currentRound <= 0) return;
-    if (scoresByRound.has(currentRound)) return;
 
     let cancelled = false;
     const loadScores = async () => {
@@ -176,10 +226,10 @@ export function DefenseBoardClient() {
     return () => {
       cancelled = true;
     };
-  }, [currentRound, isScoreRound, scoresByRound]);
+  }, [currentRound, isScoreRound]);
 
-  const canPrev = stepState.step > 0;
-  const canNext = stepState.step < MAX_ROUND * 2; // 라운드당 스냅샷/결과 두 단계
+  const canPrev = currentStep > 0;
+  const canNext = currentStep < TIMELINE.length - 1;
 
   const handlePrev = () => {
     if (!canPrev) return;

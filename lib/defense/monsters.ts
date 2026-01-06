@@ -23,7 +23,7 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
     id: 2,
     points: 6,
     maxHp: 7,
-    baseTime: 2,
+    baseTime: 3,
     name: "종이 연구원",
     description:
       "전에 봤던 수배범입니다! 괴물 제작 연구를 하며, 그림으로 스스로를 복제합니다.",
@@ -31,7 +31,7 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
   },
   {
     id: 3,
-    points: 9,
+    points: 8,
     maxHp: 9,
     baseTime: 2,
     name: "복싱 팩맨",
@@ -40,9 +40,9 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
   },
   {
     id: 4,
-    points: 10,
+    points: 9,
     maxHp: 10,
-    baseTime: 3,
+    baseTime: 4,
     name: "슬렌더맨",
     description:
       "신사적이고 예의바르지만, 귀를 기울이지 마십시오. 신성모독 단체 포교 경력이 있습니다.",
@@ -59,9 +59,9 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
   },
   {
     id: 6,
-    points: 18,
+    points: 16,
     maxHp: 15,
-    baseTime: 4,
+    baseTime: 5,
     name: "서브웨이맨",
     description:
       "힘을 합쳐 물리쳐야 하는 보스 몬스터입니다! 지하철보다 훨씬 느립니다.",

@@ -25,9 +25,9 @@ export async function POST(request: Request) {
   // 0: 준비
   // 1~2: 튜토리얼 1, 2라운드
   // 3: 튜토리얼 결과
-  // 4~13: 본게임 1~10라운드
-  // 14: 본게임 결과 (게임 종료)
-  if (nextRound < 0 || nextRound > 14) {
+  // 4~15: 본게임 1~12라운드
+  // 16: 본게임 결과 (게임 종료)
+  if (nextRound < 0 || nextRound > 16) {
     return NextResponse.json(
       { error: "round must be between 0 and 12" } as ResponseBody,
       { status: 400 }
@@ -74,9 +74,9 @@ export async function POST(request: Request) {
     ) {
       await handleDefenseInitRound(supabase, current, nextRound);
     } else if (
-      // 그 외 1->2, 2->3, 4->5, ..., 12->13, 13->14는 공통 전환 로직 실행
+      // 그 외 1->2, 2->3, 4->5, ..., 14->15, 15->16는 공통 전환 로직 실행
       current.round >= 1 &&
-      current.round <= 13 &&
+      current.round <= 15 &&
       nextRound === current.round + 1
     ) {
       await handleDefenseAdvanceRound(supabase, current, nextRound);

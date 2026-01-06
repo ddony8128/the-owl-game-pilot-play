@@ -11,6 +11,7 @@ type RoundPlayerSummary = {
         trainingFromValue?: number | null;
         trainingToBeforeValue?: number | null;
         trainingToAfterValue?: number | null;
+        restValues?: number[] | null;
       }
     | null;
   score: number | null;
@@ -90,7 +91,8 @@ export function DefenseRoundSummarySection() {
   const getRoundLabel = (r: number) => {
     if (r === 1) return "튜토리얼 1라운드";
     if (r === 2) return "튜토리얼 2라운드";
-    const gameRound = r - 2;
+    // DB round 4~15 -> 본게임 1~12라운드에 대응 (3은 튜토리얼 결과라 생략)
+    const gameRound = r - 3;
     return `${gameRound}라운드`;
   };
 
@@ -102,7 +104,7 @@ export function DefenseRoundSummarySection() {
         <h2 className="text-lg font-semibold">라운드별 상황 요약</h2>
         <div className="flex items-center gap-2 text-base">
           <span className="text-sm text-zinc-400">라운드 선택:</span>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((round) => (
+          {[1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((round) => (
             <button
               key={round}
               type="button"
@@ -174,7 +176,11 @@ export function DefenseRoundSummarySection() {
                         </p>
                       ) : p.action.type === "rest" ? (
                         <p className="text-sm">
-                          휴식 – 모든 카드를 다시 활성화하는 행동.
+                          {p.action.restValues && p.action.restValues.length > 0
+                            ? `휴식 – 값 ${p.action.restValues.join(
+                                ", "
+                              )} 카드를 다시 활성화했습니다.`
+                            : "휴식 – 비활성화된 숫자 카드 중 일부를 다시 활성화했습니다."}
                         </p>
                       ) : p.action.type === "training" ? (
                         <p className="text-sm">

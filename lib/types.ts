@@ -239,6 +239,7 @@ export type DefenseAction = {
   used_card_slot: number | null;
   training_from_slot: number | null;
   training_to_slot: number | null;
+  rest_card_slot: string | null;
 };
 
 export type DefenseScore = {

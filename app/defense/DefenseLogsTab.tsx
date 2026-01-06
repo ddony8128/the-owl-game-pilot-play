@@ -11,11 +11,11 @@ function getRoundLabelForLog(round: number): string {
   if (round === 1) return "튜토리얼 1라운드";
   if (round === 2) return "튜토리얼 2라운드";
   if (round === 3) return "튜토리얼 결과";
-  if (round >= 4 && round <= 13) {
-    const gameRound = round - 3; // 4~13 -> 1~10라운드
+  if (round >= 4 && round <= 15) {
+    const gameRound = round - 3; // 4~15 -> 1~12라운드
     return `${gameRound}라운드`;
   }
-  if (round === 14) return "게임 종료";
+  if (round === 16) return "게임 종료";
   return `알 수 없음 (DB round ${round})`;
 }
 

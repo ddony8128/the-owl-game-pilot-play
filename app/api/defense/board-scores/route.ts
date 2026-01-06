@@ -28,9 +28,12 @@ export async function GET(request: Request) {
     );
   }
 
-  // 튜토리얼 결과(3), 게임 종료(14)는 직전에 끝난 라운드의 스냅샷을 사용
+  // 튜토리얼 결과(3), 중간 점수 발표(7, 11), 게임 종료(16)는
+  // 직전에 끝난 라운드의 스냅샷을 사용한다.
   const sourceRound =
-    round === 3 || round === 14 ? round - 1 : round;
+    round === 3 || round === 7 || round === 11 || round === 16
+      ? round - 1
+      : round;
 
   const [playersRes, scoresSnapRes] = await Promise.all([
     supabase.from("players").select("id, nickname, created_at"),

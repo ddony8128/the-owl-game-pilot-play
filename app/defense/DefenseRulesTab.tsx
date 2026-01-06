@@ -12,7 +12,7 @@ export function DefenseRulesTab() {
             <span className="font-semibold">게임 종료</span>
             <ul className="ml-4 list-disc">
               <li>몬스터 24마리가 모두 쓰러지거나 도망가면 게임 종료</li>
-              <li>또는 10라운드 종료 시 게임 종료</li>
+              <li>또는 12라운드 종료 시 게임 종료</li>
             </ul>
           </li>
           <li>
@@ -82,8 +82,7 @@ export function DefenseRulesTab() {
         <div className="space-y-1">
           <p className="font-semibold text-zinc-100">① 행동 (5분간 진행)</p>
           <p className="text-zinc-100">
-            각 플레이어는 아래 행동 중 하나를 선택합니다. 선택하지 않으면
-            휴식으로 자동 결정됩니다.
+            각 플레이어는 아래 행동 중 하나를 선택합니다.
           </p>
           <ul className="list-disc pl-4">
             <li>
@@ -96,7 +95,9 @@ export function DefenseRulesTab() {
             <li>
               <span className="font-semibold">휴식</span>
               <ul className="ml-4 list-disc">
-                <li>자신의 비활성화된 숫자 카드 전부를 다시 활성화합니다.</li>
+                <li>
+                  자신의 비활성화된 숫자 카드 중 최대 3장을 골라 활성화합니다.
+                </li>
               </ul>
             </li>
             <li>
@@ -156,7 +157,14 @@ export function DefenseRulesTab() {
           <ul className="list-decimal pl-5">
             <li>모든 몬스터의 잔여 시간을 1 줄입니다.</li>
             <li>잔여 시간이 0이 된 몬스터는 도망쳐서 대기열에서 제거됩니다.</li>
-            <li>대기열의 빈 칸을 남아있는 몬스터 중 무작위로 채웁니다.</li>
+            <li>
+              도망친 몬스터 한 마리마다 모든 플레이어의 가장 큰 활성 카드 1장을
+              비활성화합니다.
+            </li>
+            <li>
+              대기열의 빈 칸을 남아있는 몬스터 중 최대한 겹치지 않도록 무작위로
+              채웁니다.
+            </li>
             <li>다음 라운드를 시작합니다.</li>
           </ul>
         </div>

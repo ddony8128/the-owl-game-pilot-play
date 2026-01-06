@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
@@ -96,6 +96,7 @@ function DefenseInner() {
   const [timerState, setTimerState] = useState<TimerState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
+  const timerMetaRef = useRef<DefenseTimerApi | null>(null);
 
   const loadState = useCallback(async () => {
     if (!player?.nickname) return;
@@ -140,6 +141,20 @@ function DefenseInner() {
     return () => {
       cancelled = true;
       clearInterval(id);
+    };
+  }, [loadState]);
+
+  // 브라우저가 다시 활성화될 때 최신 상태를 한 번 더 가져온다 (모바일 복귀/탭 재진입 대비)
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadState();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [loadState]);
 
@@ -195,8 +210,27 @@ function DefenseInner() {
           .json()
           .catch(() => null)) as DefenseTimerApi | null;
         if (!res.ok || !json || cancelled) return;
+
+        const api = json;
+        const prevMeta = timerMetaRef.current;
+
+        // 타이머 메타데이터(timerStart, timerStartAt, pauseAt, totalSeconds)가
+        // 바뀌었을 때에만 서버 기준으로 남은 시간을 재계산한다.
+        if (
+          prevMeta &&
+          prevMeta.timerStart === api.timerStart &&
+          prevMeta.timerStartAt === api.timerStartAt &&
+          prevMeta.pauseAt === api.pauseAt &&
+          prevMeta.totalSeconds === api.totalSeconds
+        ) {
+          // 아무 변화가 없으면 로컬 1초 틱만 사용 (타이머 튐 방지)
+          return;
+        }
+
         const now = Date.now();
-        setTimerState(computeRemaining(json, now));
+        const nextState = computeRemaining(api, now);
+        timerMetaRef.current = api;
+        setTimerState(nextState);
       } catch {
         // 타이머 오류는 게임 진행을 막지 않음
       }
@@ -226,17 +260,45 @@ function DefenseInner() {
     };
   }, [computeRemaining]);
 
-  const tabsDef = useMemo(
-    () =>
-      [
-        { key: "info", label: "정보" },
-        { key: "action", label: "행동" },
-        { key: "rules", label: "규칙" },
-        { key: "dex", label: "몬스터 도감" },
-        { key: "logs", label: "로그" },
-      ] as { key: TabKey; label: string }[],
-    []
-  );
+  const roundNumber = defenseState?.round ?? null;
+  const getRoundLabel = (r: number | null) => {
+    if (r == null) return "-";
+    if (r === 0) return "준비";
+    if (r === 1) return "튜토리얼 1라운드";
+    if (r === 2) return "튜토리얼 2라운드";
+    if (r === 3) return "튜토리얼 결과";
+    if (r >= 4 && r <= 15) {
+      const gameRound = r - 3; // 4~15 -> 1~12라운드
+      return `${gameRound}라운드`;
+    }
+    if (r === 16) return "게임 종료";
+    return `알 수 없음 (DB round ${r})`;
+  };
+
+  const totalSeconds = timerState?.remainingSeconds ?? null;
+  const minutes =
+    totalSeconds != null ? Math.floor(totalSeconds / 60) % 60 : null;
+  const seconds = totalSeconds != null ? totalSeconds % 60 : null;
+
+  const roundLabel = getRoundLabel(roundNumber);
+  const isInitialLoading = !defenseState;
+  const hideInfoAndAction =
+    roundNumber === 0 || roundNumber === 3 || roundNumber === 16;
+
+  const tabsDef = useMemo(() => {
+    const base: { key: TabKey; label: string }[] = [
+      { key: "info", label: "정보" },
+      { key: "rules", label: "규칙" },
+      { key: "dex", label: "몬스터 도감" },
+      { key: "logs", label: "로그" },
+    ];
+
+    if (!hideInfoAndAction) {
+      base.splice(1, 0, { key: "action", label: "행동" });
+    }
+
+    return base;
+  }, [hideInfoAndAction]);
 
   useEffect(() => {
     if (!tabsDef.find((t) => t.key === activeTab) && tabsDef.length > 0) {
@@ -252,29 +314,6 @@ function DefenseInner() {
       </div>
     );
   }
-
-  const roundNumber = defenseState?.round ?? null;
-  const getRoundLabel = (r: number | null) => {
-    if (r == null) return "-";
-    if (r === 0) return "준비";
-    if (r === 1) return "튜토리얼 1라운드";
-    if (r === 2) return "튜토리얼 2라운드";
-    if (r === 3) return "튜토리얼 결과";
-    if (r >= 4 && r <= 13) {
-      const gameRound = r - 3; // 4~13 -> 1~10라운드
-      return `${gameRound}라운드`;
-    }
-    if (r === 14) return "게임 종료";
-    return `알 수 없음 (DB round ${r})`;
-  };
-
-  const totalSeconds = timerState?.remainingSeconds ?? null;
-  const minutes =
-    totalSeconds != null ? Math.floor(totalSeconds / 60) % 60 : null;
-  const seconds = totalSeconds != null ? totalSeconds % 60 : null;
-
-  const roundLabel = getRoundLabel(roundNumber);
-  const isInitialLoading = !defenseState;
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
@@ -296,9 +335,10 @@ function DefenseInner() {
               cards={defenseState?.cards ?? []}
               score={defenseState?.score ?? 0}
               isLoading={isInitialLoading}
+              showQueue={!hideInfoAndAction}
             />
           )}
-          {activeTab === "action" && defenseState && (
+          {activeTab === "action" && defenseState && !hideInfoAndAction && (
             <DefenseActionTab
               state={defenseState}
               nickname={player.nickname}

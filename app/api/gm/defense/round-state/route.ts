@@ -86,7 +86,7 @@ export async function GET(request: Request) {
     supabase
       .from("defense_action")
       .select(
-        "round, player_id, action_type, target_monster_id, used_card_slot, training_from_slot, training_to_slot"
+        "round, player_id, action_type, target_monster_id, used_card_slot, training_from_slot, training_to_slot, rest_card_slot"
       )
       .eq("round", round),
     supabase
@@ -168,6 +168,7 @@ export async function GET(request: Request) {
       trainingFromValue?: number | null;
       trainingToBeforeValue?: number | null;
       trainingToAfterValue?: number | null;
+      restValues?: number[] | null;
     }
   >();
 
@@ -179,6 +180,7 @@ export async function GET(request: Request) {
       trainingFromValue?: number | null;
       trainingToBeforeValue?: number | null;
       trainingToAfterValue?: number | null;
+      restValues?: number[] | null;
     };
 
     const playerCards = cardsByPlayer.get(a.player_id) ?? [];
@@ -213,6 +215,12 @@ export async function GET(request: Request) {
         base.trainingToBeforeValue = toCard.card_value;
         base.trainingToAfterValue = toCard.card_value + 1;
       }
+    } else if (a.action_type === "rest" && a.rest_card_slot) {
+      const nums = a.rest_card_slot
+        .split(/[,\s]+/)
+        .map((s) => Number(s))
+        .filter((n) => Number.isFinite(n));
+      base.restValues = nums.length > 0 ? nums : null;
     }
 
     actionByPlayer.set(a.player_id, base);

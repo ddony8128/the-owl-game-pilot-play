@@ -22,6 +22,7 @@ type MonsterProps = {
   }[];
   score: number;
   isLoading: boolean;
+  showQueue: boolean;
 };
 
 export function DefenseInfoTab({
@@ -29,6 +30,7 @@ export function DefenseInfoTab({
   cards,
   score,
   isLoading,
+  showQueue,
 }: MonsterProps) {
   const sortedMonsters = [...monsters].sort(
     (a, b) => a.slotIndex - b.slotIndex
@@ -38,19 +40,16 @@ export function DefenseInfoTab({
 
   return (
     <div className="space-y-4 text-base text-zinc-200">
-      <section className="space-y-2">
-        <h2 className="text-lg font-semibold">대기열 몬스터</h2>
-        {isLoading ? (
-          // 1) 서버 응답 전: 로딩 상태
-          <p className="text-sm text-zinc-400">몬스터들이 습격 중입니다!</p>
-        ) : sortedMonsters.length === 0 ? (
-          // 3) 서버 응답 후, 대기열이 비어 있음 = 게임 종료
-          <p className="text-sm text-zinc-500">
-            모든 몬스터를 무찔렀습니다! 게임이 종료되었습니다.
-          </p>
-        ) : (
-          // 2) 서버 응답 후, 대기열에 몬스터가 있음
-          <>
+      {showQueue && (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold">대기열 몬스터</h2>
+          {isLoading ? (
+            <p className="text-sm text-zinc-400">몬스터들이 습격 중입니다!</p>
+          ) : sortedMonsters.length === 0 ? (
+            <p className="text-sm text-zinc-500">
+              모든 몬스터를 무찔렀습니다! 게임이 종료되었습니다.
+            </p>
+          ) : (
             <div className="grid gap-3">
               {sortedMonsters.map((m) => (
                 <div
@@ -85,9 +84,9 @@ export function DefenseInfoTab({
                 </div>
               ))}
             </div>
-          </>
-        )}
-      </section>
+          )}
+        </section>
+      )}
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">내 점수 및 카드</h2>

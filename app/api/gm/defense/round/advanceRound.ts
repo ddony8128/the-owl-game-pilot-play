@@ -19,11 +19,11 @@ function getRoundLabelForLog(round: number): string {
   if (round === 1) return "튜토리얼 1라운드";
   if (round === 2) return "튜토리얼 2라운드";
   if (round === 3) return "튜토리얼 결과";
-  if (round >= 4 && round <= 13) {
-    const gameRound = round - 3; // 4~13 -> 1~10라운드
+  if (round >= 4 && round <= 15) {
+    const gameRound = round - 3; // 4~15 -> 1~12라운드
     return `${gameRound}라운드`;
   }
-  if (round === 14) return "게임 종료";
+  if (round === 16) return "게임 종료";
   return `알 수 없음 (DB round ${round})`;
 }
 
@@ -82,65 +82,13 @@ export async function handleDefenseAdvanceRound(
     monstersById.set(m.id, m);
   });
 
-  // 1-B. 몬스터 스냅샷: 라운드 시작 시점의 active 몬스터 상태를 저장
-  const activeAtStart = monsters.filter((m) => m.status === "active");
-  if (activeAtStart.length > 0) {
-    await supabase.from("defense_monster_snapshot").insert(
-      activeAtStart.map((m) => ({
-        instance_id: m.id,
-        monster_id: m.monster_id,
-        round: current.round,
-        current_hp: m.current_hp,
-        remaining_time: m.remaining_time,
-        slot_index: m.slot_index,
-      }))
-    );
-  }
-
   const playerById = new Map<string, Player>();
   players.forEach((p) => playerById.set(p.id, p));
 
   // 2. 액션 처리: 휴식/훈련/전투
-  // 2-1. 휴식: 모든 카드 활성화
-  // - 명시적으로 휴식 선택한 플레이어 + 이번 라운드에 아무 행동도 선택하지 않은 플레이어
-  const explicitRestPlayers = actions
-    .filter((a) => a.action_type === "rest")
-    .map((a) => a.player_id);
-
-  const playersWithAction = new Set(actions.map((a) => a.player_id));
-  const implicitRestPlayers = players
-    .filter((p) => !playersWithAction.has(p.id))
-    .map((p) => p.id);
-
-  // 행동을 선택하지 않은 플레이어는 자동으로 휴식 행동을 기록한다.
-  if (implicitRestPlayers.length > 0) {
-    await supabase.from("defense_action").insert(
-      implicitRestPlayers.map((pid) => ({
-        round: current.round,
-        player_id: pid,
-        action_type: "rest",
-      }))
-    );
-  }
-
-  const restPlayers = Array.from(
-    new Set([...explicitRestPlayers, ...implicitRestPlayers])
-  );
-
-  if (restPlayers.length > 0) {
-    await supabase
-      .from("defense_card_state")
-      .update({ is_active: true })
-      .in("player_id", restPlayers);
-
-    // 로그
-    const restLogs = restPlayers.map((pid) => ({
-      player_id: pid,
-      round: current.round,
-      log: `휴식: 모든 숫자 카드를 다시 활성화했습니다.`,
-    }));
-    await supabase.from("defense_player_log").insert(restLogs);
-  }
+  // 2-1. 휴식
+  // - 휴식 효과(비활성 카드 최대 3장 활성화)는 /api/defense/action에서 즉시 적용된다.
+  // - 여기서는 자동 휴식 처리나 추가 카드 변경을 하지 않는다.
 
   // 2-2. 훈련: 선택한 활성 카드 비활성 + (어떤 카드든) 값 +1
   const trainingActions = actions.filter((a) => a.action_type === "training");
@@ -357,7 +305,7 @@ export async function handleDefenseAdvanceRound(
     }
   }
 
-  // 만료된 몬스터마다, 모든 플레이어의 가장 작은 활성 카드 하나 비활성화
+  // 만료된 몬스터마다, 모든 플레이어의 가장 큰 활성 카드 하나 비활성화
   if (expiredMonsters.length > 0) {
     for (const m of expiredMonsters) {
       const def = DEFENSE_MONSTERS_BY_ID[m.monster_id] ?? null;
@@ -367,18 +315,18 @@ export async function handleDefenseAdvanceRound(
           .select("player_id, card_slot, card_value, is_active")
           .eq("player_id", p.id)
           .eq("is_active", true)
-          .order("card_value", { ascending: true })
-          .order("card_slot", { ascending: true })
+          .order("card_value", { ascending: false })
+          .order("card_slot", { ascending: false })
           .limit(1);
 
         if (playerCardsRes.error) {
           throw new Error(playerCardsRes.error.message);
         }
 
-        const smallest = (playerCardsRes.data || []) as DefenseCardState[];
-        if (smallest.length === 0) continue;
+        const biggest = (playerCardsRes.data || []) as DefenseCardState[];
+        if (biggest.length === 0) continue;
 
-        const card = smallest[0];
+        const card = biggest[0];
         const value = card.card_value;
         await supabase
           .from("defense_card_state")
@@ -391,7 +339,7 @@ export async function handleDefenseAdvanceRound(
           round: current.round,
           log: `${
             def?.name ?? `몬스터 ${m.monster_id}`
-          }의 시간이 만료되어, 가장 작은 활성 카드(값 ${value})가 비활성화되었습니다.`,
+          }의 시간이 만료되어, 가장 큰 활성 카드(값 ${value})가 비활성화되었습니다.`,
         });
       }
     }
@@ -416,7 +364,11 @@ export async function handleDefenseAdvanceRound(
   const activeNow = (activeNowRes.data || []) as DefenseMonsterInstance[];
 
   const activeBySlot = new Map<number, DefenseMonsterInstance>();
-  activeNow.forEach((m) => activeBySlot.set(m.slot_index, m));
+  const existingMonsterTypes = new Set<number>();
+  activeNow.forEach((m) => {
+    activeBySlot.set(m.slot_index, m);
+    existingMonsterTypes.add(m.monster_id);
+  });
 
   const newInstances: {
     id: string;
@@ -428,16 +380,28 @@ export async function handleDefenseAdvanceRound(
     spawned_round: number;
   }[] = [];
 
+  const newlyChosenTypes = new Set<number>();
+
   for (let slot = 0; slot < 4; slot += 1) {
     if (activeBySlot.has(slot)) continue;
 
-    const available = DEFENSE_MONSTERS.filter(
-      (m) => (countsMap.get(m.id) ?? 0) > 0
-    );
-    if (available.length === 0) break;
+    const forbidden = new Set<number>([
+      ...existingMonsterTypes,
+      ...newlyChosenTypes,
+    ]);
 
-    const chosen =
-      available[Math.floor(Math.random() * available.length)] ?? null;
+    let pool = DEFENSE_MONSTERS.filter(
+      (m) => (countsMap.get(m.id) ?? 0) > 0 && !forbidden.has(m.id)
+    );
+
+    // 남은 겹치지 않는 몬스터가 없다면, 단순히 남은 몬스터 중에서 선택
+    if (pool.length === 0) {
+      pool = DEFENSE_MONSTERS.filter((m) => (countsMap.get(m.id) ?? 0) > 0);
+    }
+
+    if (pool.length === 0) break;
+
+    const chosen = pool[Math.floor(Math.random() * pool.length)] ?? null;
     if (!chosen) break;
 
     newInstances.push({
@@ -450,6 +414,7 @@ export async function handleDefenseAdvanceRound(
       spawned_round: nextRound,
     });
     countsMap.set(chosen.id, (countsMap.get(chosen.id) ?? 0) - 1);
+    newlyChosenTypes.add(chosen.id);
   }
 
   if (newInstances.length > 0) {
@@ -494,4 +459,31 @@ export async function handleDefenseAdvanceRound(
     );
   }
 
+  // 5-2. 다음 라운드 시작 시점의 몬스터 스냅샷 저장 (nextRound 기준)
+  const nextMonstersRes = await supabase
+    .from("defense_monster_instance")
+    .select(
+      "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
+    )
+    .eq("status", "active");
+
+  if (nextMonstersRes.error) {
+    throw new Error(nextMonstersRes.error.message);
+  }
+
+  const nextMonsters =
+    (nextMonstersRes.data || []) as DefenseMonsterInstance[];
+
+  if (nextMonsters.length > 0) {
+    await supabase.from("defense_monster_snapshot").insert(
+      nextMonsters.map((m) => ({
+        instance_id: m.id,
+        monster_id: m.monster_id,
+        round: nextRound,
+        current_hp: m.current_hp,
+        remaining_time: m.remaining_time,
+        slot_index: m.slot_index,
+      }))
+    );
+  }
 }
