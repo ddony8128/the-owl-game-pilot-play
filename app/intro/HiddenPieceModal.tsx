@@ -170,7 +170,7 @@ export function HiddenPieceModal({ open, onClose, onResetIntro }: Props) {
                 </p>
                 <p className="whitespace-pre-line text-sm text-zinc-200">
                   {resultMessage ??
-                    "게임 마스터에게 가서 다음 주문을 외치세요.\n'빛나는 눈의 지혜를 찬미하부엉!\n그 편린의 깃털을 하사해주시부엉!'"}
+                    "에게 가서 다음 주문을 외치세요.\n'빛나는 눈의 지혜를 찬미하부엉!\n그 편린의 깃털을 하사해주시부엉!'"}
                 </p>
                 <button
                   className="h-10 rounded-lg bg-zinc-100 text-sm font-semibold text-zinc-900 hover:bg-white"
