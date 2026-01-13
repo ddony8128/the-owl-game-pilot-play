@@ -13,7 +13,7 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
   {
     id: 1,
     points: 2,
-    maxHp: 3,
+    maxHp: 1,
     baseTime: 2,
     baseCount: 6,
     name: "스컬 스파이더",
@@ -23,9 +23,9 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
   },
   {
     id: 2,
-    points: 6,
-    maxHp: 7,
-    baseTime: 4,
+    points: 3,
+    maxHp: 5,
+    baseTime: 5,
     baseCount: 4,
     name: "종이 연구원",
     description:
@@ -34,9 +34,9 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
   },
   {
     id: 3,
-    points: 8,
+    points: 9,
     maxHp: 9,
-    baseTime: 4,
+    baseTime: 5,
     baseCount: 5,
     name: "복싱 팩맨",
     description: "눈이 마주치면 남녀노소 가리지 않고 복싱 시합을 요구합니다.",
@@ -44,8 +44,8 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
   },
   {
     id: 4,
-    points: 9,
-    maxHp: 10,
+    points: 12,
+    maxHp: 11,
     baseTime: 3,
     baseCount: 4,
     name: "슬렌더맨",
@@ -55,9 +55,9 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
   },
   {
     id: 5,
-    points: 12,
-    maxHp: 12,
-    baseTime: 3,
+    points: 16,
+    maxHp: 13,
+    baseTime: 2,
     baseCount: 3,
     name: "문어의 악마",
     description: "두족류의 원수인 인간을 산채로 요리하고 싶어합니다.",
@@ -65,7 +65,7 @@ export const DEFENSE_MONSTERS: DefenseMonsterDefinition[] = [
   },
   {
     id: 6,
-    points: 16,
+    points: 21,
     maxHp: 15,
     baseTime: 6,
     baseCount: 2,
