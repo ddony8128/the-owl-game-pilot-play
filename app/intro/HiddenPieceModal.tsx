@@ -146,7 +146,7 @@ export function HiddenPieceModal({ open, onClose, onResetIntro }: Props) {
 
         {step === "input" && (
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-zinc-200">번호를 입력해 주세요.</p>
+            <p className="text-sm text-zinc-200">번호를 입력해 주세요. 선착순 1명, 깃털 2개 획득</p>
             <textarea
               className="h-24 w-full rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-sm outline-none focus:border-zinc-400"
               value={code}

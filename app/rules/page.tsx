@@ -7,7 +7,6 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 const RULE_LABELS: Record<string, string> = {
   intro: "게임 전체 안내",
   subway: "이상교통 8번출구",
-  hidden_piece: "히든 피스",
   mafia: "자본주의 마피아",
   defense: "디펜스 딜레마",
 };
@@ -42,11 +41,9 @@ export default function RulesPage() {
           const handleClick = () => {
             const pdfMap: Record<string, string> = {
               intro: "/rulebook/avsmvlkdmv_intro.pdf",
-              hidden_piece: "/rulebook/1491j0rjflcelfe_hidden.pdf",
               subway: "/rulebook/13fsm4wg_subway.pdf",
               mafia: "/rulebook/1141rfwkvm_mafia.pdf",
-              quiz: "/rulebook/1rqvskldm_quizshow.pdf",
-              defense: "/rulebook/defense.pdf", // 디펜스 딜레마 더미 파일
+              defense: "/rulebook/1asdfd15v_defense.pdf", // 디펜스 딜레마 더미 파일
             };
 
             const url = pdfMap[key];
