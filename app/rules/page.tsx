@@ -43,7 +43,7 @@ export default function RulesPage() {
               intro: "/rulebook/avsmvlkdmv_intro.pdf",
               subway: "/rulebook/13fsm4wg_subway.pdf",
               mafia: "/rulebook/1141rfwkvm_mafia.pdf",
-              defense: "/rulebook/1asdfd15v_defense.pdf", // 디펜스 딜레마 더미 파일
+              defense: "/rulebook/1asdfd15v_defense.pdf",
             };
 
             const url = pdfMap[key];
