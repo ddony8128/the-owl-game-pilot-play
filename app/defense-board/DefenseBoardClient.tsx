@@ -162,7 +162,7 @@ export function DefenseBoardClient() {
     };
   }, [currentRound, viewKind]);
 
-  // 튜토리얼 결과(3), 게임 종료(14)에서는 점수판을 보여주기 위해 별도 스코어 데이터 로드
+  // 튜토리얼 결과(3), 게임 종료(16)에서는 점수판을 보여주기 위해 별도 스코어 데이터 로드
   useEffect(() => {
     if (!isScoreRound || currentRound <= 0) return;
 
