@@ -172,7 +172,7 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
 - 이동/정답 판정 로직(`POST /api/subway/move`)
   - 요청 바디: `{ nickname, direction }` (`direction`은 `"forward" | "back" | "reset"`)
   - 서버에서 아래 규칙을 적용해 `subway_players`를 업데이트합니다.
-    - **30초 룰**: 현재 장소에 도착한 지 30초 미만에 이동하면 무조건 `wrong` 처리
+    - **10초 룰**: 현재 장소에 도착한 지 10초 미만에 이동하면 무조건 `wrong` 처리
     - **장소 그룹별 정답 방향**
       - `01_only_door`, `02_food`, `03_capture_monster`, `05_real_world` 폴더 내 이미지:
         - **뒤로 가기(back)** → `correct`

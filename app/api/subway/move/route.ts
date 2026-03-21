@@ -402,7 +402,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // 30초 이내 이동 여부 확인
+  // 10초 이내 이동 여부 확인
   const { data: lastEnter, error: lastEnterError } = await supabase
     .from("subway_player_events")
     .select("id, event_type, event_value, created_at")
@@ -423,7 +423,7 @@ export async function POST(request: Request) {
   let reason = "";
 
   const now = Date.now();
-  // 30초 룰은 0번 출구에 있을 때만 적용
+  // 10초 룰은 0번 출구에 있을 때만 적용
   if (state.exit_number === 0 && lastEnter?.created_at) {
     const enteredAt = new Date(lastEnter.created_at).getTime();
     if (!Number.isNaN(enteredAt)) {
@@ -433,12 +433,24 @@ export async function POST(request: Request) {
           : enteredAt;
 
       const diff = now - effectiveStartMs;
-      if (diff < 30_000) {
-        // 30초 이내에는 무조건 wrong
+      if (diff < 10_000) {
+        // 10초 이내에는 무조건 wrong
         result = "wrong";
         reason = "too_fast";
-      } else if (diff >= 30_000 && !openedRuleIds.has(1)) {
-        // 규칙 1 공개 조건 충족 (한 장소에서 30초 이상 머무름)
+      }
+    }
+  }
+
+  // 규칙 1 공개: 어디에서든 30초 이상 머무르면 공개
+  if (lastEnter?.created_at && !openedRuleIds.has(1)) {
+    const enteredAt = new Date(lastEnter.created_at).getTime();
+    if (!Number.isNaN(enteredAt)) {
+      const effectiveStartMs =
+        timerStartAtMs != null
+          ? Math.max(timerStartAtMs, enteredAt)
+          : enteredAt;
+
+      if (now - effectiveStartMs >= 30_000) {
         await insertRuleOpenedEvent(supabase, player.id, 1);
         openedRuleIds.add(1);
       }
