@@ -42,6 +42,133 @@ export async function handleVoteToEnd(
   }
 
   const votes = voteRows ?? [];
+
+  // 공통: 마피아가 경제사범으로 뽑히지 않았을 때 마피아에게 가장 비싼 주식 1주 지급
+  const rewardMafiaWithStock = async (): Promise<
+    Omit<MafiaAbilityResult, "id" | "created_at">[]
+  > => {
+    const results: Omit<MafiaAbilityResult, "id" | "created_at">[] = [];
+
+    // 모든 주식 가격 조회
+    const { data: stockRows, error: stockError } = await supabase
+      .from("mafia_stock_state")
+      .select("stock_key, price");
+
+    if (stockError) {
+      throw new Error(
+        stockError.message ?? "주식 가격 조회에 실패했습니다."
+      );
+    }
+
+    const stocks = (stockRows ?? []) as { stock_key: string; price: number }[];
+    if (stocks.length === 0) return results;
+
+    // 최고가 주식 찾기
+    let maxPrice = 0;
+    for (const s of stocks) {
+      if (s.price > maxPrice) maxPrice = s.price;
+    }
+    const topStocks = stocks
+      .filter((s) => s.price === maxPrice)
+      .map((s) => s.stock_key);
+
+    if (topStocks.length === 0) return results;
+
+    // 마피아 플레이어 조회
+    const { data: mafiaRows, error: mafiaError } = await supabase
+      .from("mafia_player_state")
+      .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("is_mafia", true);
+
+    if (mafiaError) {
+      throw new Error(
+        mafiaError.message ?? "마피아 플레이어 조회에 실패했습니다."
+      );
+    }
+
+    const mafiaPlayers = (mafiaRows ?? []) as MafiaPlayerState[];
+    if (mafiaPlayers.length === 0) return results;
+
+    // 각 마피아에게 주식 지급
+    const mafiaUpdates: Partial<MafiaPlayerState>[] = [];
+    for (const mp of mafiaPlayers) {
+      if (!mp.player_id) continue;
+
+      // 최고가 주식이 여러 개면 랜덤 선택
+      const chosenStock =
+        topStocks.length === 1
+          ? topStocks[0]!
+          : topStocks[Math.floor(Math.random() * topStocks.length)]!;
+
+      const rawStocks = (mp as unknown as { stocks?: unknown }).stocks;
+      const playerStocks: Record<string, { amount: number }> =
+        rawStocks && typeof rawStocks === "object"
+          ? { ...(rawStocks as Record<string, { amount: number }>) }
+          : {};
+
+      const prevAmount =
+        typeof playerStocks[chosenStock]?.amount === "number"
+          ? playerStocks[chosenStock].amount
+          : 0;
+      playerStocks[chosenStock] = { amount: prevAmount + 1 };
+
+      mafiaUpdates.push({
+        player_id: mp.player_id,
+        stocks: playerStocks,
+      } as Partial<MafiaPlayerState>);
+
+      // 마피아 전용 메시지
+      results.push({
+        player_id: mp.player_id,
+        round_number: current.round_number,
+        phase: "vote",
+        job: mp.job,
+        category: "mafia_stock_reward",
+        message: `투표 결과로 마피아인 당신에게 ${chosenStock} 1주가 지급되었습니다.`,
+        payload: { stock_key: chosenStock, amount: 1 },
+      });
+    }
+
+    if (mafiaUpdates.length > 0) {
+      const { error: updateError } = await supabase
+        .from("mafia_player_state")
+        .upsert(mafiaUpdates, { onConflict: "player_id" });
+
+      if (updateError) {
+        throw new Error(
+          updateError.message ?? "마피아 주식 지급을 반영하지 못했습니다."
+        );
+      }
+    }
+
+    // 전체 공개 메시지
+    const { data: allRows, error: allError } = await supabase
+      .from("mafia_player_state")
+      .select("player_id, job");
+
+    if (allError) {
+      throw new Error(
+        allError.message ??
+          "마피아 주식 보상 안내를 위한 플레이어 조회에 실패했습니다."
+      );
+    }
+
+    for (const row of (allRows ?? []) as MafiaPlayerState[]) {
+      if (!row.player_id) continue;
+      results.push({
+        player_id: row.player_id,
+        round_number: current.round_number,
+        phase: "vote",
+        job: row.job,
+        category: "mafia_stock_reward_announce",
+        message: "마피아에게 주식 보상이 지급되었습니다.",
+        payload: null,
+      });
+    }
+
+    return results;
+  };
+
   // 공통: 경제사범이 뽑히지 않았을 때 모든 플레이어에게 안내 메시지를 남기는 함수
   const insertNoEconAbilityResult = async () => {
     const { data: stateRows, error: stateError } = await supabase
@@ -69,6 +196,10 @@ export async function handleVoteToEnd(
         payload: null,
       });
     }
+
+    // 마피아에게 가장 비싼 주식 지급
+    const rewardResults = await rewardMafiaWithStock();
+    abilityResults.push(...rewardResults);
 
     if (abilityResults.length > 0) {
       const { error: abilityError } = await supabase
@@ -361,6 +492,10 @@ export async function handleVoteToEnd(
         },
       });
     }
+
+    // 마피아에게 가장 비싼 주식 지급
+    const rewardResults = await rewardMafiaWithStock();
+    abilityResults.push(...rewardResults);
   }
 
   if (abilityResults.length > 0) {
