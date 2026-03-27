@@ -112,7 +112,7 @@ export default function IntroPage() {
         router.push("/vote");
         break;
       case "survey":
-        window.open("https://forms.gle/wZ6R4PtJvKWC2CD88", "_blank");
+        window.open("https://forms.gle/dTrfUsKRTuJC3CDr8", "_blank");
         break;
       default:
         break;
