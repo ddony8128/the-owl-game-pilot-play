@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/not_system/project/25-11/TheOwlGamePilotProgram/the-owl-game-pilot-play/app/defense* -name \"*.ts\" -o -name \"*.tsx\")",
+      "Bash(grep -r \"10\\\\|8\\\\|player\\\\|player_count\\\\|마피아.*수\\\\|마피아.*명\" /c/not_system/project/25-11/TheOwlGamePilotProgram/the-owl-game-pilot-play/app/api/gm/mafia/advance-phase/*.ts)",
+      "Bash(find /c/not_system/project/25-11/TheOwlGamePilotProgram/the-owl-game-pilot-play -maxdepth 3 -type d -not -path */node_modules/* -not -path */.next/* -not -path */.git/*)",
+      "Bash(wc -l /c/not_system/project/25-11/TheOwlGamePilotProgram/the-owl-game-pilot-play/app/api/**/*.ts)",
+      "Bash(npx tsc:*)",
+      "Bash(mv vari_owl_1.png tmp_4.png)",
+      "Bash(mv vari_owl_2.png tmp_5.png)",
+      "Bash(mv vari_owl_3.png tmp_2.png)",
+      "Bash(mv vari_owl_4.png tmp_3.png)",
+      "Bash(mv vari_owl_5.png tmp_1.png)",
+      "Bash(xargs grep:*)"
+    ]
+  }
+}
