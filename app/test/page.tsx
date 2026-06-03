@@ -20,23 +20,8 @@ const PLAYER_GAMES: { key: string; label: string; href: (n: string) => string }[
     { key: "vote", label: "투표", href: (n) => `/vote?as=${n}` },
   ];
 
-const GM_LINKS: { label: string; href: string }[] = [
-  { label: "GM 메인", href: "/dashboard/x9a2k7/main" },
-  { label: "GM 이상교통", href: "/dashboard/x9a2k7/subway" },
-  { label: "GM 디펜스", href: "/dashboard/x9a2k7/defense" },
-  { label: "GM 마피아", href: "/dashboard/x9a2k7/mafia" },
-  { label: "디펜스 보드(빔)", href: "/defense-board" },
-  { label: "GM 메모", href: "/dashboard/x9a2k7/memo" },
-];
-
-const START_GAMES: { game: string; label: string }[] = [
-  { game: "ready", label: "대기(ready)" },
-  { game: "subway", label: "이상교통" },
-  { game: "mafia_tutorial", label: "마피아 튜토리얼" },
-  { game: "mafia", label: "마피아 본게임" },
-  { game: "defense", label: "디펜스" },
-  { game: "vote", label: "투표" },
-];
+// GM 대시보드로 가는 링크 하나. 게임 전환·규칙 공개·페이즈 진행 등은 모두 여기서.
+const GM_DASHBOARD_HREF = "/dashboard/x9a2k7/main";
 
 const enabled = process.env.NEXT_PUBLIC_ENABLE_TEST_CONSOLE === "1";
 
@@ -118,35 +103,9 @@ export default function TestConsolePage() {
         </div>
       )}
 
-      {/* 게임 시작 */}
-      <section className="mt-6">
-        <h2 className="font-semibold">① 게임 시작 (active_game 설정)</h2>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {START_GAMES.map((g) => (
-            <button
-              key={g.game}
-              disabled={busy}
-              onClick={() =>
-                call(
-                  "/api/test/start-game",
-                  { game: g.game },
-                  `active_game → ${g.game}`
-                )
-              }
-              className="rounded border px-3 py-1 hover:bg-gray-100 disabled:opacity-50"
-            >
-              {g.label}
-            </button>
-          ))}
-        </div>
-        <p className="mt-1 text-xs text-gray-400">
-          마피아/디펜스의 자산·라운드 진행은 아래 GM 대시보드에서 페이즈를 넘기세요.
-        </p>
-      </section>
-
       {/* 플레이어 생성 */}
       <section className="mt-6">
-        <h2 className="font-semibold">② 플레이어 생성</h2>
+        <h2 className="font-semibold">① 플레이어 생성</h2>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
             value={newName}
@@ -199,7 +158,7 @@ export default function TestConsolePage() {
 
       {/* 플레이어 목록 + 입장 링크 */}
       <section className="mt-6">
-        <h2 className="font-semibold">③ 플레이어 입장 (각 버튼 = 새 탭 = 독립 플레이어)</h2>
+        <h2 className="font-semibold">② 플레이어 입장 (각 버튼 = 새 탭 = 독립 플레이어)</h2>
         {players.length === 0 ? (
           <p className="mt-2 text-gray-400">플레이어가 없습니다.</p>
         ) : (
@@ -230,23 +189,23 @@ export default function TestConsolePage() {
 
       {/* GM 대시보드 */}
       <section className="mt-6">
-        <h2 className="font-semibold">④ GM 대시보드</h2>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {GM_LINKS.map((l) => (
-            <button
-              key={l.href}
-              onClick={() => open(l.href)}
-              className="rounded border px-3 py-1 hover:bg-gray-100"
-            >
-              {l.label}
-            </button>
-          ))}
+        <h2 className="font-semibold">③ GM 대시보드</h2>
+        <div className="mt-2">
+          <button
+            onClick={() => open(GM_DASHBOARD_HREF)}
+            className="rounded border px-4 py-2 font-medium hover:bg-gray-100"
+          >
+            GM 대시보드 열기 →
+          </button>
+          <p className="mt-1 text-xs text-gray-400">
+            게임 전환·규칙 공개·페이즈/라운드 진행은 모두 GM 대시보드에서 합니다.
+          </p>
         </div>
       </section>
 
       {/* 초기화 */}
       <section className="mt-6">
-        <h2 className="font-semibold text-red-600">⑤ DB 초기화</h2>
+        <h2 className="font-semibold text-red-600">④ DB 초기화</h2>
         <div className="mt-2 flex flex-wrap gap-2">
           {(["subway", "defense", "mafia", "vote"] as const).map((g) => (
             <button
