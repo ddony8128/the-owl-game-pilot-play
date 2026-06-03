@@ -11,15 +11,6 @@ import type { Player } from "@/lib/types";
 //
 // 주의: 파괴적 API 들은 서버에서 ENABLE_TEST_CONSOLE=1 일 때만 동작한다.
 
-const PLAYER_GAMES: { key: string; label: string; href: (n: string) => string }[] =
-  [
-    { key: "intro", label: "인트로", href: (n) => `/intro?as=${n}` },
-    { key: "subway", label: "1게임 이상교통", href: (n) => `/subway?as=${n}` },
-    { key: "defense", label: "2게임 디펜스", href: (n) => `/defense?as=${n}` },
-    { key: "mafia", label: "3게임 마피아", href: (n) => `/mafia?as=${n}` },
-    { key: "vote", label: "투표", href: (n) => `/vote?as=${n}` },
-  ];
-
 // GM 대시보드로 가는 링크 하나. 게임 전환·규칙 공개·페이즈 진행 등은 모두 여기서.
 const GM_DASHBOARD_HREF = "/dashboard/x9a2k7/main";
 
@@ -158,7 +149,7 @@ export default function TestConsolePage() {
 
       {/* 플레이어 목록 + 입장 링크 */}
       <section className="mt-6">
-        <h2 className="font-semibold">② 플레이어 입장 (각 버튼 = 새 탭 = 독립 플레이어)</h2>
+        <h2 className="font-semibold">② 플레이어 입장 (입장 = 그 플레이어로 새 탭 열기)</h2>
         {players.length === 0 ? (
           <p className="mt-2 text-gray-400">플레이어가 없습니다.</p>
         ) : (
@@ -168,18 +159,15 @@ export default function TestConsolePage() {
               return (
                 <div
                   key={p.id}
-                  className="flex flex-wrap items-center gap-2 rounded border p-2"
+                  className="flex items-center justify-between gap-2 rounded border p-2"
                 >
-                  <b className="w-28 shrink-0">{p.nickname}</b>
-                  {PLAYER_GAMES.map((g) => (
-                    <button
-                      key={g.key}
-                      onClick={() => open(g.href(n))}
-                      className="rounded bg-gray-100 px-2 py-0.5 text-xs hover:bg-gray-200"
-                    >
-                      {g.label}
-                    </button>
-                  ))}
+                  <b className="shrink-0">{p.nickname}</b>
+                  <button
+                    onClick={() => open(`/intro?as=${n}`)}
+                    className="rounded bg-amber-400 px-4 py-1.5 text-sm font-semibold text-black hover:bg-amber-300"
+                  >
+                    입장 →
+                  </button>
                 </div>
               );
             })}
