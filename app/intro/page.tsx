@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import type { SubwayPlayerStateClient } from "@/lib/types";
 import { useGameState } from "@/lib/hooks/useGameState";
-import { HiddenPieceModal } from "@/app/intro/HiddenPieceModal";
 import { IntroHeader } from "./IntroHeader";
 import { IntroOwlScene } from "./IntroOwlScene";
 import { IntroActions } from "./IntroActions";
@@ -28,7 +27,6 @@ export default function IntroPage() {
   const [owlRightWing, setOwlRightWing] = useState(false);
   const [checkingNickname, setCheckingNickname] = useState(false);
   const [nicknameError, setNicknameError] = useState<string | null>(null);
-  const [showHiddenPiece, setShowHiddenPiece] = useState(false);
   const showNicknameModal = !authLoading && !nickname;
   const [hasClearedSubway, setHasClearedSubway] = useState(false);
 
@@ -97,32 +95,10 @@ export default function IntroPage() {
   };
 
   const handleMainAction = () => {
-    switch (activeGame) {
-      case "subway":
-        router.push("/subway");
-        break;
-      case "mafia_tutorial":
-      case "mafia":
-        router.push("/mafia");
-        break;
-      case "defense":
-        router.push("/defense");
-        break;
-      case "vote":
-        router.push("/vote");
-        break;
-      case "survey":
-        window.open("https://forms.gle/dTrfUsKRTuJC3CDr8", "_blank");
-        break;
-      default:
-        break;
+    // 1게임(이상교통)만 플레이 가능
+    if (activeGame === "subway") {
+      router.push("/subway");
     }
-  };
-
-  const resetIntroState = () => {
-    setSunLevel(65);
-    setOwlLeftWing(false);
-    setOwlRightWing(false);
   };
 
   const bright4BgColor = "from-sky-500 via-sky-600 to-sky-500";
@@ -152,7 +128,6 @@ export default function IntroPage() {
           setOwlLeftWing={setOwlLeftWing}
           owlRightWing={owlRightWing}
           setOwlRightWing={setOwlRightWing}
-          onRevealHidden={() => setShowHiddenPiece(true)}
         />
 
         <IntroActions
@@ -170,12 +145,6 @@ export default function IntroPage() {
         nicknameError={nicknameError}
         checkingNickname={checkingNickname}
         onSubmit={handleNicknameSubmit}
-      />
-
-      <HiddenPieceModal
-        open={showHiddenPiece}
-        onClose={() => setShowHiddenPiece(false)}
-        onResetIntro={resetIntroState}
       />
     </div>
   );

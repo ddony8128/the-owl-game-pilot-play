@@ -67,10 +67,12 @@ export default function SubwayEndClient() {
   }
 
   const finishedRank = state?.finishedRank ?? null;
+  const resetCount = state?.resetCount ?? 0;
 
   return (
     <SubwayEndContent
       finishedRank={finishedRank}
+      resetCount={resetCount}
       onBackToIntro={() => router.replace("/intro")}
     />
   );

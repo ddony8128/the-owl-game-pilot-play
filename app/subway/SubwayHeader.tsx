@@ -43,7 +43,13 @@ export function SubwayHeader({
           </div>
           <div className="text-base text-zinc-400">
             <span>0번 출구로 돌아간 횟수: </span>
-            <span className="font-semibold text-red-300">
+            <span
+              className={
+                resetCount > 15
+                  ? "text-lg font-bold text-red-500"
+                  : "font-semibold text-zinc-200"
+              }
+            >
               {resetCount.toString()}회
             </span>
           </div>

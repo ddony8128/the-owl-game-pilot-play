@@ -9,7 +9,6 @@ type Props = {
   setOwlLeftWing: Dispatch<SetStateAction<boolean>>;
   owlRightWing: boolean;
   setOwlRightWing: Dispatch<SetStateAction<boolean>>;
-  onRevealHidden: () => void;
 };
 
 export function IntroOwlScene({
@@ -19,7 +18,6 @@ export function IntroOwlScene({
   setOwlLeftWing,
   owlRightWing,
   setOwlRightWing,
-  onRevealHidden,
 }: Props) {
   const [isDraggingSun, setIsDraggingSun] = useState(false);
   const sunTrackRef = useRef<HTMLDivElement | null>(null);
@@ -55,23 +53,11 @@ export function IntroOwlScene({
   };
 
   const toggleLeftWing = () => {
-    setOwlLeftWing((v) => {
-      const next = !v;
-      if (sunLevel < 25 && next && owlRightWing) {
-        onRevealHidden();
-      }
-      return next;
-    });
+    setOwlLeftWing((v) => !v);
   };
 
   const toggleRightWing = () => {
-    setOwlRightWing((v) => {
-      const next = !v;
-      if (sunLevel < 25 && owlLeftWing && next) {
-        onRevealHidden();
-      }
-      return next;
-    });
+    setOwlRightWing((v) => !v);
   };
 
   return (

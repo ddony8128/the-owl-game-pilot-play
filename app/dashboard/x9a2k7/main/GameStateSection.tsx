@@ -1,14 +1,7 @@
 import type { GameState } from "@/lib/types";
 
-const GAME_OPTIONS: GameState["active_game"][] = [
-  "ready",
-  "subway",
-  "mafia_tutorial",
-  "mafia",
-  "defense",
-  "vote",
-  "survey",
-];
+// 1게임(이상교통) 전용 빌드: ready/subway만 사용
+const GAME_OPTIONS: GameState["active_game"][] = ["ready", "subway"];
 
 type Props = {
   activeGame: GameState["active_game"] | null;

@@ -1,10 +1,18 @@
+const WRONG_LIMIT = 15;
+
 type Props = {
   finishedRank: number | null;
+  resetCount: number;
   onBackToIntro: () => void;
 };
 
-export function SubwayEndContent({ finishedRank, onBackToIntro }: Props) {
+export function SubwayEndContent({
+  finishedRank,
+  resetCount,
+  onBackToIntro,
+}: Props) {
   const isSuccess = typeof finishedRank === "number";
+  const isOverLimit = resetCount > WRONG_LIMIT;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 px-4 text-center text-zinc-50">
@@ -13,7 +21,15 @@ export function SubwayEndContent({ finishedRank, onBackToIntro }: Props) {
           <h1 className="mb-2 text-2xl font-semibold">탈출 성공!</h1>
           <br />
           <p className="mb-1 text-base text-amber-300">
-            당신은 {finishedRank}등으로 파일럿 역에서 탈출하셨습니다.
+            당신은{" "}
+            <span
+              className={
+                isOverLimit ? "font-bold text-red-400" : "text-amber-300"
+              }
+            >
+              {resetCount}번
+            </span>{" "}
+            틀리고 {finishedRank}번째 순서로 파일럿 역에서 탈출하셨습니다.
           </p>
           <p className="mb-4 max-w-xs text-base text-zinc-400">
             축하드립니다!
