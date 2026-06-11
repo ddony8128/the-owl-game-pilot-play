@@ -104,7 +104,7 @@ NEXT_PUBLIC_ENABLE_TEST_CONSOLE=1     # /test 화면 경고 숨김용
 
 | 자산 | 파일 | 용도(현장 배치) |
 |---|---|---|
-| 수배범 포스터 | `print/wanted.pdf` | 현장에 게시 → 플레이어가 수배범 신고(비밀 URL `/metropolitan/police/3%52jfk3`)로 연결 |
+| 수배범 포스터 | `print/wanted.pdf` | 현장에 게시 → 플레이어가 수배범 신고(비밀 URL `/metropolitan/police/3Rjfk3`)로 연결 |
 | 현실세계 단서 | `print/real_1~4.pdf` | "진짜 세계" 장소 단서로 곳곳에 부착/은닉 |
 | 히든피스 단서 | `print/hidden_1~2.pdf` | 히든 피스 1·2 풀이용 (세계관 연결) |
 | 룰북 QR | `rulebook_2nd/*.pdf`, `rulebook_1st/QR_set.pdf` | QR을 인쇄해 두면 `/rules`의 룰북 PDF로 연결 |

@@ -28,7 +28,7 @@ Next.js(App Router)와 Supabase를 사용해 진행하는 **The Owl Game 파일�
   - `rules/`, `rules/[ruleKey]/`
   - `locked/`, `ask/`
   - `subway/`, `subway/end/`
-  - `metropolitan/police/3%52jfk3/`
+  - `metropolitan/police/3Rjfk3/`
   - `mafia/`
   - `vote/`
   - `quizshow/`
@@ -198,9 +198,11 @@ NEXT_PUBLIC_ASK_FORM_URL=https://your-google-form-url
 - 이상교통 게임을 마친 플레이어용 결과 화면
 - “인트로로 돌아가기” 버튼 → `/intro` 리다이렉트
 
-#### `/metropolitan/police/3%52jfk3`
+#### `/metropolitan/police/3Rjfk3`
 
-구현 파일: `app/metropolitan/police/3%52jfk3/page.tsx`
+구현 파일: `app/metropolitan/police/3Rjfk3/page.tsx`
+(과거 `3%52jfk3` 폴더는 일부 배포 인프라가 `%52`→`R`로 정규화하여 무한
+리다이렉트를 유발했으므로, `%` 없는 슬러그로 변경함. 두 형태 모두 배포에서 동작)
 
 - 수배범 신고 페이지(비밀 URL)
 - 입력
