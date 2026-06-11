@@ -84,10 +84,11 @@ export async function DELETE(request: Request) {
   }
 
   // 이 플레이어를 참조하는 런타임 행 정리 (이상교통 + 투표)
+  // events/reports 가 subway_player_state 를 참조하므로 자식 → 부모 순서로 삭제
   const childCleanups: { table: string; col: string }[] = [
-    { table: "subway_player_state", col: "player_id" },
     { table: "subway_player_events", col: "player_id" },
     { table: "subway_reports", col: "player_id" },
+    { table: "subway_player_state", col: "player_id" },
     { table: "player_votes", col: "voter_id" },
   ];
 
