@@ -46,7 +46,7 @@ export const SUBWAY_RULES: SubwayRule[] = [
       "알 수 없는 존재가 당신을 유인하고 있는 것입니다. 절대 음식을 향해 나아가지 말고 뒤로 돌아가십시오. " +
       "운이 좋아 음식을 챙겼더라도 섭취하지 마십시오. 섭취 시 다음 증상이 보고되었습니다 : " +
       "환각, 정신분열, 급속 노화, 사지 뒤틀림, 통로와의 일체화",
-    conditionDescription: "식당에서 간식을 챙긴다.",
+    conditionDescription: "간식을 챙긴다.",
     alwaysVisible: false,
   },
   {
