@@ -27,11 +27,16 @@ export function SubwayInteractionSection({ players, onReload }: Props) {
     }
   };
 
+  // 상호작용 버튼을 눌러 새로고침해도 순서가 흔들리지 않도록 player_id 기준 고정 정렬
+  const sortedPlayers = [...players].sort((a, b) =>
+    a.player_id.localeCompare(b.player_id)
+  );
+
   return (
     <section className="flex flex-col gap-2 text-sm">
       <h2 className="text-base font-semibold">플레이어 상호작용</h2>
       <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg bg-zinc-900 p-2 text-xs">
-        {players.map((p) => (
+        {sortedPlayers.map((p) => (
           <div
             key={p.player_id}
             className="flex items-center justify-between rounded bg-zinc-950 px-2 py-1"
