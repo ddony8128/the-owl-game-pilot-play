@@ -24,6 +24,9 @@ export function SubwayHeader({
           {timeLabel}
         </span>
       </div>
+      <p className="text-center text-sm text-red-300">
+        다른 사람에게 화면을 직접 보여주어서는 안 됩니다.
+      </p>
       <div className="flex items-center justify-between text-sm">
         <button
           className={`h-12 rounded-full border border-zinc-700 px-12 text-lg text-zinc-100 hover:bg-zinc-900 disabled:opacity-40 ${

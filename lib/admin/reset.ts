@@ -405,6 +405,9 @@ export async function resetScope(
       // 자식 런타임을 모두 지운 뒤 플레이어 삭제 (FK 안전)
       const err = await deleteAllRows(supabase, "players", "id");
       if (err) errors.push(err);
+      // GM 메모(gm_memos)도 전체 초기화 시 함께 삭제
+      const memoErr = await deleteAllRows(supabase, "gm_memos", "id");
+      if (memoErr) errors.push(memoErr);
     }
 
     // 전체 설정 초기화 (싱글톤/시드 복원)

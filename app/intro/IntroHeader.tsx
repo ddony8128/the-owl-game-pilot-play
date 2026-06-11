@@ -11,7 +11,6 @@ export function IntroHeader({ player, onClearNickname }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">The Owl Game</h1>
-          <p className="text-sm text-zinc-400">Pilot Program</p>
         </div>
         {player && (
           <div className="text-right text-sm text-zinc-300">

@@ -19,9 +19,8 @@ export function RulesSection({ rules, onToggleRule }: Props) {
       <h2 className="mb-2 text-base font-semibold">규칙 공개 상태</h2>
       <div className="space-y-1 text-xs">
         {rules
-          .filter(
-            (r) => r.rule_key !== "quiz" && r.rule_key !== "quiz_questions"
-          )
+          // 1game-only: 이상교통 8번출구 규칙만 노출
+          .filter((r) => r.rule_key === "subway")
           .map((r) => (
             <label key={r.rule_key} className="flex items-center gap-2">
               <input
