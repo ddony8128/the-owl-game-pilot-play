@@ -5,6 +5,13 @@ type Props = {
   onReload: () => void;
 };
 
+function formatClearTime(sec: number | null | undefined): string {
+  if (sec == null) return "-";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}분 ${s.toString().padStart(2, "0")}초`;
+}
+
 export function SubwayStatusSection({ players, onReload }: Props) {
   return (
     <section className="flex flex-col gap-2 text-sm">
@@ -28,6 +35,7 @@ export function SubwayStatusSection({ players, onReload }: Props) {
               <th className="px-2 py-1 text-left">reset</th>
               <th className="px-2 py-1 text-left">finished</th>
               <th className="px-2 py-1 text-left">rank</th>
+              <th className="px-2 py-1 text-left">탈출시간</th>
             </tr>
           </thead>
           <tbody>
@@ -39,11 +47,12 @@ export function SubwayStatusSection({ players, onReload }: Props) {
                 <td className="px-2 py-1">{r.reset_count}</td>
                 <td className="px-2 py-1">{r.is_finished ? "Y" : "N"}</td>
                 <td className="px-2 py-1">{r.finished_rank ?? "-"}</td>
+                <td className="px-2 py-1">{formatClearTime(r.clear_seconds)}</td>
               </tr>
             ))}
             {players.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-2 py-4 text-center text-zinc-400">
+                <td colSpan={7} className="px-2 py-4 text-center text-zinc-400">
                   subway_player_state에 데이터가 없습니다.
                 </td>
               </tr>

@@ -17,9 +17,17 @@ type RankedRow = {
   nickname: string | null;
   resetCount: number;
   finishedRank: number;
+  clearSeconds: number | null;
   rank: number;
   overLimit: boolean;
 };
+
+function formatClearTime(sec: number | null | undefined): string {
+  if (sec == null) return "";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}분 ${s.toString().padStart(2, "0")}초`;
+}
 
 function rankBadgeClass(rank: number, overLimit: boolean): string {
   if (overLimit) return "bg-zinc-700 text-zinc-100";
@@ -91,6 +99,7 @@ export function SubwayBoardClient() {
       nickname: r.nickname ?? null,
       resetCount: r.reset_count,
       finishedRank: r.finished_rank ?? 0,
+      clearSeconds: r.clear_seconds ?? null,
       rank: i + 1,
       overLimit: r.reset_count > WRONG_LIMIT,
     }));
@@ -189,6 +198,9 @@ export function SubwayBoardClient() {
                               }`}
                             >
                               {r.resetCount}회 틀림
+                            </span>
+                            <span className="w-28 text-xl font-semibold text-amber-300">
+                              {formatClearTime(r.clearSeconds) || "-"}
                             </span>
                             <span className="w-28 text-base text-zinc-500">
                               {r.finishedRank}번째 탈출

@@ -114,11 +114,57 @@ export async function GET(request: Request) {
       players?: { nickname?: string | null } | null;
     })[];
 
+    // 전역 타이머 시작 시각(탈출 소요시간 기준점)
+    const { data: gameRow } = await supabase
+      .from("game_state")
+      .select("timer_start_at")
+      .eq("id", 1)
+      .maybeSingle();
+    const timerStartMs = gameRow?.timer_start_at
+      ? new Date(gameRow.timer_start_at as string).getTime()
+      : null;
+
+    // 탈출한 플레이어들의 탈출 시각 = 8번 출구 도달(to_exit>=8) move 이벤트 시각
+    const finishedIds = rows
+      .filter((r) => r.is_finished && r.finished_rank != null)
+      .map((r) => r.player_id);
+    const finishMsByPlayer = new Map<string, number>();
+    if (finishedIds.length > 0) {
+      const { data: moveEvents } = await supabase
+        .from("subway_player_events")
+        .select("player_id, event_value, created_at")
+        .in("player_id", finishedIds)
+        .eq("event_type", "move");
+      for (const ev of (moveEvents ?? []) as {
+        player_id: string;
+        event_value: { to_exit?: number } | null;
+        created_at: string;
+      }[]) {
+        if (Number(ev.event_value?.to_exit) >= 8) {
+          const ms = new Date(ev.created_at).getTime();
+          if (Number.isNaN(ms)) continue;
+          const prev = finishMsByPlayer.get(ev.player_id);
+          if (prev == null || ms < prev) finishMsByPlayer.set(ev.player_id, ms);
+        }
+      }
+    }
+
     const mapped: SubwayPlayerState[] = rows.map((row) => {
       const { players, ...rest } = row;
+      let clearSeconds: number | null = null;
+      if (rest.is_finished && rest.finished_rank != null && timerStartMs != null) {
+        // finish move 이벤트가 없으면 상태행 updated_at 으로 대체
+        const finishMs =
+          finishMsByPlayer.get(rest.player_id) ??
+          new Date(rest.updated_at).getTime();
+        if (!Number.isNaN(finishMs)) {
+          clearSeconds = Math.max(0, Math.round((finishMs - timerStartMs) / 1000));
+        }
+      }
       return {
         ...rest,
         nickname: players?.nickname ?? null,
+        clear_seconds: clearSeconds,
       };
     });
 

@@ -32,6 +32,7 @@ export type SubwayPlayerState = {
   finished_rank: number | null;
   updated_at: string;
   nickname?: string | null; // GM 대시보드 등에서 보여주기 위한 용도
+  clear_seconds?: number | null; // 탈출까지 걸린 시간(초). all=1 응답에서만 채워짐
 };
 
 export type SubwayRuleClient = {

@@ -11,15 +11,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const MOCK_STATE = [
   // tier1 (15회 이하 탈출자)
-  { player_id: "p1", nickname: "철수", exit_number: 8, current_location: null, reset_count: 3, is_finished: true, finished_rank: 1, updated_at: "" },
-  { player_id: "p2", nickname: "영희", exit_number: 8, current_location: null, reset_count: 7, is_finished: true, finished_rank: 2, updated_at: "" },
-  { player_id: "p3", nickname: "민수", exit_number: 8, current_location: null, reset_count: 12, is_finished: true, finished_rank: 3, updated_at: "" },
+  { player_id: "p1", nickname: "철수", exit_number: 8, current_location: null, reset_count: 3, is_finished: true, finished_rank: 1, updated_at: "", clear_seconds: 372 },
+  { player_id: "p2", nickname: "영희", exit_number: 8, current_location: null, reset_count: 7, is_finished: true, finished_rank: 2, updated_at: "", clear_seconds: 845 },
+  { player_id: "p3", nickname: "민수", exit_number: 8, current_location: null, reset_count: 12, is_finished: true, finished_rank: 3, updated_at: "", clear_seconds: 1503 },
   // tier2 (15회 초과 탈출자)
-  { player_id: "p4", nickname: "지은", exit_number: 8, current_location: null, reset_count: 16, is_finished: true, finished_rank: 5, updated_at: "" },
-  { player_id: "p5", nickname: "대현", exit_number: 8, current_location: null, reset_count: 21, is_finished: true, finished_rank: 4, updated_at: "" },
+  { player_id: "p4", nickname: "지은", exit_number: 8, current_location: null, reset_count: 16, is_finished: true, finished_rank: 5, updated_at: "", clear_seconds: 2105 },
+  { player_id: "p5", nickname: "대현", exit_number: 8, current_location: null, reset_count: 21, is_finished: true, finished_rank: 4, updated_at: "", clear_seconds: 1980 },
   // 미탈출
-  { player_id: "p6", nickname: "보라", exit_number: 5, current_location: null, reset_count: 9, is_finished: false, finished_rank: null, updated_at: "" },
-  { player_id: "p7", nickname: "하늘", exit_number: 2, current_location: null, reset_count: 18, is_finished: false, finished_rank: null, updated_at: "" },
+  { player_id: "p6", nickname: "보라", exit_number: 5, current_location: null, reset_count: 9, is_finished: false, finished_rank: null, updated_at: "", clear_seconds: null },
+  { player_id: "p7", nickname: "하늘", exit_number: 2, current_location: null, reset_count: 18, is_finished: false, finished_rank: null, updated_at: "", clear_seconds: null },
 ];
 
 async function main() {
