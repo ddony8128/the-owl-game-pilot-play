@@ -26,9 +26,11 @@ function isMissingTableError(error: { code?: string; message?: string }): boolea
 // 주의: FK 가 있는 테이블은 "참조하는 쪽"을 먼저 지워야 한다.
 export const RUNTIME_TABLES: Record<string, { table: string; col: string }[]> = {
   subway: [
-    { table: "subway_player_state", col: "player_id" },
+    // 자식(state 를 참조) → 부모(state) 순서로 삭제해야 FK 위반이 없다.
+    // events/reports 가 subway_player_state(player_id) 를 참조하므로 먼저 비운다.
     { table: "subway_player_events", col: "id" },
     { table: "subway_reports", col: "id" },
+    { table: "subway_player_state", col: "player_id" },
   ],
   mafia: [
     { table: "mafia_actions", col: "id" },
