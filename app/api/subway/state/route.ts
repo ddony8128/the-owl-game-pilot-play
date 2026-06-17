@@ -20,7 +20,7 @@ type SupabaseClient = ReturnType<typeof createServerSupabaseClient>;
 
 const BASE_DIR = path.join(process.cwd(), "public", "subway-location");
 let cachedLocations: string[] | null = null;
-const TOTAL_SECONDS = 40 * 60;
+const TOTAL_SECONDS = 35 * 60;
 
 async function getAllLocationKeys(): Promise<string[]> {
   if (cachedLocations) return cachedLocations;

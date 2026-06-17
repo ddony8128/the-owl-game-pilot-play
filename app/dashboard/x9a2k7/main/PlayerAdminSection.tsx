@@ -57,19 +57,19 @@ export function PlayerAdminSection() {
         throw new Error(json?.error ?? "플레이어를 추가하지 못했습니다.");
       }
       setMsg(
-        json.created ? `추가: ${nickname}` : `이미 존재하는 닉네임: ${nickname}`
+        json.created ? `등록: ${nickname}` : `이미 등록된 닉네임: ${nickname}`
       );
       setNewName("");
       await refresh();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "플레이어를 추가하지 못했습니다.");
+      setError(e instanceof Error ? e.message : "참가자를 등록하지 못했습니다.");
     } finally {
       setBusy(false);
     }
   };
 
   const deletePlayer = async (player: Player) => {
-    if (!window.confirm(`'${player.nickname}' 플레이어를 삭제할까요?`)) return;
+    if (!window.confirm(`참가자 '${player.nickname}'을(를) 제거할까요?`)) return;
     setBusy(true);
     setMsg(null);
     setError(null);
@@ -86,10 +86,10 @@ export function PlayerAdminSection() {
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error ?? "플레이어를 삭제하지 못했습니다.");
       }
-      setMsg(`삭제: ${player.nickname}`);
+      setMsg(`제거: ${player.nickname}`);
       await refresh();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "플레이어를 삭제하지 못했습니다.");
+      setError(e instanceof Error ? e.message : "참가자를 제거하지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -98,8 +98,8 @@ export function PlayerAdminSection() {
   const reset = async (scope: "runtime" | "all") => {
     const confirmMsg =
       scope === "all"
-        ? "플레이어를 포함해 전부 초기화합니다. (설정값은 초기 상태로 복원) 진행할까요?"
-        : "모든 게임 진행 데이터를 초기화합니다. (플레이어는 유지) 진행할까요?";
+        ? "이번 나폴리탄 카지노 세션의 참가자 목록과 8번출구 진행 상태를 초기화합니다.\n다음 팀을 받기 전 사용하는 기능입니다. 계속하시겠습니까?"
+        : "참가자 목록은 유지하고 8번출구 진행 상태만 초기화합니다. 계속하시겠습니까?";
     if (!window.confirm(confirmMsg)) return;
     setBusy(true);
     setMsg(null);
@@ -138,7 +138,7 @@ export function PlayerAdminSection() {
 
   return (
     <section className="space-y-3 text-sm">
-      <h2 className="text-base font-semibold">플레이어 관리</h2>
+      <h2 className="text-base font-semibold">나폴리탄 카지노 참가자 관리</h2>
 
       {msg && <p className="text-xs text-emerald-400">{msg}</p>}
       {error && <p className="text-xs text-red-400">{error}</p>}
@@ -160,7 +160,7 @@ export function PlayerAdminSection() {
           onClick={() => void addPlayer()}
           className="h-8 rounded bg-amber-400 px-3 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
         >
-          추가
+          참가자 등록
         </button>
         <span className="text-xs text-zinc-500">총 {players.length}명</span>
       </div>
@@ -169,7 +169,7 @@ export function PlayerAdminSection() {
       <div className="space-y-1 rounded-lg border border-zinc-800 bg-zinc-900 p-2">
         {players.length === 0 ? (
           <p className="px-1 py-2 text-xs text-zinc-400">
-            등록된 플레이어가 없습니다.
+            등록된 참가자가 없습니다.
           </p>
         ) : (
           players.map((p) => (
@@ -184,7 +184,7 @@ export function PlayerAdminSection() {
                 onClick={() => void deletePlayer(p)}
                 className="h-6 rounded border border-red-500/40 px-2 text-[11px] text-red-300 hover:bg-red-500/10 disabled:opacity-40"
               >
-                삭제
+                제거
               </button>
             </div>
           ))
@@ -193,7 +193,7 @@ export function PlayerAdminSection() {
 
       {/* 초기화 */}
       <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900 p-3">
-        <h3 className="text-xs font-semibold text-zinc-300">초기화</h3>
+        <h3 className="text-xs font-semibold text-zinc-300">세션 종료 / 다음 팀 준비</h3>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -201,7 +201,7 @@ export function PlayerAdminSection() {
             onClick={() => void reset("runtime")}
             className="h-8 rounded border border-orange-400/60 px-3 text-xs text-orange-300 hover:bg-orange-500/10 disabled:opacity-40"
           >
-            진행 데이터 초기화 (플레이어 유지)
+            진행 상태만 초기화 (참가자 유지)
           </button>
           <button
             type="button"
@@ -209,7 +209,7 @@ export function PlayerAdminSection() {
             onClick={() => void reset("all")}
             className="h-8 rounded bg-red-600 px-3 text-xs font-semibold text-white hover:bg-red-500 disabled:opacity-40"
           >
-            ⚠ 전체 초기화 (플레이어 포함)
+            ⚠ 세션 종료 / 다음 팀 준비 (참가자 포함 초기화)
           </button>
         </div>
         <p className="text-[11px] text-zinc-500">

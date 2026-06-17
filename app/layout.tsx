@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Owl Game",
-  description: "The Owl Game Pilot Program Play Page",
+  title: "이상교통 8번출구",
+  description: "이상교통 8번출구 플레이 페이지",
 };
 
 export default function RootLayout({

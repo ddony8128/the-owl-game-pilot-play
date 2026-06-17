@@ -14,10 +14,10 @@ type TimerState = {
 
 function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
   if (!api) {
-    return { remainingSeconds: 50 * 60, isRunning: false };
+    return { remainingSeconds: 35 * 60, isRunning: false };
   }
 
-  const total = api.totalSeconds || 50 * 60;
+  const total = api.totalSeconds || 35 * 60;
 
   if (!api.timerStart && !api.pauseAt) {
     // 아직 시작 전/리셋 상태
@@ -50,7 +50,7 @@ function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
 
 export function SubwayCountdownSection() {
   const [state, setState] = useState<TimerState>({
-    remainingSeconds: 40 * 60,
+    remainingSeconds: 35 * 60,
     isRunning: false,
   });
 

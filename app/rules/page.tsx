@@ -24,7 +24,7 @@ export default function RulesPage() {
       <header className="w-full max-w-md">
         <h1 className="text-xl font-semibold">규칙 / 안내</h1>
         <p className="text-sm text-zinc-400">
-          헷갈릴 땐 꼼꼼히 보도록 해 부엉! 그래도 모르겠으면 물어봐 부엉!
+          헷갈릴 땐 꼼꼼히 읽어주세요. 모르는 점은 딜러에게 문의해주세요.
         </p>
       </header>
 
@@ -65,7 +65,7 @@ export default function RulesPage() {
 
         <button
           className="mt-auto h-12 rounded-full border border-zinc-700 text-base text-zinc-200 hover:bg-zinc-900"
-          onClick={() => router.push("/intro")}
+          onClick={() => router.push("/")}
         >
           메인 화면으로
         </button>

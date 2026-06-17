@@ -86,7 +86,7 @@ const ALL_LOCATION_KEYS: string[] = [
 ];
 
 type SupabaseClient = ReturnType<typeof createServerSupabaseClient>;
-const TOTAL_SECONDS = 40 * 60;
+const TOTAL_SECONDS = 35 * 60;
 
 async function getOpenedRuleIdsForPlayer(
   supabase: SupabaseClient,

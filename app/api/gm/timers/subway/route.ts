@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-// 1게임 – 이상교통 전역 카운트다운은 항상 40분(2400초)을 기준으로 한다.
-const TOTAL_SECONDS = 40 * 60;
+// 8번출구 전역 카운트다운은 항상 35분(2100초)을 기준으로 한다.
+const TOTAL_SECONDS = 35 * 60;
 
 async function markAllPlayersFinishedOnTimeout() {
   const supabase = createServerSupabaseClient();
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "reset") {
-      // 완전 초기화: DB 상에서 타이머를 끄고, 다시 50분 대기로 만든다.
+      // 완전 초기화: DB 상에서 타이머를 끄고, 다시 35분 대기로 만든다.
       await supabase
         .from("game_state")
         .update({
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
     } else if (action === "start") {
       // 이미 실행 중이면 무시
       if (!gameRow?.timer_start) {
-        // 1) pause_at이 없는 경우: 50분 전체를 새로 시작
+        // 1) pause_at이 없는 경우: 35분 전체를 새로 시작
         if (!gameRow?.pause_at) {
           const startIso = new Date(now).toISOString();
           await supabase

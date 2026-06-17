@@ -5,7 +5,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen bg-zinc-950 text-zinc-50">
       <aside className="flex w-40 flex-col gap-2 border-r border-zinc-800 bg-zinc-900 px-3 py-4 text-xs">
-        <h1 className="mb-2 text-sm font-semibold">GM Dashboard</h1>
+        <h1 className="mb-2 text-sm font-semibold">나폴리탄 카지노 운영</h1>
         <Link
           className="text-zinc-200 hover:text-amber-300"
           href="/dashboard/x9a2k7/main"
