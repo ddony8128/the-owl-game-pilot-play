@@ -47,15 +47,15 @@ export function SubwayInteractionSection({ players, onReload }: Props) {
                 exit {p.exit_number} / {p.current_location ?? "-"}
               </span>
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-2">
               <button
-                className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-100 hover:bg-zinc-700"
+                className="rounded bg-zinc-800 px-5 py-2.5 text-base font-semibold text-zinc-100 hover:bg-zinc-700"
                 onClick={() => triggerRule(p.player_id, "meeting")}
               >
                 밀담실
               </button>
               <button
-                className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-100 hover:bg-zinc-700"
+                className="rounded bg-zinc-800 px-5 py-2.5 text-base font-semibold text-zinc-100 hover:bg-zinc-700"
                 onClick={() => triggerRule(p.player_id, "food")}
               >
                 음식

@@ -212,10 +212,6 @@ export function PlayerAdminSection() {
             ⚠ 세션 종료 / 다음 팀 준비 (참가자 포함 초기화)
           </button>
         </div>
-        <p className="text-[11px] text-zinc-500">
-          설정/시드(game_state·규칙)는 삭제되지 않고 초기값으로 복원됩니다 — 곧바로
-          다시 게임 시작 가능.
-        </p>
       </div>
     </section>
   );

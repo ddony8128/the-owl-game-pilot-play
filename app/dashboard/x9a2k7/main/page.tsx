@@ -1,34 +1,12 @@
 "use client";
 
-import { LoadingScreen } from "@/components/LoadingScreen";
-import { ErrorMessage } from "@/components/ErrorMessage";
-import { GameStateSection } from "./GameStateSection";
-import { RulesSection } from "./RulesSection";
 import { PlayerAdminSection } from "./PlayerAdminSection";
-import { useDashboardMainState } from "./useDashboardMainState";
 
+// 1게임(이상교통) 전용: 전역 게임 상태/규칙 공개 토글은 사용하지 않으므로
+// 참가자 관리만 남긴다. (active_game 은 세션 초기화 시 자동으로 'subway' 로 복원)
 export default function DashboardMainPage() {
-  const { gameState, rules, loading, error, changeGame, toggleRule } =
-    useDashboardMainState();
-
-  if (loading) return <LoadingScreen />;
-  if (error) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <ErrorMessage message={error} />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-1 flex-col gap-6 text-sm">
-      <GameStateSection
-        activeGame={gameState?.active_game ?? "ready"}
-        onChangeGame={changeGame}
-      />
-
-      <RulesSection rules={rules} onToggleRule={toggleRule} />
-
       <PlayerAdminSection />
     </div>
   );

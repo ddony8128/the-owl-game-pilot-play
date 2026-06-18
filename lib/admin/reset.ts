@@ -122,11 +122,12 @@ export async function restoreGlobalConfig(
   supabase: SupabaseClient
 ): Promise<string[]> {
   const errors: string[] = [];
-  // game_state 싱글톤 복원: active_game=ready, 타이머 해제
+  // game_state 싱글톤 복원: 1게임(이상교통) 전용이라 active_game 은 'subway' 로
+  // 유지한다(초기화 후에도 바로 플레이 가능 — 대시보드에 게임 상태 선택기가 없음).
   const game = await supabase.from("game_state").upsert(
     {
       id: 1,
-      active_game: "ready",
+      active_game: "subway",
       timer_start: false,
       timer_start_at: null,
       pause_at: null,

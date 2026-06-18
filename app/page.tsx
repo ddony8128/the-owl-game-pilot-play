@@ -67,7 +67,7 @@ export default function EntryPage() {
       <div className="w-full max-w-sm rounded-2xl bg-zinc-900/80 p-6 shadow-xl ring-1 ring-zinc-800/60">
         <h1 className="mb-1 text-2xl font-semibold">이상교통 8번출구</h1>
         <p className="mb-5 text-xs text-zinc-400">
-          딜러가 등록한 닉네임을 그대로 입력해주세요.
+          방명록에 적었던 이름을 그대로 입력해주세요.
         </p>
 
         <input
