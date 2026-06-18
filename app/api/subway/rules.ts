@@ -35,7 +35,7 @@ export const SUBWAY_RULES: SubwayRule[] = [
     body:
       "이곳에는 문이 존재하지 않습니다. 시공간 이상이 문의 형태로 인식되는 것으로 추정됩니다. " +
       "절대 문을 열지 마십시오. 그곳은 출구가 아닙니다. 통로가 막혀 있고 문이 보인다면 뒤로 돌아가십시오.",
-    conditionDescription: "밀담실에 입장한다.",
+    conditionDescription: "창고에 입장한다.",
     alwaysVisible: false,
   },
   {

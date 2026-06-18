@@ -52,7 +52,7 @@ export function SubwayInteractionSection({ players, onReload }: Props) {
                 className="rounded bg-zinc-800 px-5 py-2.5 text-base font-semibold text-zinc-100 hover:bg-zinc-700"
                 onClick={() => triggerRule(p.player_id, "meeting")}
               >
-                밀담실
+                창고
               </button>
               <button
                 className="rounded bg-zinc-800 px-5 py-2.5 text-base font-semibold text-zinc-100 hover:bg-zinc-700"
