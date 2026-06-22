@@ -36,6 +36,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         >
           마피아
         </Link>
+        <Link className="text-zinc-200 hover:text-amber-300" href="/mafia-board">
+          마피아 중계
+        </Link>
         <Link
           className="text-zinc-200 hover:text-amber-300"
           href="/dashboard/x9a2k7/defense"
