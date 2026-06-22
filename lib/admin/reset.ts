@@ -330,6 +330,120 @@ export async function archiveSubway(
   return { fatal, warnings };
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// 마피아 / 디펜스 — 원본 행 전체 보존 아카이브
+//
+// 리플레이·밸런스 패치 분석을 위해, reset 으로 런타임이 지워지기 전에 해당 게임의
+// 모든 런타임/설정 테이블 행을 "원본 그대로(JSONB)" 한 판(session) 단위로 적재한다.
+//   - game_runtime_archive : { session_id, game, source_table, row_data(jsonb), archived_at }
+//                            → 모든 컬럼을 손실 없이 보존하므로 그대로 리플레이/재구성 가능
+//   - game_play_sessions   : 세션 헤더(빠른 목록/요약 조회용)
+// 두 테이블 모두 RUNTIME_TABLES 에 없으므로 어떤 reset 으로도 삭제되지 않는다(=영구 보존).
+// DDL 미적용 환경에서는 경고만 남기고 reset 자체는 진행한다.
+// ───────────────────────────────────────────────────────────────────────────
+
+// 게임별로 보존할 테이블 목록. 런타임(RUNTIME_TABLES)에 더해 리플레이에 필요한
+// 설정/상태 싱글톤(주가·페이즈·몬스터 수 등)까지 포함한다.
+const ARCHIVE_TABLES: Record<string, string[]> = {
+  mafia: [
+    ...RUNTIME_TABLES.mafia.map((t) => t.table),
+    "mafia_phase_state",
+    "mafia_stock_state",
+  ],
+  defense: [
+    ...RUNTIME_TABLES.defense.map((t) => t.table),
+    "defense_phase_state",
+    "defense_monster_count",
+  ],
+};
+
+type ArchiveRow = {
+  session_id: string;
+  game: string;
+  source_table: string;
+  row_data: Record<string, unknown>;
+};
+
+async function archiveGameRuntime(
+  supabase: SupabaseClient,
+  game: string,
+  tables: string[]
+): Promise<ArchiveOutcome> {
+  const fatal: string[] = [];
+  const warnings: string[] = [];
+
+  const sessionId = randomUUID();
+  const rows: ArchiveRow[] = [];
+  let playerCount = 0;
+
+  for (const table of tables) {
+    const res = await supabase.from(table).select("*");
+    if (res.error) {
+      // 아직 없는 테이블(미적용 게임)은 보존에서 제외하고 계속 진행한다.
+      if (isMissingTableError(res.error)) {
+        warnings.push(`${table} 테이블이 없어 보존에서 제외했습니다.`);
+        continue;
+      }
+      // 그 외 조회 실패는 데이터 유실 위험 → 안전하게 중단
+      fatal.push(`${table} 조회 실패: ${res.error.message}`);
+      return { fatal, warnings };
+    }
+    const data = (res.data ?? []) as Record<string, unknown>[];
+    if (table.endsWith("player_state")) playerCount = data.length;
+    for (const row of data) {
+      rows.push({
+        session_id: sessionId,
+        game,
+        source_table: table,
+        row_data: row,
+      });
+    }
+  }
+
+  // 보존할 데이터가 전혀 없으면 조용히 종료
+  if (rows.length === 0) return { fatal, warnings };
+
+  // 대량 insert 는 청크로 나눠 적재(요청 크기 한계 회피)
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const insertRes = await supabase
+      .from("game_runtime_archive")
+      .insert(rows.slice(i, i + CHUNK));
+    if (insertRes.error) {
+      if (isMissingTableError(insertRes.error)) {
+        warnings.push(
+          "game_runtime_archive 테이블이 없어 플레이 데이터를 보존하지 못했습니다. (DDL 적용 필요)"
+        );
+        return { fatal, warnings };
+      }
+      fatal.push(`game_runtime_archive 적재 실패: ${insertRes.error.message}`);
+      return { fatal, warnings };
+    }
+  }
+
+  // 세션 헤더(빠른 목록/요약 조회용). 없거나 실패해도 본문은 이미 보존됐으므로 경고만.
+  const sessionRes = await supabase.from("game_play_sessions").insert({
+    session_id: sessionId,
+    game,
+    player_count: playerCount,
+  });
+  if (sessionRes.error && !isMissingTableError(sessionRes.error)) {
+    warnings.push(`game_play_sessions 적재 경고: ${sessionRes.error.message}`);
+  }
+
+  return { fatal, warnings };
+}
+
+export function archiveMafia(supabase: SupabaseClient): Promise<ArchiveOutcome> {
+  return archiveGameRuntime(supabase, "mafia", ARCHIVE_TABLES.mafia);
+}
+
+export function archiveDefense(
+  supabase: SupabaseClient
+): Promise<ArchiveOutcome> {
+  return archiveGameRuntime(supabase, "defense", ARCHIVE_TABLES.defense);
+}
+
 export type ResetResult = {
   ok: boolean;
   errors: string[];
@@ -371,17 +485,24 @@ export async function resetScope(
     };
   }
 
-  // 이상교통 런타임을 지우는 모든 경로에서, 삭제 전에 플레이 데이터를 보존한다.
-  const wipesSubway =
-    scope === "runtime" ||
-    scope === "all" ||
-    (scope === "game" && game === "subway");
-  if (wipesSubway) {
+  // 런타임을 지우는 모든 경로에서, 삭제 전에 해당 게임의 플레이 데이터를 보존한다.
+  // 보존이 불가능(예상치 못한 오류)하면 데이터 유실을 막기 위해 삭제를 중단한다.
+  const wipes = (g: string) =>
+    scope === "runtime" || scope === "all" || (scope === "game" && game === g);
+
+  if (wipes("subway")) {
     const arch = await archiveSubway(supabase);
-    // 보존이 불가능(예상치 못한 오류)하면 데이터 유실을 막기 위해 삭제를 중단한다.
-    if (arch.fatal.length) {
-      return { ok: false, errors: arch.fatal };
-    }
+    if (arch.fatal.length) return { ok: false, errors: arch.fatal };
+    warnings.push(...arch.warnings);
+  }
+  if (wipes("mafia")) {
+    const arch = await archiveMafia(supabase);
+    if (arch.fatal.length) return { ok: false, errors: arch.fatal };
+    warnings.push(...arch.warnings);
+  }
+  if (wipes("defense")) {
+    const arch = await archiveDefense(supabase);
+    if (arch.fatal.length) return { ok: false, errors: arch.fatal };
     warnings.push(...arch.warnings);
   }
 
