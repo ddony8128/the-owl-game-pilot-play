@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { GameStateSection } from "./GameStateSection";
+import { PlayerAdminSection } from "./PlayerAdminSection";
 import { RulesSection } from "./RulesSection";
 import { FeatherSection } from "./FeatherSection";
 import { useDashboardMainState } from "./useDashboardMainState";
@@ -81,6 +82,8 @@ export default function DashboardMainPage() {
         activeGame={gameState?.active_game ?? "ready"}
         onChangeGame={changeGame}
       />
+
+      <PlayerAdminSection />
 
       <RulesSection rules={rules} onToggleRule={toggleRule} />
 
