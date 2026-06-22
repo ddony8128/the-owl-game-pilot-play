@@ -24,7 +24,7 @@ export function MafiaStocksSection({ stocks }: Props) {
   return (
     <section className="space-y-2 text-sm">
       <h2 className="text-base font-semibold">주가</h2>
-      <div className="flex flex-wrap gap-2 text-xs">
+      <div className="flex flex-wrap gap-2 text-sm">
         {stocks.map((s) => (
           <div
             key={s.stock_key}

@@ -37,12 +37,12 @@ export function MafiaPhaseSection({
   return (
     <section className="space-y-2 text-sm">
       <h2 className="text-base font-semibold">라운드 / 페이즈</h2>
-      <p className="text-xs text-zinc-400">
+      <p className="text-sm text-zinc-400">
         현재 라운드: {phase?.round_number ?? "-"} / 페이즈:{" "}
         {getMafiaPhaseLabel(currentPhase)}
       </p>
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-[11px] text-zinc-400">라운드 선택:</span>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-sm text-zinc-400">라운드 선택:</span>
         {[0, 1, 2, 3, 4, 5].map((round) => (
           <button
             key={round}
@@ -54,7 +54,7 @@ export function MafiaPhaseSection({
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2 text-xs">
+      <div className="flex flex-wrap gap-2 text-sm">
         {ORDERED_PHASES.map((ph) => (
           <button
             key={ph}

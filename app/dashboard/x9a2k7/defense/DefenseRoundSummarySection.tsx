@@ -153,10 +153,7 @@ export function DefenseRoundSummarySection() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-base font-semibold">
-                          {p.nickname ?? p.player_id}
-                        </p>
-                        <p className="text-sm text-zinc-500">
-                          id: {p.player_id}
+                          {p.nickname ?? "(이름 없음)"}
                         </p>
                       </div>
                       <div className="text-right text-sm">
@@ -260,7 +257,7 @@ export function DefenseRoundSummarySection() {
                         <ul className="space-y-0.5 text-sm">
                           {m.attackers.map((a, idx) => (
                             <li key={`${a.player_id}-${idx}`}>
-                              {a.nickname ?? a.player_id} – 숫자{" "}
+                              {a.nickname ?? "(이름 없음)"} – 숫자{" "}
                               {a.usedCardValue != null
                                 ? a.usedCardValue
                                 : "?"}

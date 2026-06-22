@@ -42,26 +42,23 @@ export function MafiaAssetsSection({ players, playerNames, stocks }: Props) {
     <section className="space-y-2 text-sm">
       <h2 className="text-base font-semibold">자산 현황</h2>
       {players.length === 0 ? (
-        <p className="text-xs text-zinc-400">플레이어 데이터가 없습니다.</p>
+        <p className="text-sm text-zinc-400">플레이어 데이터가 없습니다.</p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {players.map((p) => {
-            const name = playerNames[p.player_id] ?? p.player_id;
+            const name = playerNames[p.player_id] ?? "(이름 없음)";
             const { holdings, holdingsValue, totalAssets } =
               computeHoldingsAndTotal(p);
             return (
               <div
                 key={p.player_id}
-                className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-xs"
+                className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-sm"
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold">{name}</p>
-                    <p className="text-[11px] text-zinc-500">
-                      id: {p.player_id}
-                    </p>
                   </div>
-                  <div className="text-right text-[11px]">
+                  <div className="text-right text-sm">
                     <p>
                       직업:{" "}
                       <span className="font-semibold">
@@ -78,29 +75,29 @@ export function MafiaAssetsSection({ players, playerNames, stocks }: Props) {
                 </div>
 
                 <div className="rounded-md bg-zinc-950 px-2 py-1.5">
-                  <p className="flex justify-between text-[11px] text-zinc-300">
+                  <p className="flex justify-between text-sm text-zinc-300">
                     <span>현금</span>
                     <span className="font-semibold">{p.cash}원</span>
                   </p>
-                  <p className="mt-1 flex justify-between text-[11px] text-zinc-300">
+                  <p className="mt-1 flex justify-between text-sm text-zinc-300">
                     <span>주식 평가액</span>
                     <span className="font-semibold">{holdingsValue}원</span>
                   </p>
-                  <p className="mt-1 flex justify-between text-[11px] text-amber-300">
+                  <p className="mt-1 flex justify-between text-sm text-amber-300">
                     <span>총 자산</span>
                     <span className="font-semibold">{totalAssets}원</span>
                   </p>
                 </div>
 
                 <div>
-                  <p className="mb-1 text-[11px] text-zinc-400">보유 주식</p>
+                  <p className="mb-1 text-sm text-zinc-400">보유 주식</p>
                   {holdings.length === 0 ? (
-                    <p className="text-[11px] text-zinc-600">
+                    <p className="text-sm text-zinc-600">
                       보유한 주식이 없습니다.
                     </p>
                   ) : (
                     <div className="max-h-40 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950">
-                      <table className="min-w-full border-collapse text-[11px]">
+                      <table className="min-w-full border-collapse text-sm">
                         <thead className="bg-zinc-900">
                           <tr>
                             <th className="px-2 py-1 text-left">종목</th>

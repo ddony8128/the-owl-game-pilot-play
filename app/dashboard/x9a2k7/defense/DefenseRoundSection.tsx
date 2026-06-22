@@ -49,7 +49,7 @@ export function DefenseRoundSection({ round, onAdvanceRound }: Props) {
         })}
       </div>
       {nextRound == null && (
-        <p className="text-[11px] text-zinc-500">
+        <p className="text-sm text-zinc-500">
           마지막 라운드(12라운드)까지 진행되었습니다.
         </p>
       )}

@@ -30,9 +30,8 @@ export function DefenseScoreSection({ players, onChangeScore }: Props) {
           >
             <div className="flex flex-col">
               <span className="text-sm font-medium">
-                {p.nickname || p.id.slice(0, 8)}
+                {p.nickname || "(이름 없음)"}
               </span>
-              <span className="text-[10px] text-zinc-500">{p.id}</span>
             </div>
             <div className="flex items-center gap-2">
               <button

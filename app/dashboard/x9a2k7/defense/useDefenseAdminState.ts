@@ -17,8 +17,9 @@ export function useDefenseAdminState(): DefenseAdminState {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
+  // silent=true 면 주기 폴링 시 로딩 스피너를 띄우지 않고 조용히 갱신한다.
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [roundRes, playersRes, scoresRes] = await Promise.all([
@@ -94,6 +95,9 @@ export function useDefenseAdminState(): DefenseAdminState {
 
   useEffect(() => {
     void load();
+    // 라운드/점수/플레이어 현황을 주기적으로 갱신한다.
+    const interval = setInterval(() => void load(true), 4000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

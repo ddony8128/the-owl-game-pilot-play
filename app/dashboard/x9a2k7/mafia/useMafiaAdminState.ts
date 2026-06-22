@@ -30,8 +30,9 @@ export function useMafiaAdminState(): MafiaAdminState {
   useEffect(() => {
     let cancelled = false;
 
-    const load = async () => {
-      setLoading(true);
+    // silent=true 면 주기 폴링 시 로딩 스피너를 띄우지 않고 조용히 갱신한다.
+    const load = async (silent = false) => {
+      if (!silent) setLoading(true);
       try {
         const res = await fetch("/api/mafia/state?all=1");
         const json = (await res.json().catch(() => null)) as
@@ -72,8 +73,11 @@ export function useMafiaAdminState(): MafiaAdminState {
     };
 
     void load();
+    // 플레이어 행동으로 바뀌는 정보(페이즈/주식/자산/로그)를 주기적으로 갱신한다.
+    const interval = setInterval(() => void load(true), 4000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [reloadToken]);
 
