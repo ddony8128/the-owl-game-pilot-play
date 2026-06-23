@@ -92,7 +92,7 @@ export default function DefenseClient() {
 }
 
 function DefenseInner() {
-  const { player } = usePlayerAuth();
+  const { player, roomCode, nickname } = usePlayerAuth();
   const [defenseState, setDefenseState] = useState<DefenseState | null>(null);
   const [timerState, setTimerState] = useState<TimerState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -100,9 +100,9 @@ function DefenseInner() {
   const timerMetaRef = useRef<DefenseTimerApi | null>(null);
 
   const loadState = useCallback(async () => {
-    if (!player?.nickname) return;
+    if (!roomCode || !nickname) return;
     try {
-      const params = new URLSearchParams({ nickname: player.nickname });
+      const params = new URLSearchParams({ room: roomCode, nickname });
       const res = await fetch(`/api/defense/state?${params.toString()}`);
       const json = (await res.json().catch(() => null)) as
         | DefenseState
@@ -123,7 +123,7 @@ function DefenseInner() {
         e instanceof Error ? e.message : "디펜스 상태를 불러오지 못했습니다.";
       setError(message);
     }
-  }, [player?.nickname]);
+  }, [roomCode, nickname]);
 
   // 플레이어 전용 상태 폴링
   useEffect(() => {
@@ -202,11 +202,14 @@ function DefenseInner() {
 
   // 타이머 폴링 + 1초 틱 (마피아/서브웨이와 동일한 패턴)
   useEffect(() => {
+    if (!roomCode) return;
     let cancelled = false;
 
     const loadTimer = async () => {
       try {
-        const res = await fetch("/api/gm/timers/defense");
+        const res = await fetch(
+          `/api/gm/timers/defense?room=${encodeURIComponent(roomCode)}`
+        );
         const json = (await res
           .json()
           .catch(() => null)) as DefenseTimerApi | null;
@@ -259,7 +262,7 @@ function DefenseInner() {
       clearInterval(pollId);
       clearInterval(tickId);
     };
-  }, [computeRemaining]);
+  }, [computeRemaining, roomCode]);
 
   const roundNumber = defenseState?.round ?? null;
   const getRoundLabel = (r: number | null) => {
@@ -343,6 +346,7 @@ function DefenseInner() {
             <DefenseActionTab
               state={defenseState}
               nickname={player.nickname}
+              room={player.room_code}
               onActionCompleted={loadState}
             />
           )}

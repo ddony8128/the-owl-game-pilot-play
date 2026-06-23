@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type { MafiaPhaseState } from "@/lib/types";
 
 // 페이즈별 기본 시간 (초)
@@ -12,7 +13,7 @@ const PHASE_DEFAULTS: Record<string, number | null> = {
   end: null,
 };
 
-async function getPhaseAndTimer() {
+async function getPhaseAndTimer(room: string) {
   const supabase = createServerSupabaseClient();
 
   const [
@@ -21,13 +22,13 @@ async function getPhaseAndTimer() {
   ] = await Promise.all([
     supabase
       .from("mafia_phase_state")
-      .select("id, round_number, phase, updated_at")
-      .eq("id", 1)
+      .select("room_code, round_number, phase, updated_at")
+      .eq("room_code", room)
       .maybeSingle(),
     supabase
       .from("game_state")
-      .select("id, timer_start, timer_start_at, pause_at")
-      .eq("id", 1)
+      .select("room_code, timer_start, timer_start_at, pause_at")
+      .eq("room_code", room)
       .maybeSingle(),
   ]);
 
@@ -91,9 +92,15 @@ async function getPhaseAndTimer() {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const room = normalizeRoomCode(
+    new URL(request.url).searchParams.get("room") ?? ""
+  );
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
   try {
-    const { phaseKey, base, gameRow } = await getPhaseAndTimer();
+    const { phaseKey, base, gameRow } = await getPhaseAndTimer(room);
 
     return NextResponse.json({
       phase: phaseKey,
@@ -116,8 +123,14 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     action?: "start" | "pause" | "reset";
     phase?: string;
+    room?: string;
   } | null;
   const action = body?.action;
+
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
 
   if (!action || !["start", "pause", "reset"].includes(action)) {
     return NextResponse.json({ error: "invalid action" }, { status: 400 });
@@ -132,7 +145,7 @@ export async function POST(request: Request) {
       remainingSeconds: currentRemaining,
       isRunning: currentRunning,
       gameRow,
-    } = await getPhaseAndTimer();
+    } = await getPhaseAndTimer(room);
 
     let remainingSeconds = currentRemaining;
     let isRunning = currentRunning;
@@ -146,7 +159,7 @@ export async function POST(request: Request) {
           timer_start_at: null,
           pause_at: null,
         })
-        .eq("id", 1);
+        .eq("room_code", room);
 
       return NextResponse.json({
         phase: phaseKey,
@@ -169,7 +182,7 @@ export async function POST(request: Request) {
           timer_start_at: null,
           pause_at: null,
         })
-        .eq("id", 1);
+        .eq("room_code", room);
       remainingSeconds = base;
       isRunning = false;
     } else if (action === "pause") {
@@ -181,7 +194,7 @@ export async function POST(request: Request) {
             timer_start_at: gameRow.timer_start_at,
             pause_at: new Date(now).toISOString(),
           })
-          .eq("id", 1);
+          .eq("room_code", room);
         isRunning = false;
       }
     } else if (action === "start") {
@@ -196,7 +209,7 @@ export async function POST(request: Request) {
               timer_start_at: startIso,
               pause_at: null,
             })
-            .eq("id", 1);
+            .eq("room_code", room);
           remainingSeconds = base;
           isRunning = true;
         } else if (gameRow.pause_at && gameRow.timer_start_at) {
@@ -219,7 +232,7 @@ export async function POST(request: Request) {
                 timer_start_at: new Date(newStartMs).toISOString(),
                 pause_at: null,
               })
-              .eq("id", 1);
+              .eq("room_code", room);
             isRunning = remainingSeconds > 0;
           }
         }

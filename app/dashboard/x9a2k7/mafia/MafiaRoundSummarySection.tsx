@@ -54,9 +54,10 @@ type RoundState = {
 
 type Props = {
   currentRound: number | null | undefined;
+  room: string;
 };
 
-export function MafiaRoundSummarySection({ currentRound }: Props) {
+export function MafiaRoundSummarySection({ currentRound, room }: Props) {
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
   const [data, setData] = useState<RoundState>(null);
   const [loading, setLoading] = useState(false);
@@ -77,7 +78,7 @@ export function MafiaRoundSummarySection({ currentRound }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ round: String(round) });
+      const params = new URLSearchParams({ round: String(round), room });
       const res = await fetch(`/api/gm/mafia/round-state?${params.toString()}`);
       const json = (await res.json().catch(() => null)) as
         | {
@@ -113,7 +114,8 @@ export function MafiaRoundSummarySection({ currentRound }: Props) {
   useEffect(() => {
     if (selectedRound == null) return;
     void load(selectedRound);
-  }, [selectedRound]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRound, room]);
 
   const roundLabel =
     selectedRound === 0

@@ -11,7 +11,7 @@ type DefenseAdminState = {
   reload: () => void;
 };
 
-export function useDefenseAdminState(): DefenseAdminState {
+export function useDefenseAdminState(room: string | null): DefenseAdminState {
   const [round, setRound] = useState<number | null>(null);
   const [players, setPlayers] = useState<DefenseAdminPlayer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,13 +19,18 @@ export function useDefenseAdminState(): DefenseAdminState {
 
   // silent=true 면 주기 폴링 시 로딩 스피너를 띄우지 않고 조용히 갱신한다.
   const load = async (silent = false) => {
+    if (!room) {
+      setLoading(false);
+      return;
+    }
     if (!silent) setLoading(true);
     setError(null);
     try {
+      const roomParam = `?room=${encodeURIComponent(room)}`;
       const [roundRes, playersRes, scoresRes] = await Promise.all([
-        fetch("/api/defense/state"),
-        fetch("/api/gm/main-state"),
-        fetch("/api/gm/defense/score"),
+        fetch(`/api/defense/state${roomParam}`),
+        fetch(`/api/gm/main-state${roomParam}`),
+        fetch(`/api/gm/defense/score${roomParam}`),
       ]);
 
       const roundJson = (await roundRes.json().catch(() => null)) as
@@ -94,12 +99,19 @@ export function useDefenseAdminState(): DefenseAdminState {
   };
 
   useEffect(() => {
+    if (!room) {
+      setRound(null);
+      setPlayers([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     void load();
     // 라운드/점수/플레이어 현황을 주기적으로 갱신한다.
     const interval = setInterval(() => void load(true), 4000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [room]);
 
   return {
     round,

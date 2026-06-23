@@ -1,14 +1,26 @@
 // 주요 테이블에서 사용하는 필드 위주로 타입 정의 (최종 DDL 기준)
 
+// 방(room)
+export type RoomGame = "mafia" | "defense" | "subway";
+
+export type Room = {
+  code: string;
+  game: RoomGame;
+  status: "active" | "ended";
+  ended_normally: boolean;
+  created_at: string;
+};
+
 // 공통
 export type Player = {
   id: string;
+  room_code: string;
   nickname: string;
   created_at: string;
 };
 
 export type GameState = {
-  id: number;
+  room_code: string;
   active_game: string; // 'ready' | 'subway' | 'mafia_tutorial' | 'mafia' | 'defense' | 'vote' | 'survey'
   updated_at: string;
   timer_start: boolean | null;
@@ -17,6 +29,7 @@ export type GameState = {
 };
 
 export type RulesState = {
+  room_code: string;
   rule_key: string; // intro | subway | hidden_piece | mafia ...
   is_open: boolean;
   updated_at: string;
@@ -25,6 +38,7 @@ export type RulesState = {
 // 1게임 – 이상교통
 export type SubwayPlayerState = {
   player_id: string;
+  room_code: string;
   exit_number: number;
   current_location: string | null;
   reset_count: number;
@@ -89,7 +103,7 @@ export type MafiaPhase =
   | "end";
 
 export type MafiaPhaseState = {
-  id: number;
+  room_code: string;
   round_number: number;
   phase: MafiaPhase;
   updated_at: string;
@@ -103,6 +117,7 @@ export type MafiaStocksHolding = {
 
 export type MafiaAction = {
   id: string;
+  room_code: string;
   player_id: string | null;
   round_number: number;
   phase: string;
@@ -112,6 +127,7 @@ export type MafiaAction = {
 };
 
 export type MafiaStockState = {
+  room_code: string;
   stock_key: string;
   price: number;
   updated_at: string;
@@ -119,6 +135,7 @@ export type MafiaStockState = {
 
 export type MafiaStockHistory = {
   id: string;
+  room_code: string;
   stock_key: string;
   round_number: number;
   price_before: number | null;
@@ -129,6 +146,7 @@ export type MafiaStockHistory = {
 
 export type MafiaPlayerState = {
   player_id: string;
+  room_code: string;
   cash: number;
   is_mafia: boolean;
   job: string | null;
@@ -138,6 +156,7 @@ export type MafiaPlayerState = {
 
 export type MafiaPlayerSnapshot = {
   id: string;
+  room_code: string;
   player_id: string;
   round_number: number | null;
   phase: string | null;
@@ -149,6 +168,7 @@ export type MafiaPlayerSnapshot = {
 
 export type MafiaVote = {
   id: string;
+  room_code: string;
   round_number: number | null;
   voter_id: string | null;
   target_id: string | null;
@@ -165,6 +185,7 @@ export type MafiaLog = {
 
 export type MafiaAbilityResult = {
   id: string;
+  room_code: string;
   player_id: string;
   round_number: number | null;
   phase: string | null; // "apply" | "vote" 정도가 들어옴
@@ -177,6 +198,7 @@ export type MafiaAbilityResult = {
 
 export type PlayerVote = {
   id: string;
+  room_code: string;
   voter_id: string | null;
   topic: string;
   target_id: string | null;
@@ -190,12 +212,13 @@ export type ApiResult<T> =
 
 // 3게임 – 디펜스 딜레마
 export type DefensePhaseState = {
-  id: number;
+  room_code: string;
   round: number;
   updated_at: string;
 };
 
 export type DefenseMonsterCount = {
+  room_code: string;
   id: number; // 1~6
   count: number;
 };
@@ -204,6 +227,7 @@ export type DefenseMonsterInstanceStatus = "active" | "defeated" | "expired";
 
 export type DefenseMonsterInstance = {
   id: string; // uuid
+  room_code: string;
   monster_id: number; // 1~6
   current_hp: number;
   remaining_time: number;
@@ -215,6 +239,7 @@ export type DefenseMonsterInstance = {
 
 export type DefenseMonsterSnapshot = {
   instance_id: string;
+  room_code: string;
   monster_id: number;
   round: number; // 1~12
   current_hp: number;
@@ -224,6 +249,7 @@ export type DefenseMonsterSnapshot = {
 
 export type DefenseCardState = {
   player_id: string;
+  room_code: string;
   card_slot: number; // 1~4
   card_value: number;
   is_active: boolean;
@@ -232,6 +258,7 @@ export type DefenseCardState = {
 export type DefenseActionType = "combat" | "rest" | "training";
 
 export type DefenseAction = {
+  room_code: string;
   round: number; // 1~12
   player_id: string;
   action_type: DefenseActionType;
@@ -244,17 +271,20 @@ export type DefenseAction = {
 
 export type DefenseScore = {
   player_id: string;
+  room_code: string;
   points: number;
 };
 
 export type DefenseScoreSnapshot = {
   player_id: string;
+  room_code: string;
   round: number; // 1~12
   points: number;
 };
 
 export type DefensePlayerLog = {
   player_id: string;
+  room_code: string;
   round: number; // 1~12
   log: string;
   created_at: string;

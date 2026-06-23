@@ -166,7 +166,7 @@ function VoteInner() {
         <h1 className="mb-3 text-lg font-semibold">투표가 완료되었습니다</h1>
         <button
           className="mt-2 h-12 rounded-full bg-zinc-100 px-6 text-base font-semibold text-zinc-900 hover:bg-white"
-          onClick={() => router.push("/intro")}
+          onClick={() => router.push("/")}
         >
           메인 페이지로 돌아가기
         </button>

@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type { GameState, RulesState } from "@/lib/types";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const room = normalizeRoomCode(
+    new URL(request.url).searchParams.get("room") ?? ""
+  );
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
+
   const supabase = createServerSupabaseClient();
 
   const [
@@ -12,11 +20,14 @@ export async function GET() {
     supabase
       .from("game_state")
       .select(
-        "id, active_game, updated_at, timer_start, timer_start_at, pause_at"
+        "room_code, active_game, updated_at, timer_start, timer_start_at, pause_at"
       )
-      .eq("id", 1)
+      .eq("room_code", room)
       .maybeSingle(),
-    supabase.from("rules_state").select("rule_key, is_open, updated_at"),
+    supabase
+      .from("rules_state")
+      .select("rule_key, is_open, updated_at")
+      .eq("room_code", room),
   ]);
 
   if (gameError) {

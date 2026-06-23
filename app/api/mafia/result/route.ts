@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type {
   MafiaPlayerState,
   MafiaStockState,
@@ -18,16 +19,33 @@ type FinalResult = {
 
 type ResultResponse = { results: FinalResult[] } | { error: string };
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
+  const room = normalizeRoomCode(new URL(request.url).searchParams.get("room") ?? "");
+
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as ResultResponse, {
+      status: 400,
+    });
+  }
 
   const [playersRes, stocksRes, mafiaRes, subwayRes] = await Promise.all([
-    supabase.from("players").select("id, nickname, created_at"),
-    supabase.from("mafia_stock_state").select("stock_key, price, updated_at"),
+    supabase
+      .from("players")
+      .select("id, nickname, created_at")
+      .eq("room_code", room),
+    supabase
+      .from("mafia_stock_state")
+      .select("stock_key, price, updated_at")
+      .eq("room_code", room),
     supabase
       .from("mafia_player_state")
-      .select("player_id, cash, is_mafia, job, stocks, updated_at"),
-    supabase.from("subway_player_state").select("player_id, finished_rank"),
+      .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("room_code", room),
+    supabase
+      .from("subway_player_state")
+      .select("player_id, finished_rank")
+      .eq("room_code", room),
   ]);
 
   if (playersRes.error) {

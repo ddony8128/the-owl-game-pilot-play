@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useState } from "react";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { useMafiaAdminState } from "./useMafiaAdminState";
@@ -12,17 +14,24 @@ import { MafiaRoundSummarySection } from "./MafiaRoundSummarySection";
 import type { MafiaLog } from "@/lib/types";
 
 export default function DashboardMafiaPage() {
+  const [room] = useState<string | null>(() =>
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("room")
+      : null
+  );
+
   const { phase, stocks, players, playerNames, logs, loading, error, reload } =
-    useMafiaAdminState();
+    useMafiaAdminState(room);
 
   const changePhase = async (to: string) => {
+    if (!room) return;
     try {
       const res = await fetch("/api/gm/mafia/advance-phase", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ to }),
+        body: JSON.stringify({ to, room }),
       });
       const json = (await res.json().catch(() => null)) as {
         ok?: true;
@@ -49,6 +58,20 @@ export default function DashboardMafiaPage() {
     logs.unshift(log);
   };
 
+  if (!room) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm">
+        <p className="text-zinc-300">방이 선택되지 않았습니다.</p>
+        <Link
+          href="/dashboard/x9a2k7"
+          className="rounded bg-amber-400 px-3 py-1 font-semibold text-zinc-950 hover:bg-amber-300"
+        >
+          대시보드로 돌아가기
+        </Link>
+      </div>
+    );
+  }
+
   if (loading) return <LoadingScreen />;
   if (error) {
     return (
@@ -60,7 +83,7 @@ export default function DashboardMafiaPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 text-sm">
-      <MafiaCountdownSection phase={phase} />
+      <MafiaCountdownSection phase={phase} room={room} />
 
       <MafiaPhaseSection
         phase={phase}
@@ -72,7 +95,7 @@ export default function DashboardMafiaPage() {
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ round }),
+              body: JSON.stringify({ round, room }),
             });
             const json = (await res.json().catch(() => null)) as {
               ok?: true;
@@ -101,9 +124,9 @@ export default function DashboardMafiaPage() {
 
       <MafiaStocksSection stocks={stocks} />
 
-      <MafiaRoundSummarySection currentRound={phase?.round_number} />
+      <MafiaRoundSummarySection currentRound={phase?.round_number} room={room} />
 
-      <MafiaLogsSection logs={logs} onLogAdded={handleLogAdded} />
+      <MafiaLogsSection logs={logs} onLogAdded={handleLogAdded} room={room} />
     </div>
   );
 }

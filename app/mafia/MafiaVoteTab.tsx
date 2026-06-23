@@ -22,7 +22,7 @@ export function MafiaVoteTab({
   players,
   myVoteSummary,
 }: Props) {
-  const { player } = usePlayerAuth();
+  const { player, roomCode } = usePlayerAuth();
   // 선택된 대상은 players.id (uuid)를 들고 있고,
   // 화면에는 nickname을 표시한다.
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function MafiaVoteTab({
     typeof ticketPrice === "number" && ticketPrice > 0 ? ticketPrice : 1;
 
   const handleSubmit = async () => {
-    if (!player?.nickname) return;
+    if (!player?.nickname || !roomCode) return;
     if (!selectedTarget) {
       setError("먼저 투표할 대상을 선택해 주세요.");
       return;
@@ -62,6 +62,7 @@ export function MafiaVoteTab({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          room: roomCode,
           nickname: player.nickname,
           target_id: selectedTarget,
           vote_count: voteCount,

@@ -1,16 +1,24 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type { Player } from "@/lib/types";
 
 type PlayersResponse = { players: Player[] } | { error: string };
 
-export async function GET() {
+// GET /api/gm/players?room=A3F82  → 그 방의 참가자 명단(화이트리스트)
+export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
+  const { searchParams } = new URL(request.url);
+  const room = normalizeRoomCode(searchParams.get("room") ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
 
   const { data, error } = await supabase
     .from("players")
-    .select("id, nickname, created_at")
+    .select("id, room_code, nickname, created_at")
+    .eq("room_code", room)
     .order("nickname", { ascending: true });
 
   if (error) {
@@ -22,16 +30,23 @@ export async function GET() {
   return NextResponse.json({ players: (data || []) as Player[] });
 }
 
-// 플레이어 단건 생성. body: { nickname: "철수" }
-// 이미 존재하면 생성하지 않고 기존 행을 반환한다(중복 방지).
+// 플레이어 단건 생성. body: { room, nickname }
+// 같은 방에 이미 있으면 생성하지 않고 기존 행을 반환한다(중복 방지).
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as {
+    room?: unknown;
     nickname?: unknown;
   } | null;
 
+  const room = normalizeRoomCode(
+    typeof body?.room === "string" ? body.room : "",
+  );
   const nickname =
     typeof body?.nickname === "string" ? body.nickname.trim() : "";
+  if (!room) {
+    return NextResponse.json({ error: "room 이 필요합니다." }, { status: 400 });
+  }
   if (!nickname) {
     return NextResponse.json({ error: "닉네임을 입력해 주세요." }, {
       status: 400,
@@ -40,7 +55,8 @@ export async function POST(request: Request) {
 
   const { data: existing, error: existingError } = await supabase
     .from("players")
-    .select("id, nickname, created_at")
+    .select("id, room_code, nickname, created_at")
+    .eq("room_code", room)
     .eq("nickname", nickname)
     .maybeSingle();
 
@@ -54,8 +70,8 @@ export async function POST(request: Request) {
 
   const { data: inserted, error: insertError } = await supabase
     .from("players")
-    .insert({ id: randomUUID(), nickname, feather: 0 })
-    .select("id, nickname, created_at")
+    .insert({ id: randomUUID(), room_code: room, nickname, feather: 0 })
+    .select("id, room_code, nickname, created_at")
     .maybeSingle();
 
   if (insertError || !inserted) {

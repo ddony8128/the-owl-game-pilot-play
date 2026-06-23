@@ -3,7 +3,8 @@ import type { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function handlePrepareToAuction(
   supabase: ReturnType<typeof createServerSupabaseClient>,
-  current: MafiaPhaseState
+  current: MafiaPhaseState,
+  room: string
 ) {
   // 튜토리얼(0) 또는 1라운드에서만 초기 자산을 세팅한다.
   if (current.round_number !== 0 && current.round_number !== 1) {
@@ -13,7 +14,8 @@ export async function handlePrepareToAuction(
   // 플레이어 전체 조회
   const { data: playerRows, error: playersError } = await supabase
     .from("players")
-    .select("id, nickname, created_at");
+    .select("id, nickname, created_at")
+    .eq("room_code", room);
 
   if (playersError || !playerRows) {
     throw new Error(playersError?.message ?? "players 조회에 실패했습니다.");
@@ -54,7 +56,10 @@ export async function handlePrepareToAuction(
   if (bonuses.length > 0) {
     const { error: upsertError } = await supabase
       .from("mafia_player_state")
-      .upsert(bonuses, { onConflict: "player_id" });
+      .upsert(
+        bonuses.map((b) => ({ ...b, room_code: room })),
+        { onConflict: "player_id" }
+      );
 
     if (upsertError) {
       throw new Error(
@@ -74,7 +79,10 @@ export async function handlePrepareToAuction(
 
   const { error: stockResetError } = await supabase
     .from("mafia_stock_state")
-    .upsert(initialStockRows, { onConflict: "stock_key" });
+    .upsert(
+      initialStockRows.map((s) => ({ ...s, room_code: room })),
+      { onConflict: "room_code,stock_key" }
+    );
 
   if (stockResetError) {
     throw new Error(

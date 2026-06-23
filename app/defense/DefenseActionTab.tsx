@@ -37,6 +37,7 @@ type DefenseStateForAction = {
 type Props = {
   state: DefenseStateForAction;
   nickname: string;
+  room: string;
   onActionCompleted: () => Promise<void> | void;
 };
 
@@ -51,6 +52,7 @@ type Step =
 export function DefenseActionTab({
   state,
   nickname,
+  room,
   onActionCompleted,
 }: Props) {
   const [step, setStep] = useState<Step>("chooseAction");
@@ -91,6 +93,7 @@ export function DefenseActionTab({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          room,
           nickname,
           ...payload,
         }),

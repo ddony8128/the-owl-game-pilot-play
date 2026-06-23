@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useGameState } from "@/lib/hooks/useGameState";
+import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { LoadingScreen } from "@/components/LoadingScreen";
 
 const RULE_LABELS: Record<string, string> = {
@@ -13,7 +14,8 @@ const RULE_LABELS: Record<string, string> = {
 
 export default function RulesPage() {
   const router = useRouter();
-  const { rulesMap, isLoading } = useGameState();
+  const { roomCode } = usePlayerAuth();
+  const { rulesMap, isLoading } = useGameState(roomCode);
 
   if (isLoading) return <LoadingScreen />;
 
@@ -65,7 +67,7 @@ export default function RulesPage() {
 
         <button
           className="mt-auto h-12 rounded-full border border-zinc-700 text-base text-zinc-200 hover:bg-zinc-900"
-          onClick={() => router.push("/intro")}
+          onClick={() => router.push("/")}
         >
           메인 화면으로
         </button>

@@ -11,12 +11,14 @@ import type { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function handleTradeToApply(
   supabase: ReturnType<typeof createServerSupabaseClient>,
-  current: MafiaPhaseState
+  current: MafiaPhaseState,
+  room: string
 ) {
   // 현재 주가 조회
   const { data: stockRows, error: stockError } = await supabase
     .from("mafia_stock_state")
-    .select("stock_key, price, updated_at");
+    .select("stock_key, price, updated_at")
+    .eq("room_code", room);
 
   if (stockError || !stockRows) {
     throw new Error(
@@ -33,6 +35,7 @@ export async function handleTradeToApply(
   const { data: actionRows, error: actionsError } = await supabase
     .from("mafia_actions")
     .select("player_id, round_number, phase, action_type, payload, created_at")
+    .eq("room_code", room)
     .eq("round_number", current.round_number)
     .eq("phase", current.phase);
 
@@ -47,7 +50,8 @@ export async function handleTradeToApply(
   // 플레이어 상태 조회 (cash, job, stocks, is_mafia)
   const { data: playerStateRows, error: playerStateError } = await supabase
     .from("mafia_player_state")
-    .select("player_id, cash, is_mafia, job, stocks, updated_at");
+    .select("player_id, cash, is_mafia, job, stocks, updated_at")
+    .eq("room_code", room);
 
   if (playerStateError) {
     throw new Error(
@@ -64,7 +68,8 @@ export async function handleTradeToApply(
   // 플레이어 기본 정보 (닉네임 매핑용)
   const { data: playerRows, error: playersError } = await supabase
     .from("players")
-    .select("id, nickname, created_at");
+    .select("id, nickname, created_at")
+    .eq("room_code", room);
 
   if (playersError || !playerRows) {
     throw new Error(playersError?.message ?? "players 조회에 실패했습니다.");
@@ -90,7 +95,10 @@ export async function handleTradeToApply(
   // 직업 능력 payload
   const abilitiesByPlayer = new Map<string, MafiaAbilityPayload[]>();
 
-  const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at">[] = [];
+  const abilityResults: Omit<
+    MafiaAbilityResult,
+    "id" | "created_at" | "room_code"
+  >[] = [];
 
   const addIncome = (playerId: string, amount: number) => {
     if (!amount) return;
@@ -285,10 +293,11 @@ export async function handleTradeToApply(
       .from("mafia_stock_state")
       .upsert(
         updatedStocks.map((s) => ({
+          room_code: room,
           stock_key: s.stock_key,
           price: s.price,
         })),
-        { onConflict: "stock_key" }
+        { onConflict: "room_code,stock_key" }
       );
 
     if (updateStocksError) {
@@ -302,6 +311,7 @@ export async function handleTradeToApply(
       const before = stockMap.get(s.stock_key)?.price ?? null;
       const after = s.price ?? null;
       return {
+        room_code: room,
         stock_key: s.stock_key,
         round_number: current.round_number,
         price_before: before,
@@ -781,6 +791,7 @@ export async function handleTradeToApply(
 
     updatedPlayers.push({
       player_id: pid,
+      room_code: room,
       cash: nextCash,
     } as Partial<MafiaPlayerState>);
   }
@@ -801,7 +812,7 @@ export async function handleTradeToApply(
   if (abilityResults.length > 0) {
     const { error: abilityError } = await supabase
       .from("mafia_ability_results")
-      .insert(abilityResults);
+      .insert(abilityResults.map((r) => ({ ...r, room_code: room })));
 
     if (abilityError) {
       throw new Error(

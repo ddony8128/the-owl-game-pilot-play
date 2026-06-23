@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type { MafiaPhaseState, MafiaPlayerState, Player } from "@/lib/types";
 
 type VoteBody = {
+  room?: string;
   nickname?: string;
   target_id?: string;
   vote_count?: number;
@@ -13,6 +15,13 @@ type VoteResponse = { ok: true } | { error: string };
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as VoteBody | null;
+
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as VoteResponse, {
+      status: 400,
+    });
+  }
 
   if (!body || typeof body.nickname !== "string") {
     return NextResponse.json(
@@ -40,8 +49,8 @@ export async function POST(request: Request) {
 
   const { data: phaseRow, error: phaseError } = await supabase
     .from("mafia_phase_state")
-    .select("id, round_number, phase, updated_at")
-    .eq("id", 1)
+    .select("room_code, round_number, phase, updated_at")
+    .eq("room_code", room)
     .maybeSingle();
 
   if (phaseError) {
@@ -68,6 +77,7 @@ export async function POST(request: Request) {
   const { data: playerRow, error: playerError } = await supabase
     .from("players")
     .select("id, nickname, created_at")
+    .eq("room_code", room)
     .eq("nickname", nickname)
     .maybeSingle();
 
@@ -92,6 +102,7 @@ export async function POST(request: Request) {
   const { data: abilityRows, error: abilityError } = await supabase
     .from("mafia_actions")
     .select("payload")
+    .eq("room_code", room)
     .eq("round_number", roundNumber)
     .eq("phase", "trade")
     .eq("action_type", "ability");
@@ -116,6 +127,7 @@ export async function POST(request: Request) {
   const { data: voterStateRow, error: voterStateError } = await supabase
     .from("mafia_player_state")
     .select("player_id, cash, is_mafia, job, stocks, updated_at")
+    .eq("room_code", room)
     .eq("player_id", player.id)
     .maybeSingle();
 
@@ -140,6 +152,7 @@ export async function POST(request: Request) {
     const { error: updateCashError } = await supabase
       .from("mafia_player_state")
       .update({ cash: nextCash })
+      .eq("room_code", room)
       .eq("player_id", player.id);
 
     if (updateCashError) {
@@ -151,6 +164,7 @@ export async function POST(request: Request) {
   }
 
   const { error: insertError } = await supabase.from("mafia_votes").insert({
+    room_code: room,
     round_number: roundNumber,
     voter_id: player.id,
     target_id: body.target_id,

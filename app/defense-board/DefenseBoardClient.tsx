@@ -75,6 +75,12 @@ function getRoundLabel(round: number | null): string {
 }
 
 export function DefenseBoardClient() {
+  const [room] = useState<string | null>(() =>
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("room")
+      : null
+  );
+  const [roomInput, setRoomInput] = useState("");
   const [stepState, setStepState] = useState<StepState>({ step: 0 });
   const [dataByRound, setDataByRound] = useState<Map<number, BoardApiResponse>>(
     () => new Map()
@@ -111,6 +117,7 @@ export function DefenseBoardClient() {
   }, [currentRound, dataByRound]);
 
   useEffect(() => {
+    if (!room) return;
     if (currentRound <= 0 || currentRound > 15) return;
     if (viewKind === "score" || viewKind === "ready") return;
 
@@ -119,7 +126,10 @@ export function DefenseBoardClient() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ round: String(currentRound) });
+        const params = new URLSearchParams({
+          round: String(currentRound),
+          room,
+        });
         const res = await fetch(
           `/api/defense/board-state?${params.toString()}`
         );
@@ -160,10 +170,11 @@ export function DefenseBoardClient() {
     return () => {
       cancelled = true;
     };
-  }, [currentRound, viewKind]);
+  }, [currentRound, viewKind, room]);
 
   // 튜토리얼 결과(3), 게임 종료(16)에서는 점수판을 보여주기 위해 별도 스코어 데이터 로드
   useEffect(() => {
+    if (!room) return;
     if (!isScoreRound || currentRound <= 0) return;
 
     let cancelled = false;
@@ -171,7 +182,10 @@ export function DefenseBoardClient() {
       setScoresLoading(true);
       setScoresError(null);
       try {
-        const params = new URLSearchParams({ round: String(currentRound) });
+        const params = new URLSearchParams({
+          round: String(currentRound),
+          room,
+        });
         const res = await fetch(
           `/api/defense/board-scores?${params.toString()}`
         );
@@ -229,7 +243,7 @@ export function DefenseBoardClient() {
     return () => {
       cancelled = true;
     };
-  }, [currentRound, isScoreRound]);
+  }, [currentRound, isScoreRound, room]);
 
   const canPrev = currentStep > 0;
   const canNext = currentStep < TIMELINE.length - 1;
@@ -257,6 +271,37 @@ export function DefenseBoardClient() {
     if (!currentData) return [];
     return currentData.monsters;
   }, [currentData]);
+
+  if (!room) {
+    const goToRoom = () => {
+      const code = roomInput.trim().toUpperCase();
+      if (!code) return;
+      window.location.search = `?room=${encodeURIComponent(code)}`;
+    };
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-4 text-zinc-50">
+        <p className="text-xl">결과 페이지 — 방 코드가 필요합니다.</p>
+        <div className="flex items-center gap-2">
+          <input
+            value={roomInput}
+            onChange={(e) => setRoomInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") goToRoom();
+            }}
+            placeholder="방 코드"
+            className="rounded bg-zinc-800 px-3 py-2 text-base text-zinc-100 placeholder:text-zinc-500"
+          />
+          <button
+            type="button"
+            onClick={goToRoom}
+            className="rounded bg-amber-400 px-4 py-2 text-base font-semibold text-zinc-950 hover:bg-amber-300"
+          >
+            이동
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 px-4 py-6 text-zinc-50">

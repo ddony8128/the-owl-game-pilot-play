@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type { DefensePhaseState } from "@/lib/types";
 import { handleDefenseInitRound } from "./initGame";
 import { handleDefenseAdvanceRound } from "./advanceRound";
 
 type Body = {
+  room?: string;
   round?: number;
 };
 
@@ -13,6 +15,13 @@ type ResponseBody = { ok: true; phase: DefensePhaseState } | { error: string };
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as Body | null;
+
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as ResponseBody, {
+      status: 400,
+    });
+  }
 
   if (!body || typeof body.round !== "number") {
     return NextResponse.json({ error: "round is required" } as ResponseBody, {
@@ -36,8 +45,8 @@ export async function POST(request: Request) {
 
   const { data: phaseRow, error: phaseError } = await supabase
     .from("defense_phase_state")
-    .select("id, round, updated_at")
-    .eq("id", 1)
+    .select("room_code, round, updated_at")
+    .eq("room_code", room)
     .maybeSingle();
 
   if (phaseError) {
@@ -72,14 +81,14 @@ export async function POST(request: Request) {
       (current.round === 0 && nextRound === 1) ||
       (current.round === 3 && nextRound === 4)
     ) {
-      await handleDefenseInitRound(supabase, current, nextRound);
+      await handleDefenseInitRound(supabase, current, nextRound, room);
     } else if (
       // 그 외 1->2, 2->3, 4->5, ..., 14->15, 15->16는 공통 전환 로직 실행
       current.round >= 1 &&
       current.round <= 15 &&
       nextRound === current.round + 1
     ) {
-      await handleDefenseAdvanceRound(supabase, current, nextRound);
+      await handleDefenseAdvanceRound(supabase, current, nextRound, room);
     }
   } catch (e: unknown) {
     const message =
@@ -94,8 +103,8 @@ export async function POST(request: Request) {
   const { data: updatedPhase, error: updateError } = await supabase
     .from("defense_phase_state")
     .update({ round: nextRound })
-    .eq("id", 1)
-    .select("id, round, updated_at")
+    .eq("room_code", room)
+    .select("room_code, round, updated_at")
     .maybeSingle();
 
   if (updateError || !updatedPhase) {

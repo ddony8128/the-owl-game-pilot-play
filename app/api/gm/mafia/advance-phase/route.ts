@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type {
   MafiaPhase,
   MafiaPhaseState,
@@ -12,6 +13,7 @@ import { handleTradeToApply } from "./tradeToApply";
 import { handleVoteToEnd } from "./voteToEnd";
 
 type AdvanceBody = {
+  room?: string;
   from?: string;
   to?: string;
 };
@@ -21,6 +23,13 @@ type AdvanceResponse = { ok: true; phase: MafiaPhaseState } | { error: string };
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as AdvanceBody | null;
+
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as AdvanceResponse, {
+      status: 400,
+    });
+  }
 
   if (!body || typeof body.to !== "string") {
     return NextResponse.json({ error: "to is required" } as AdvanceResponse, {
@@ -34,8 +43,8 @@ export async function POST(request: Request) {
   // 현재 phase 조회
   const { data: phaseRow, error: phaseError } = await supabase
     .from("mafia_phase_state")
-    .select("id, round_number, phase, updated_at")
-    .eq("id", 1)
+    .select("room_code, round_number, phase, updated_at")
+    .eq("room_code", room)
     .maybeSingle();
 
   if (phaseError) {
@@ -75,7 +84,8 @@ export async function POST(request: Request) {
   // 스냅샷 생성 (현재 phase 종료 시점)
   const { data: playerStates, error: playerStatesError } = await supabase
     .from("mafia_player_state")
-    .select("player_id, cash, is_mafia, job, stocks, updated_at");
+    .select("player_id, cash, is_mafia, job, stocks, updated_at")
+    .eq("room_code", room);
 
   if (playerStatesError) {
     return NextResponse.json(
@@ -89,6 +99,7 @@ export async function POST(request: Request) {
   if (snapshots.length > 0) {
     await supabase.from("mafia_player_snapshots").insert(
       snapshots.map((p) => ({
+        room_code: room,
         player_id: p.player_id,
         round_number: current.round_number,
         phase: current.phase,
@@ -104,13 +115,13 @@ export async function POST(request: Request) {
   // 페이즈 전환별 비즈니스 로직
   try {
     if (current.phase === "prepare" && to === "auction") {
-      await handlePrepareToAuction(supabase, current);
+      await handlePrepareToAuction(supabase, current, room);
     } else if (current.phase === "auction" && to === "trade") {
-      await handleAuctionToTrade(supabase, current);
+      await handleAuctionToTrade(supabase, current, room);
     } else if (current.phase === "trade" && to === "apply") {
-      await handleTradeToApply(supabase, current);
+      await handleTradeToApply(supabase, current, room);
     } else if (current.phase === "vote" && to === "end") {
-      await handleVoteToEnd(supabase, current);
+      await handleVoteToEnd(supabase, current, room);
     }
   } catch (e: unknown) {
     const message =
@@ -125,8 +136,8 @@ export async function POST(request: Request) {
   const { data: updatedPhase, error: updateError } = await supabase
     .from("mafia_phase_state")
     .update({ round_number: current.round_number, phase: to })
-    .eq("id", 1)
-    .select("id, round_number, phase, updated_at")
+    .eq("room_code", room)
+    .select("room_code, round_number, phase, updated_at")
     .maybeSingle();
 
   if (updateError || !updatedPhase) {
@@ -151,6 +162,7 @@ export async function POST(request: Request) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          room,
           action: "reset",
           phase: to,
         }),

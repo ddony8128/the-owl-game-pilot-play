@@ -34,7 +34,7 @@ export default function MafiaClient() {
 }
 
 function MafiaInner() {
-  const { player } = usePlayerAuth();
+  const { player, roomCode, nickname } = usePlayerAuth();
   const [mafiaPlayer, setMafiaPlayer] = useState<MafiaPlayerState | null>(null);
   const [stocks, setStocks] = useState<MafiaStockState[]>([]);
   const [phase, setPhase] = useState<MafiaPhaseState | null>(null);
@@ -76,13 +76,13 @@ function MafiaInner() {
 
   // 초기 로딩 + 에러 처리는 한 번만 수행
   useEffect(() => {
-    if (!player?.nickname) return;
+    if (!roomCode || !nickname) return;
     let cancelled = false;
 
-    const load = async (nickname: string) => {
+    const load = async (room: string, nick: string) => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({ nickname });
+        const params = new URLSearchParams({ room, nickname: nick });
         const res = await fetch(`/api/mafia/state?${params.toString()}`);
         const json = (await res.json().catch(() => null)) as
           | {
@@ -165,21 +165,21 @@ function MafiaInner() {
       }
     };
 
-    void load(player.nickname);
+    void load(roomCode, nickname);
 
     return () => {
       cancelled = true;
     };
-  }, [player?.nickname]);
+  }, [roomCode, nickname]);
 
   // 페이즈/현금/능력결과 등을 주기적으로 갱신하기 위한 폴링
   useEffect(() => {
-    if (!player?.nickname) return;
+    if (!roomCode || !nickname) return;
     let cancelled = false;
 
-    const poll = async (nickname: string) => {
+    const poll = async (room: string, nick: string) => {
       try {
-        const params = new URLSearchParams({ nickname });
+        const params = new URLSearchParams({ room, nickname: nick });
         const res = await fetch(`/api/mafia/state?${params.toString()}`);
         const json = (await res.json().catch(() => null)) as
           | {
@@ -247,14 +247,14 @@ function MafiaInner() {
     };
 
     const intervalId = setInterval(() => {
-      void poll(player.nickname);
+      void poll(roomCode, nickname);
     }, 3000);
 
     return () => {
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [player?.nickname]);
+  }, [roomCode, nickname]);
 
   const [timerState, setTimerState] = useState<{
     remainingSeconds: number;
@@ -316,11 +316,14 @@ function MafiaInner() {
 
   // 서버 타이머 폴링 + 로컬 1초 틱 (GM 카운트다운과 동일 패턴)
   useEffect(() => {
+    if (!roomCode) return;
     let cancelled = false;
 
     const loadTimer = async () => {
       try {
-        const res = await fetch("/api/gm/timers/mafia");
+        const res = await fetch(
+          `/api/gm/timers/mafia?room=${encodeURIComponent(roomCode)}`
+        );
         const json = (await res
           .json()
           .catch(() => null)) as MafiaTimerApi | null;
@@ -374,7 +377,7 @@ function MafiaInner() {
       clearInterval(pollId);
       clearInterval(tickId);
     };
-  }, [computeRemaining]);
+  }, [computeRemaining, roomCode]);
 
   const availableTabs = useMemo(() => {
     const base: TabKey[] = ["info", "rules", "stocks", "result"];

@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 
 // 디펜스 딜레마 전역 카운트다운 기본 시간 (초)
 // 라운드당 5분
 const TOTAL_SECONDS = 5 * 60;
 
-async function getGameStateTimer() {
+async function getGameStateTimer(room: string) {
   const supabase = createServerSupabaseClient();
   const { data: gameRow, error } = await supabase
     .from("game_state")
-    .select("id, timer_start, timer_start_at, pause_at")
-    .eq("id", 1)
+    .select("room_code, timer_start, timer_start_at, pause_at")
+    .eq("room_code", room)
     .maybeSingle();
 
   if (error) {
@@ -49,9 +50,15 @@ async function getGameStateTimer() {
   return { supabase, gameRow, remainingSeconds, isRunning };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const room = normalizeRoomCode(
+    new URL(request.url).searchParams.get("room") ?? ""
+  );
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
   try {
-    const { gameRow } = await getGameStateTimer();
+    const { gameRow } = await getGameStateTimer(room);
 
     return NextResponse.json({
       timerStart: !!gameRow?.timer_start,
@@ -70,8 +77,14 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     action?: "start" | "pause" | "reset";
+    room?: string;
   } | null;
   const action = body?.action;
+
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
 
   if (!action || !["start", "pause", "reset"].includes(action)) {
     return NextResponse.json({ error: "invalid action" }, { status: 400 });
@@ -83,7 +96,7 @@ export async function POST(request: Request) {
       gameRow,
       remainingSeconds: currentRemaining,
       isRunning: currentRunning,
-    } = await getGameStateTimer();
+    } = await getGameStateTimer(room);
 
     let remainingSeconds = currentRemaining;
     let isRunning = currentRunning;
@@ -98,7 +111,7 @@ export async function POST(request: Request) {
           timer_start_at: null,
           pause_at: null,
         })
-        .eq("id", 1);
+        .eq("room_code", room);
       remainingSeconds = TOTAL_SECONDS;
       isRunning = false;
     } else if (action === "pause") {
@@ -110,7 +123,7 @@ export async function POST(request: Request) {
             timer_start_at: gameRow.timer_start_at,
             pause_at: new Date(now).toISOString(),
           })
-          .eq("id", 1);
+          .eq("room_code", room);
         isRunning = false;
       }
     } else if (action === "start") {
@@ -124,7 +137,7 @@ export async function POST(request: Request) {
               timer_start_at: startIso,
               pause_at: null,
             })
-            .eq("id", 1);
+            .eq("room_code", room);
           remainingSeconds = TOTAL_SECONDS;
           isRunning = true;
         } else if (gameRow.pause_at && gameRow.timer_start_at) {
@@ -146,7 +159,7 @@ export async function POST(request: Request) {
                 timer_start_at: new Date(newStartMs).toISOString(),
                 pause_at: null,
               })
-              .eq("id", 1);
+              .eq("room_code", room);
             isRunning = remainingSeconds > 0;
           }
         }

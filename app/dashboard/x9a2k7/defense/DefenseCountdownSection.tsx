@@ -50,7 +50,7 @@ function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
   return { remainingSeconds: total, isRunning: false };
 }
 
-export function DefenseCountdownSection() {
+export function DefenseCountdownSection({ room }: { room: string }) {
   const [state, setState] = useState<TimerState>({
     remainingSeconds: 0,
     isRunning: false,
@@ -58,7 +58,9 @@ export function DefenseCountdownSection() {
 
   const reload = async () => {
     try {
-      const res = await fetch("/api/gm/timers/defense");
+      const res = await fetch(
+        `/api/gm/timers/defense?room=${encodeURIComponent(room)}`
+      );
       if (!res.ok) {
         throw new Error(
           `Failed to load defense timer: ${res.status} ${res.statusText}`
@@ -111,7 +113,7 @@ export function DefenseCountdownSection() {
       const res = await fetch("/api/gm/timers/defense", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, room }),
       });
       if (!res.ok) {
         throw new Error(

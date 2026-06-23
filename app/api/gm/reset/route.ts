@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import { resetScope } from "@/lib/admin/reset";
 
 // GM 대시보드용 초기화. (난수 슬러그 대시보드에서만 노출되며 테스트 가드와 무관)
@@ -13,12 +14,18 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     scope?: string;
     game?: string;
+    room?: string;
   } | null;
+
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
 
   const scope = body?.scope;
   const game = body?.game;
 
-  const result = await resetScope(supabase, scope, game);
+  const result = await resetScope(supabase, scope, game, room);
 
   // 잘못된 입력은 400 으로 구분해 돌려준다.
   if (result.badRequest) {

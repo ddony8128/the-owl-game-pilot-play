@@ -4,6 +4,7 @@ import { getMafiaPhaseLabel } from "@/lib/labels/mafia";
 
 type Props = {
   phase: MafiaPhaseState | null;
+  room: string;
 };
 
 type ApiTimer = {
@@ -57,14 +58,16 @@ function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
   return { remainingSeconds: total, isRunning: false };
 }
 
-export function MafiaCountdownSection({ phase }: Props) {
+export function MafiaCountdownSection({ phase, room }: Props) {
   const [state, setState] = useState<TimerState>({
     remainingSeconds: 0,
     isRunning: false,
   });
 
   const reload = async () => {
-    const res = await fetch("/api/gm/timers/mafia");
+    const res = await fetch(
+      `/api/gm/timers/mafia?room=${encodeURIComponent(room)}`
+    );
     const json = (await res.json().catch(() => null)) as ApiTimer | null;
     if (!json) return;
     const now = Date.now();
@@ -92,13 +95,14 @@ export function MafiaCountdownSection({ phase }: Props) {
       clearInterval(syncId);
     };
     // 페이즈가 바뀔 때마다 서버 기준으로 다시 초기화
-  }, [phase?.phase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase?.phase, room]);
 
   const sendAction = async (action: "start" | "pause" | "reset") => {
     await fetch("/api/gm/timers/mafia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, room }),
     }).catch(() => undefined);
     void reload();
   };

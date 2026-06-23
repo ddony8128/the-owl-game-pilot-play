@@ -45,7 +45,7 @@ export function MafiaTradeTab({
   const [info, setInfo] = useState<string | null>(null);
   const [boughtStocks, setBoughtStocks] = useState<string[]>([]);
   const [soldStocks, setSoldStocks] = useState<string[]>([]);
-  const { player } = usePlayerAuth();
+  const { player, roomCode } = usePlayerAuth();
 
   const holdingAmountFor = (key: string): number => {
     if (!holdings || typeof holdings !== "object") return 0;
@@ -56,7 +56,7 @@ export function MafiaTradeTab({
   };
 
   const handleSubmit = async () => {
-    if (!player?.nickname) return;
+    if (!player?.nickname || !roomCode) return;
     if (!stockKey) return;
     const amount = Number(value);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -73,6 +73,7 @@ export function MafiaTradeTab({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          room: roomCode,
           nickname: player.nickname,
           type,
           payload: { stock_key: stockKey, amount },

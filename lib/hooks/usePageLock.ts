@@ -3,33 +3,28 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
-import { useGameState } from "@/lib/hooks/useGameState";
 
 export type PageLockOptions = {
   requireLogin?: boolean;
-  allowGames?: string[]; // active_game 허용 목록
+  allowGames?: string[]; // 이 방의 game 허용 목록 (예: ["mafia"])
 };
 
+// 방 모델: 로그인(방+닉네임 검증 완료) + 방의 game 일치 여부로 접근 제어.
+// 게임 진행 상태(phase)는 서버가 강제하므로 여기선 방 소속만 본다.
 export function usePageLock(options: PageLockOptions) {
   const router = useRouter();
-  const { player, nickname, isLoading: authLoading } = usePlayerAuth();
-  const { activeGame, isLoading: gameLoading } = useGameState();
+  const { player, nickname, roomCode, roomGame, isLoading } = usePlayerAuth();
 
-  const isLoading = authLoading || gameLoading;
-
-  const isLoggedIn = !!nickname && !!player;
+  const isLoggedIn = !!nickname && !!roomCode && !!player;
   const isPageActivated =
     !options.allowGames ||
-    (activeGame != null && options.allowGames.includes(activeGame));
+    (roomGame != null && options.allowGames.includes(roomGame));
 
-  // finalist 기반 접근 제한은 더 이상 사용하지 않음
   const canAccess = isLoggedIn && isPageActivated;
 
   useEffect(() => {
     if (isLoading) return;
-    if (!canAccess) {
-      router.replace("/locked");
-    }
+    if (!canAccess) router.replace("/locked");
   }, [canAccess, isLoading, router]);
 
   return {

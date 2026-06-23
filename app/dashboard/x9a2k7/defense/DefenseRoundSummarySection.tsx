@@ -40,7 +40,7 @@ type RoundState = {
   monsters: RoundMonsterSummary[];
 } | null;
 
-export function DefenseRoundSummarySection() {
+export function DefenseRoundSummarySection({ room }: { room: string }) {
   const [selectedRound, setSelectedRound] = useState<number>(1);
   const [data, setData] = useState<RoundState>(null);
   const [loading, setLoading] = useState(false);
@@ -50,7 +50,7 @@ export function DefenseRoundSummarySection() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ round: String(round) });
+      const params = new URLSearchParams({ round: String(round), room });
       const res = await fetch(
         `/api/gm/defense/round-state?${params.toString()}`
       );

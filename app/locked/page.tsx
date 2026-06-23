@@ -17,7 +17,7 @@ export default function LockedPage() {
         정상적이지 않은 접근이부엉!
       </h1>
       <Link
-        href="/intro"
+        href="/"
         className="mt-2 inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-sm text-zinc-100 hover:bg-zinc-900"
       >
         메인 페이지로 돌아가기

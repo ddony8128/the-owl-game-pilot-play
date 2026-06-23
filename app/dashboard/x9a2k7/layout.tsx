@@ -8,9 +8,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <h1 className="mb-2 text-sm font-semibold">GM Dashboard</h1>
         <Link
           className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/main"
+          href="/dashboard/x9a2k7"
         >
-          메인
+          방 관리
         </Link>
         <Link
           className="text-zinc-200 hover:text-amber-300"
@@ -24,40 +24,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         >
           BGM
         </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/subway"
-        >
-          이상교통
-        </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/mafia"
-        >
-          마피아
-        </Link>
-        <Link className="text-zinc-200 hover:text-amber-300" href="/mafia-board">
-          마피아 중계
-        </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/defense"
-        >
-          디펜스
-        </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
-          href="/defense-board"
-        >
-          디펜스 중계
-        </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/police"
-        >
-          신고 관리
-        </Link>
-        {/* 3게임(퀴즈쇼) 관련 GM 페이지는 더 이상 사용하지 않음 */}
+        {/* 게임 대시보드는 "방 관리"에서 방을 골라 입장합니다(방 코드 필요). */}
       </aside>
       <main className="flex flex-1 flex-col px-4 py-4">{children}</main>
     </div>

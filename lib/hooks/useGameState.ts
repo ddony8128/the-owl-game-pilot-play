@@ -3,63 +3,55 @@
 import { useEffect, useState } from "react";
 import type { GameState, RulesState } from "@/lib/types";
 
-export function useGameState() {
+// 방(room) 단위 게임 상태. room 이 없으면 유휴 상태.
+export function useGameState(room: string | null) {
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const [rulesMap, setRulesMap] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!room) {
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
 
     const load = async () => {
       try {
-        const res = await fetch("/api/state/game");
-        if (!res.ok) {
-          throw new Error("게임 상태를 불러오지 못했습니다.");
-        }
+        const res = await fetch(
+          `/api/state/game?room=${encodeURIComponent(room)}`,
+        );
+        if (!res.ok) throw new Error("게임 상태를 불러오지 못했습니다.");
         const json = (await res.json()) as {
           gameState: GameState | null;
           rules: RulesState[];
         };
-
         if (cancelled) return;
 
-        const g = json.gameState;
-        const r = json.rules || [];
-        setActiveGame(g?.active_game ?? null);
+        setActiveGame(json.gameState?.active_game ?? null);
         const map: Record<string, boolean> = {};
-        for (const row of r) {
-          map[row.rule_key] = row.is_open;
-        }
+        for (const row of json.rules || []) map[row.rule_key] = row.is_open;
         setRulesMap(map);
         setError(null);
       } catch (e: unknown) {
         if (!cancelled) {
-          const message =
-            e instanceof Error ? e.message : "게임 상태를 불러오지 못했습니다.";
-          setError(message);
+          setError(
+            e instanceof Error ? e.message : "게임 상태를 불러오지 못했습니다.",
+          );
         }
       } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
+        if (!cancelled) setIsLoading(false);
       }
     };
 
-    // 최초 1회 즉시 호출
     void load();
-
-    // 5초마다 주기적으로 갱신 (폴링)
-    const id = setInterval(() => {
-      void load();
-    }, 5000);
-
+    const id = setInterval(() => void load(), 5000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [room]);
 
   return { activeGame, rulesMap, isLoading, error } as const;
 }

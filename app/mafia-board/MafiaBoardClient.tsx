@@ -62,6 +62,12 @@ function computeRanked(
 const RANK_ACCENT = ["text-amber-300", "text-zinc-200", "text-orange-400"];
 
 export function MafiaBoardClient() {
+  const [room] = useState<string | null>(() =>
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("room")
+      : null
+  );
+  const [roomInput, setRoomInput] = useState("");
   const [players, setPlayers] = useState<MafiaPlayerState[]>([]);
   const [stocks, setStocks] = useState<MafiaStockState[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
@@ -69,10 +75,13 @@ export function MafiaBoardClient() {
   const [revealMafia, setRevealMafia] = useState(false);
 
   useEffect(() => {
+    if (!room) return;
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch("/api/mafia/state?all=1");
+        const res = await fetch(
+          `/api/mafia/state?all=1&room=${encodeURIComponent(room)}`
+        );
         const json = (await res.json().catch(() => null)) as
           | StateResponse
           | { error: string }
@@ -102,12 +111,43 @@ export function MafiaBoardClient() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [room]);
 
   const ranked = useMemo(
     () => computeRanked(players, stocks, names),
     [players, stocks, names]
   );
+
+  if (!room) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-8 text-zinc-50">
+        <p className="text-2xl">결과 페이지 — 방 코드가 필요합니다.</p>
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const code = roomInput.trim().toUpperCase();
+            if (code) {
+              window.location.search = `?room=${encodeURIComponent(code)}`;
+            }
+          }}
+        >
+          <input
+            className="h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-base outline-none focus:border-zinc-400"
+            placeholder="방 코드"
+            value={roomInput}
+            onChange={(e) => setRoomInput(e.target.value)}
+          />
+          <button
+            type="submit"
+            className="h-10 rounded-lg bg-amber-400 px-4 text-base font-semibold text-zinc-950 hover:bg-amber-300"
+          >
+            이동
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 px-8 py-8 text-zinc-50">

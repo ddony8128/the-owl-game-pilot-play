@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type {
   DefenseMonsterSnapshot,
   DefenseMonsterInstance,
@@ -33,8 +34,15 @@ type BoardStateResponse =
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(request.url);
+  const room = normalizeRoomCode(searchParams.get("room") ?? "");
   const roundParam = searchParams.get("round");
   const round = roundParam ? Number(roundParam) : NaN;
+
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as BoardStateResponse, {
+      status: 400,
+    });
+  }
 
   // 디펜스 라운드: 튜토리얼 1(1), 튜토리얼 2(2), 튜토리얼 결과(3), 본게임 1~12라운드(4~15)
   if (!Number.isInteger(round) || round < 1 || round > 15) {
@@ -52,12 +60,14 @@ export async function GET(request: Request) {
       .select(
         "instance_id, monster_id, round, current_hp, remaining_time, slot_index"
       )
+      .eq("room_code", room)
       .eq("round", round),
     supabase
       .from("defense_monster_instance")
       .select(
         "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
-      ),
+      )
+      .eq("room_code", room),
   ]);
 
   if (snapRes.error) {

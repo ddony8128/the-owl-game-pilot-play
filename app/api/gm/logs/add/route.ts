@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   // 현재 라운드/페이즈 정보를 함께 기록한다.
   const { data: phaseRow, error: phaseError } = await supabase
     .from("mafia_phase_state")
-    .select("id, round_number, phase, updated_at")
+    .select("room_code, round_number, phase, updated_at")
     .eq("id", 1)
     .maybeSingle();
 

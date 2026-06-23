@@ -30,7 +30,8 @@ function getRoundLabelForLog(round: number): string {
 export async function handleDefenseAdvanceRound(
   supabase: ReturnType<typeof createServerSupabaseClient>,
   current: DefensePhaseState,
-  nextRound: number
+  nextRound: number,
+  room: string
 ) {
   // 1. 이번 라운드의 모든 액션/카드/몬스터/점수/플레이어 상태 로드
   const [actionsRes, cardsRes, monstersRes, scoresRes, playersRes] =
@@ -40,17 +41,26 @@ export async function handleDefenseAdvanceRound(
         .select(
           "round, player_id, action_type, target_monster_id, used_card_value, training_from, training_to"
         )
+        .eq("room_code", room)
         .eq("round", current.round),
       supabase
         .from("defense_card_state")
-        .select("player_id, card_slot, card_value, is_active"),
+        .select("player_id, card_slot, card_value, is_active")
+        .eq("room_code", room),
       supabase
         .from("defense_monster_instance")
         .select(
           "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
-        ),
-      supabase.from("defense_score").select("player_id, points"),
-      supabase.from("players").select("id, nickname, created_at"),
+        )
+        .eq("room_code", room),
+      supabase
+        .from("defense_score")
+        .select("player_id, points")
+        .eq("room_code", room),
+      supabase
+        .from("players")
+        .select("id, nickname, created_at")
+        .eq("room_code", room),
     ]);
 
   if (actionsRes.error) throw new Error(actionsRes.error.message);
@@ -137,6 +147,7 @@ export async function handleDefenseAdvanceRound(
           current_hp: 0,
           removed_round: current.round,
         })
+        .eq("room_code", room)
         .eq("id", monsterId);
 
       const points = def?.points ?? 0;
@@ -151,6 +162,7 @@ export async function handleDefenseAdvanceRound(
 
           await supabase.from("defense_score").upsert(
             {
+              room_code: room,
               player_id: e.player_id,
               points: next,
             } as DefenseScore,
@@ -158,6 +170,7 @@ export async function handleDefenseAdvanceRound(
           );
 
           await supabase.from("defense_player_log").insert({
+            room_code: room,
             player_id: e.player_id,
             round: current.round,
             log: `전투: ${
@@ -168,6 +181,7 @@ export async function handleDefenseAdvanceRound(
       } else {
         for (const e of entries) {
           await supabase.from("defense_player_log").insert({
+            room_code: room,
             player_id: e.player_id,
             round: current.round,
             log: `전투: ${
@@ -181,6 +195,7 @@ export async function handleDefenseAdvanceRound(
       for (const p of players) {
         if (participantIds.has(p.id)) continue;
         await supabase.from("defense_player_log").insert({
+          room_code: room,
           player_id: p.id,
           round: current.round,
           log: `${def?.name ?? `몬스터 ${monster.monster_id}`}이(가) 쓰러졌습니다.`,
@@ -190,11 +205,13 @@ export async function handleDefenseAdvanceRound(
       await supabase
         .from("defense_monster_instance")
         .update({ current_hp: afterHp })
+        .eq("room_code", room)
         .eq("id", monsterId);
 
       // 전투에 참여한 플레이어들: 지금처럼 상세 피해 로그 유지
       for (const e of entries) {
         await supabase.from("defense_player_log").insert({
+          room_code: room,
           player_id: e.player_id,
           round: current.round,
           log: `전투: ${
@@ -207,6 +224,7 @@ export async function handleDefenseAdvanceRound(
       for (const p of players) {
         if (participantIds.has(p.id)) continue;
         await supabase.from("defense_player_log").insert({
+          room_code: room,
           player_id: p.id,
           round: current.round,
           log: `${def?.name ?? `몬스터 ${monster.monster_id}`}이(가) 이번 라운드에 총 ${totalDamage} 피해를 입고 남은 HP가 ${afterHp}가 되었습니다.`,
@@ -221,6 +239,7 @@ export async function handleDefenseAdvanceRound(
     .select(
       "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
     )
+    .eq("room_code", room)
     .eq("status", "active");
 
   if (activeAfterCombatRes.error) {
@@ -243,11 +262,13 @@ export async function handleDefenseAdvanceRound(
           status: "expired",
           removed_round: current.round,
         })
+        .eq("room_code", room)
         .eq("id", m.id);
     } else {
       await supabase
         .from("defense_monster_instance")
         .update({ remaining_time: newTime })
+        .eq("room_code", room)
         .eq("id", m.id);
     }
   }
@@ -262,6 +283,7 @@ export async function handleDefenseAdvanceRound(
       const playerCardsRes = await supabase
         .from("defense_card_state")
         .select("player_id, card_slot, card_value, is_active")
+        .eq("room_code", room)
         .eq("player_id", p.id)
         .eq("is_active", true)
         .order("card_value", { ascending: false })
@@ -280,10 +302,12 @@ export async function handleDefenseAdvanceRound(
       await supabase
         .from("defense_card_state")
         .update({ is_active: false })
+        .eq("room_code", room)
         .eq("player_id", card.player_id)
         .eq("card_slot", card.card_slot);
 
       await supabase.from("defense_player_log").insert({
+        room_code: room,
         player_id: card.player_id,
         round: current.round,
         log: `${
@@ -296,7 +320,8 @@ export async function handleDefenseAdvanceRound(
   // 4. 대기열 빈 슬롯에 새 몬스터 소환 (count를 고려)
   const countsRes = await supabase
     .from("defense_monster_count")
-    .select("id, count");
+    .select("id, count")
+    .eq("room_code", room);
   if (countsRes.error) throw new Error(countsRes.error.message);
   const counts = (countsRes.data || []) as DefenseMonsterCount[];
   const countsMap = new Map<number, number>();
@@ -307,6 +332,7 @@ export async function handleDefenseAdvanceRound(
     .select(
       "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
     )
+    .eq("room_code", room)
     .eq("status", "active");
   if (activeNowRes.error) throw new Error(activeNowRes.error.message);
   const activeNow = (activeNowRes.data || []) as DefenseMonsterInstance[];
@@ -319,6 +345,7 @@ export async function handleDefenseAdvanceRound(
   });
 
   const newInstances: {
+    room_code: string;
     id: string;
     monster_id: number;
     current_hp: number;
@@ -353,6 +380,7 @@ export async function handleDefenseAdvanceRound(
     if (!chosen) break;
 
     newInstances.push({
+      room_code: room,
       id: randomUUID(),
       monster_id: chosen.id,
       current_hp: chosen.maxHp,
@@ -375,6 +403,7 @@ export async function handleDefenseAdvanceRound(
     }
 
     const updatedCounts = DEFENSE_MONSTERS.map((m) => ({
+      room_code: room,
       id: m.id,
       count: countsMap.get(m.id) ?? 0,
     }));
@@ -382,7 +411,7 @@ export async function handleDefenseAdvanceRound(
     const { error: updateCountsError } = await supabase
       .from("defense_monster_count")
       .upsert(updatedCounts, {
-        onConflict: "id",
+        onConflict: "room_code,id",
       });
 
     if (updateCountsError) {
@@ -393,13 +422,15 @@ export async function handleDefenseAdvanceRound(
   // 5. 점수/몬스터 스냅샷 저장 (현재 라운드 기준)
   const finalScoresRes = await supabase
     .from("defense_score")
-    .select("player_id, points");
+    .select("player_id, points")
+    .eq("room_code", room);
   if (finalScoresRes.error) throw new Error(finalScoresRes.error.message);
   const finalScores = (finalScoresRes.data || []) as DefenseScore[];
 
   if (finalScores.length > 0) {
     await supabase.from("defense_score_snapshot").insert(
       finalScores.map((s) => ({
+        room_code: room,
         player_id: s.player_id,
         round: current.round,
         points: s.points,
@@ -413,6 +444,7 @@ export async function handleDefenseAdvanceRound(
     .select(
       "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
     )
+    .eq("room_code", room)
     .eq("status", "active");
 
   if (nextMonstersRes.error) {
@@ -425,6 +457,7 @@ export async function handleDefenseAdvanceRound(
   if (nextMonsters.length > 0) {
     await supabase.from("defense_monster_snapshot").insert(
       nextMonsters.map((m) => ({
+        room_code: room,
         instance_id: m.id,
         monster_id: m.monster_id,
         round: nextRound,

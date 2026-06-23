@@ -110,7 +110,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const rows = (data || []) as (SubwayPlayerState & {
+    const rows = (data || []) as unknown as (SubwayPlayerState & {
       players?: { nickname?: string | null } | null;
     })[];
 

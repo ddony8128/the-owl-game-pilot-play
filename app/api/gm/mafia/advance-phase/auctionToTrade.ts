@@ -7,12 +7,14 @@ import type { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function handleAuctionToTrade(
   supabase: ReturnType<typeof createServerSupabaseClient>,
-  current: MafiaPhaseState
+  current: MafiaPhaseState,
+  room: string
 ) {
   // 현재 라운드의 경매 베팅 내역 조회
   const { data: actionRows, error: actionsError } = await supabase
     .from("mafia_actions")
     .select("player_id, round_number, phase, action_type, payload, created_at")
+    .eq("room_code", room)
     .eq("round_number", current.round_number)
     .eq("phase", current.phase)
     .eq("action_type", "bet");
@@ -26,7 +28,8 @@ export async function handleAuctionToTrade(
   // 플레이어 목록 조회 (모든 참가자 대상)
   const { data: playerStateRows, error: playerStateError } = await supabase
     .from("mafia_player_state")
-    .select("player_id, cash, is_mafia, job, updated_at");
+    .select("player_id, cash, is_mafia, job, updated_at")
+    .eq("room_code", room);
 
   if (playerStateError) {
     throw new Error(
@@ -111,6 +114,7 @@ export async function handleAuctionToTrade(
 
     updates.push({
       player_id: pid,
+      room_code: room,
       job,
       is_mafia: isMafia,
     } as Partial<MafiaPlayerState>);
@@ -147,6 +151,7 @@ export async function handleAuctionToTrade(
       const nextCash = baseCash - betAmount;
       updatedPlayers.push({
         player_id: pid,
+        room_code: room,
         cash: nextCash,
       } as Partial<MafiaPlayerState>);
     }

@@ -4,9 +4,10 @@ import type { MafiaLog } from "@/lib/types";
 type Props = {
   logs: MafiaLog[];
   onLogAdded: (log: MafiaLog) => void;
+  room: string;
 };
 
-export function MafiaLogsSection({ logs, onLogAdded }: Props) {
+export function MafiaLogsSection({ logs, onLogAdded, room }: Props) {
   const [newLog, setNewLog] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -19,7 +20,7 @@ export function MafiaLogsSection({ logs, onLogAdded }: Props) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content: newLog.trim() }),
+        body: JSON.stringify({ content: newLog.trim(), room }),
       });
       const json = (await res.json().catch(() => null)) as {
         ok?: true;

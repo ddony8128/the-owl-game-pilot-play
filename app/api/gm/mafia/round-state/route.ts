@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type {
   MafiaAction,
   MafiaPlayerSnapshot,
@@ -68,8 +69,16 @@ const phaseRank: Record<string, number> = {
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(request.url);
+  const room = normalizeRoomCode(searchParams.get("room") ?? "");
   const roundParam = searchParams.get("round");
   const round = roundParam ? Number(roundParam) : NaN;
+
+  if (!room) {
+    return NextResponse.json(
+      { error: "room 필요" } as RoundStateResponse,
+      { status: 400 }
+    );
+  }
 
   if (!Number.isInteger(round) || round < 0 || round > 5) {
     return NextResponse.json(
@@ -83,7 +92,8 @@ export async function GET(request: Request) {
   // 플레이어 기본 정보(닉네임)
   const { data: playerRows, error: playersError } = await supabase
     .from("players")
-    .select("id, nickname, created_at");
+    .select("id, nickname, created_at")
+    .eq("room_code", room);
 
   if (playersError) {
     return NextResponse.json(
@@ -102,6 +112,7 @@ export async function GET(request: Request) {
   const { data: snapshotRows, error: snapshotError } = await supabase
     .from("mafia_player_snapshots")
     .select("player_id, round_number, phase, cash, stocks, job, created_at")
+    .eq("room_code", room)
     .eq("round_number", round);
 
   if (snapshotError) {
@@ -133,6 +144,7 @@ export async function GET(request: Request) {
   const { data: actionRows, error: actionsError } = await supabase
     .from("mafia_actions")
     .select("player_id, round_number, phase, action_type, payload, created_at")
+    .eq("room_code", room)
     .eq("round_number", round);
 
   if (actionsError) {
@@ -148,6 +160,7 @@ export async function GET(request: Request) {
   const { data: voteRows, error: votesError } = await supabase
     .from("mafia_votes")
     .select("voter_id, target_id, vote_count, unit_price")
+    .eq("room_code", room)
     .eq("round_number", round);
 
   if (votesError) {
@@ -165,6 +178,7 @@ export async function GET(request: Request) {
     .select(
       "stock_key, round_number, price_before, price_after, meta, created_at"
     )
+    .eq("room_code", room)
     .eq("round_number", round);
 
   if (historyError) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type {
   DefensePhaseState,
   DefenseCardState,
@@ -9,6 +10,7 @@ import type {
 } from "@/lib/types";
 
 type Body = {
+  room?: string;
   nickname?: string;
   action_type?: DefenseActionType;
   target_monster_id?: string | null;
@@ -23,6 +25,13 @@ type ResponseBody = { ok: true } | { error: string };
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as Body | null;
+
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as ResponseBody, {
+      status: 400,
+    });
+  }
 
   if (!body || typeof body.nickname !== "string") {
     return NextResponse.json(
@@ -50,8 +59,8 @@ export async function POST(request: Request) {
   // 현재 라운드 조회
   const { data: phaseRow, error: phaseError } = await supabase
     .from("defense_phase_state")
-    .select("id, round, updated_at")
-    .eq("id", 1)
+    .select("room_code, round, updated_at")
+    .eq("room_code", room)
     .maybeSingle();
 
   if (phaseError) {
@@ -83,6 +92,7 @@ export async function POST(request: Request) {
   const playerRes = await supabase
     .from("players")
     .select("id, nickname, created_at")
+    .eq("room_code", room)
     .eq("nickname", nickname)
     .maybeSingle();
 
@@ -106,6 +116,7 @@ export async function POST(request: Request) {
   const { data: existingAction, error: existingError } = await supabase
     .from("defense_action")
     .select("round, player_id")
+    .eq("room_code", room)
     .eq("round", currentRound)
     .eq("player_id", player.id)
     .maybeSingle();
@@ -155,6 +166,7 @@ export async function POST(request: Request) {
       .select(
         "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
       )
+      .eq("room_code", room)
       .eq("id", targetId)
       .maybeSingle();
 
@@ -178,6 +190,7 @@ export async function POST(request: Request) {
     const { data: cardRow, error: cardError } = await supabase
       .from("defense_card_state")
       .select("player_id, card_slot, card_value, is_active")
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .eq("card_slot", usedSlot)
       .maybeSingle();
@@ -204,6 +217,7 @@ export async function POST(request: Request) {
     await supabase
       .from("defense_card_state")
       .update({ is_active: false })
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .eq("card_slot", usedSlot);
   } else if (actionType === "training") {
@@ -228,6 +242,7 @@ export async function POST(request: Request) {
     const { data: fromCardRow, error: fromCardError } = await supabase
       .from("defense_card_state")
       .select("player_id, card_slot, card_value, is_active")
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .eq("card_slot", fromSlot)
       .maybeSingle();
@@ -253,6 +268,7 @@ export async function POST(request: Request) {
     const { data: toCardRow, error: toCardError } = await supabase
       .from("defense_card_state")
       .select("player_id, card_slot, card_value, is_active")
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .eq("card_slot", toSlot)
       .maybeSingle();
@@ -284,16 +300,19 @@ export async function POST(request: Request) {
     await supabase
       .from("defense_card_state")
       .update({ is_active: false })
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .eq("card_slot", fromSlot);
 
     await supabase
       .from("defense_card_state")
       .update({ card_value: afterValue })
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .eq("card_slot", toSlot);
 
     await supabase.from("defense_player_log").insert({
+      room_code: room,
       player_id: player.id,
       round: currentRound,
       log: `훈련: 값 ${fromValue} 카드를 비활성화하고 값 ${beforeValue} 카드를 ${afterValue}로 강화했습니다.`,
@@ -320,6 +339,7 @@ export async function POST(request: Request) {
     const { data: cardsRows, error: cardsError } = await supabase
       .from("defense_card_state")
       .select("player_id, card_slot, card_value, is_active")
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .in("card_slot", uniqueSlots);
 
@@ -348,6 +368,7 @@ export async function POST(request: Request) {
     await supabase
       .from("defense_card_state")
       .update({ is_active: true })
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .in("card_slot", inactiveSlots);
 
@@ -356,6 +377,7 @@ export async function POST(request: Request) {
     restCardSlotText = values.join(",");
 
     await supabase.from("defense_player_log").insert({
+      room_code: room,
       player_id: player.id,
       round: currentRound,
       log: `휴식: ${valuesLabel} 카드를 다시 활성화했습니다.`,
@@ -363,6 +385,7 @@ export async function POST(request: Request) {
   }
 
   const insertBody = {
+    room_code: room,
     round: currentRound,
     player_id: player.id,
     action_type: actionType,

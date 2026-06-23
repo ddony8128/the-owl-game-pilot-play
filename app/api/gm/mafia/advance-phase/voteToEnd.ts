@@ -8,13 +8,15 @@ import type { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function handleVoteToEnd(
   supabase: ReturnType<typeof createServerSupabaseClient>,
-  current: MafiaPhaseState
+  current: MafiaPhaseState,
+  room: string
 ) {
   // 이미 이 라운드의 경제사범 처리(국채 조정/벌금/안내 메시지 등)를 한 번 수행했다면
   // 같은 라운드에 대해 중복으로 호출되더라도 두 번째부터는 아무 작업도 하지 않는다.
   const { data: existingResults, error: existingError } = await supabase
     .from("mafia_ability_results")
     .select("id, category")
+    .eq("room_code", room)
     .eq("round_number", current.round_number)
     .eq("phase", "vote")
     .in("category", ["econ_mafia", "econ_not_mafia", "vote_no_econ"]);
@@ -35,6 +37,7 @@ export async function handleVoteToEnd(
   const { data: voteRows, error: votesError } = await supabase
     .from("mafia_votes")
     .select("round_number, target_id, vote_count")
+    .eq("room_code", room)
     .eq("round_number", current.round_number);
 
   if (votesError) {
@@ -45,14 +48,15 @@ export async function handleVoteToEnd(
 
   // 공통: 마피아가 경제사범으로 뽑히지 않았을 때 마피아에게 가장 비싼 주식 1주 지급
   const rewardMafiaWithStock = async (): Promise<
-    Omit<MafiaAbilityResult, "id" | "created_at">[]
+    Omit<MafiaAbilityResult, "id" | "created_at" | "room_code">[]
   > => {
-    const results: Omit<MafiaAbilityResult, "id" | "created_at">[] = [];
+    const results: Omit<MafiaAbilityResult, "id" | "created_at" | "room_code">[] = [];
 
     // 모든 주식 가격 조회
     const { data: stockRows, error: stockError } = await supabase
       .from("mafia_stock_state")
-      .select("stock_key, price");
+      .select("stock_key, price")
+      .eq("room_code", room);
 
     if (stockError) {
       throw new Error(
@@ -78,6 +82,7 @@ export async function handleVoteToEnd(
     const { data: mafiaRows, error: mafiaError } = await supabase
       .from("mafia_player_state")
       .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("room_code", room)
       .eq("is_mafia", true);
 
     if (mafiaError) {
@@ -114,6 +119,7 @@ export async function handleVoteToEnd(
 
       mafiaUpdates.push({
         player_id: mp.player_id,
+        room_code: room,
         stocks: playerStocks,
       } as Partial<MafiaPlayerState>);
 
@@ -144,7 +150,8 @@ export async function handleVoteToEnd(
     // 전체 공개 메시지
     const { data: allRows, error: allError } = await supabase
       .from("mafia_player_state")
-      .select("player_id, job");
+      .select("player_id, job")
+      .eq("room_code", room);
 
     if (allError) {
       throw new Error(
@@ -173,7 +180,8 @@ export async function handleVoteToEnd(
   const insertNoEconAbilityResult = async () => {
     const { data: stateRows, error: stateError } = await supabase
       .from("mafia_player_state")
-      .select("player_id, job");
+      .select("player_id, job")
+      .eq("room_code", room);
 
     if (stateError) {
       throw new Error(
@@ -182,7 +190,7 @@ export async function handleVoteToEnd(
       );
     }
 
-    const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at">[] = [];
+    const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at" | "room_code">[] = [];
 
     for (const row of (stateRows ?? []) as MafiaPlayerState[]) {
       if (!row.player_id) continue;
@@ -204,7 +212,7 @@ export async function handleVoteToEnd(
     if (abilityResults.length > 0) {
       const { error: abilityError } = await supabase
         .from("mafia_ability_results")
-        .insert(abilityResults);
+        .insert(abilityResults.map((r) => ({ ...r, room_code: room })));
 
       if (abilityError) {
         throw new Error(
@@ -259,6 +267,7 @@ export async function handleVoteToEnd(
   const { data: econPlayerRow, error: econPlayerError } = await supabase
     .from("players")
     .select("id, nickname, created_at")
+    .eq("room_code", room)
     .eq("id", econTargetId)
     .maybeSingle();
 
@@ -275,6 +284,7 @@ export async function handleVoteToEnd(
   const { data: econStateRow, error: econStateError } = await supabase
     .from("mafia_player_state")
     .select("player_id, cash, is_mafia, job, stocks, updated_at")
+    .eq("room_code", room)
     .eq("player_id", econPlayer.id)
     .maybeSingle();
 
@@ -291,12 +301,13 @@ export async function handleVoteToEnd(
   const econState = econStateRow as MafiaPlayerState;
   const isMafia = econState.is_mafia;
 
-  const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at">[] = [];
+  const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at" | "room_code">[] = [];
 
   // 현재 국채 가격 조회
   const { data: bondRow, error: bondError } = await supabase
     .from("mafia_stock_state")
     .select("stock_key, price")
+    .eq("room_code", room)
     .eq("stock_key", "국채")
     .maybeSingle();
 
@@ -318,6 +329,7 @@ export async function handleVoteToEnd(
     const { error: updateBondError } = await supabase
       .from("mafia_stock_state")
       .update({ price: newBondPrice })
+      .eq("room_code", room)
       .eq("stock_key", "국채");
 
     if (updateBondError) {
@@ -331,6 +343,7 @@ export async function handleVoteToEnd(
     const { error: historyError } = await supabase
       .from("mafia_stock_history")
       .insert({
+        room_code: room,
         stock_key: "국채",
         round_number: current.round_number,
         price_before: currentBondPrice,
@@ -353,6 +366,7 @@ export async function handleVoteToEnd(
     const { error: updateFineError } = await supabase
       .from("mafia_player_state")
       .update({ cash: nextCash })
+      .eq("room_code", room)
       .eq("player_id", econPlayer.id);
 
     if (updateFineError) {
@@ -376,6 +390,7 @@ export async function handleVoteToEnd(
     const { data: citizenRows, error: citizenError } = await supabase
       .from("mafia_player_state")
       .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("room_code", room)
       .eq("is_mafia", false);
 
     if (citizenError) {
@@ -400,6 +415,7 @@ export async function handleVoteToEnd(
 
       citizenUpdates.push({
         player_id: row.player_id,
+        room_code: room,
         stocks,
       } as Partial<MafiaPlayerState>);
     }
@@ -419,7 +435,8 @@ export async function handleVoteToEnd(
     // 모든 플레이어에게: 경제사범이 마피아이었고 시민에게 국채가 지급되었음을 안내
     const { data: allRows, error: allError } = await supabase
       .from("mafia_player_state")
-      .select("player_id, job");
+      .select("player_id, job")
+      .eq("room_code", room);
 
     if (allError) {
       throw new Error(
@@ -449,6 +466,7 @@ export async function handleVoteToEnd(
     const { error: updateFineError } = await supabase
       .from("mafia_player_state")
       .update({ cash: nextCash })
+      .eq("room_code", room)
       .eq("player_id", econPlayer.id);
 
     if (updateFineError) {
@@ -470,7 +488,8 @@ export async function handleVoteToEnd(
     // 경제사범이 마피아가 아니면, 모든 플레이어에게 "마피아가 아니었다"는 안내 메시지를 남긴다.
     const { data: allRows, error: allError } = await supabase
       .from("mafia_player_state")
-      .select("player_id, cash, is_mafia, job, stocks, updated_at");
+      .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("room_code", room);
 
     if (allError) {
       throw new Error(
@@ -501,7 +520,7 @@ export async function handleVoteToEnd(
   if (abilityResults.length > 0) {
     const { error: abilityError } = await supabase
       .from("mafia_ability_results")
-      .insert(abilityResults);
+      .insert(abilityResults.map((r) => ({ ...r, room_code: room })));
 
     if (abilityError) {
       throw new Error(

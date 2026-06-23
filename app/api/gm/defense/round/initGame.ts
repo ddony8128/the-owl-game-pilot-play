@@ -11,16 +11,18 @@ import { randomUUID } from "crypto";
 export async function handleDefenseInitRound(
   supabase: ReturnType<typeof createServerSupabaseClient>,
   current: DefensePhaseState,
-  nextRound: number
+  nextRound: number,
+  room: string
 ) {
   // 몬스터 카운트 초기화 (각 몬스터의 baseCount 값 사용)
-  const initialCounts: DefenseMonsterCount[] = DEFENSE_MONSTERS.map((m) => ({
+  const initialCounts = DEFENSE_MONSTERS.map((m) => ({
+    room_code: room,
     id: m.id,
     count: m.baseCount,
   }));
 
   await supabase.from("defense_monster_count").upsert(initialCounts, {
-    onConflict: "id",
+    onConflict: "room_code,id",
   });
 
   // 기존 몬스터 인스턴스 정리:
@@ -32,6 +34,7 @@ export async function handleDefenseInitRound(
       remaining_time: 0,
       removed_round: current.round,
     })
+    .eq("room_code", room)
     .eq("status", "active");
 
   if (expireError) {
@@ -41,7 +44,8 @@ export async function handleDefenseInitRound(
   // 플레이어 목록 조회
   const { data: playerRows, error: playersError } = await supabase
     .from("players")
-    .select("id, nickname, created_at");
+    .select("id, nickname, created_at")
+    .eq("room_code", room);
 
   if (playersError) {
     throw new Error(playersError.message);
@@ -53,6 +57,7 @@ export async function handleDefenseInitRound(
   if (players.length > 0) {
     // 카드: 1,2,3,4 모두 활성
     const cardRows: {
+      room_code: string;
       player_id: string;
       card_slot: number;
       card_value: number;
@@ -62,6 +67,7 @@ export async function handleDefenseInitRound(
     for (const p of players) {
       for (let slot = 1; slot <= 4; slot += 1) {
         cardRows.push({
+          room_code: room,
           player_id: p.id,
           card_slot: slot,
           card_value: slot,
@@ -70,11 +76,11 @@ export async function handleDefenseInitRound(
       }
     }
 
-    // 전체 카드 상태 리셋 (Supabase는 WHERE 없는 delete를 막으므로 항상 true인 조건 사용)
+    // 해당 방의 카드 상태 리셋
     const { error: deleteCardsError } = await supabase
       .from("defense_card_state")
       .delete()
-      .neq("player_id", "00000000-0000-0000-0000-000000000000");
+      .eq("room_code", room);
     if (deleteCardsError) {
       throw new Error(deleteCardsError.message);
     }
@@ -88,15 +94,16 @@ export async function handleDefenseInitRound(
 
     // 점수: 0포인트로 초기화
     const scoreRows = players.map((p) => ({
+      room_code: room,
       player_id: p.id,
       points: 0,
     }));
 
-    // 전체 점수 리셋
+    // 해당 방의 점수 리셋
     const { error: deleteScoresError } = await supabase
       .from("defense_score")
       .delete()
-      .neq("player_id", "00000000-0000-0000-0000-000000000000");
+      .eq("room_code", room);
     if (deleteScoresError) {
       throw new Error(deleteScoresError.message);
     }
@@ -112,7 +119,8 @@ export async function handleDefenseInitRound(
   // 초기 몬스터 인스턴스 4개 생성 (대기열 0~3)
   const { data: countsRows, error: countsError } = await supabase
     .from("defense_monster_count")
-    .select("id, count");
+    .select("id, count")
+    .eq("room_code", room);
 
   if (countsError) {
     throw new Error(countsError.message);
@@ -123,6 +131,7 @@ export async function handleDefenseInitRound(
   counts.forEach((c) => countsMap.set(c.id, c.count));
 
   const instancesToInsert: {
+    room_code: string;
     id: string;
     monster_id: number;
     current_hp: number;
@@ -152,6 +161,7 @@ export async function handleDefenseInitRound(
     if (!chosen) break;
 
     instancesToInsert.push({
+      room_code: room,
       id: randomUUID(),
       monster_id: chosen.id,
       current_hp: chosen.maxHp,
@@ -175,6 +185,7 @@ export async function handleDefenseInitRound(
 
     // 카운트 반영
     const updatedCounts = DEFENSE_MONSTERS.map((m) => ({
+      room_code: room,
       id: m.id,
       count: countsMap.get(m.id) ?? 0,
     }));
@@ -182,7 +193,7 @@ export async function handleDefenseInitRound(
     const { error: updateCountsError } = await supabase
       .from("defense_monster_count")
       .upsert(updatedCounts, {
-        onConflict: "id",
+        onConflict: "room_code,id",
       });
 
     if (updateCountsError) {
@@ -195,6 +206,7 @@ export async function handleDefenseInitRound(
       .select(
         "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
       )
+      .eq("room_code", room)
       .eq("status", "active");
 
     if (activeError) {
@@ -209,6 +221,7 @@ export async function handleDefenseInitRound(
         .from("defense_monster_snapshot")
         .insert(
           active.map((m) => ({
+            room_code: room,
             instance_id: m.id,
             monster_id: m.monster_id,
             round: nextRound,

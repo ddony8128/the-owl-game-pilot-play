@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type {
   DefenseMonsterSnapshot,
   DefenseMonsterInstance,
@@ -51,8 +52,15 @@ type RoundStateResponse =
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(request.url);
+  const room = normalizeRoomCode(searchParams.get("room") ?? "");
   const roundParam = searchParams.get("round");
   const round = roundParam ? Number(roundParam) : NaN;
+
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as RoundStateResponse, {
+      status: 400,
+    });
+  }
 
   // 디펜스 DB 라운드: 튜토리얼 1(1), 튜토리얼 2(2), 튜토리얼 결과(3),
   // 본게임 1~12라운드의 전투/스냅샷(4~15)까지 요약 조회 가능
@@ -66,7 +74,8 @@ export async function GET(request: Request) {
   // 플레이어 기본 정보
   const { data: playerRows, error: playersError } = await supabase
     .from("players")
-    .select("id, nickname, created_at");
+    .select("id, nickname, created_at")
+    .eq("room_code", room);
 
   if (playersError) {
     return NextResponse.json(
@@ -86,23 +95,28 @@ export async function GET(request: Request) {
         .select(
           "instance_id, monster_id, round, current_hp, remaining_time, slot_index"
         )
+        .eq("room_code", room)
         .eq("round", round),
       supabase
         .from("defense_action")
         .select(
           "round, player_id, action_type, target_monster_id, used_card_value, training_from, training_to, rest_card"
         )
+        .eq("room_code", room)
         .eq("round", round),
       supabase
         .from("defense_card_state")
-        .select("player_id, card_slot, card_value, is_active"),
+        .select("player_id, card_slot, card_value, is_active")
+        .eq("room_code", room),
       supabase
         .from("defense_score_snapshot")
         .select("player_id, round, points")
+        .eq("room_code", room)
         .eq("round", round),
       supabase
         .from("defense_monster_instance")
-        .select("id, monster_id"),
+        .select("id, monster_id")
+        .eq("room_code", room),
     ]);
 
   if (monstersSnapRes.error) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type {
   DefenseScoreSnapshot,
   DefenseAction,
@@ -23,8 +24,15 @@ type BoardScoreResponse =
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(request.url);
+  const room = normalizeRoomCode(searchParams.get("room") ?? "");
   const roundParam = searchParams.get("round");
   const round = roundParam ? Number(roundParam) : NaN;
+
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as BoardScoreResponse, {
+      status: 400,
+    });
+  }
 
   if (!Number.isInteger(round)) {
     return NextResponse.json(
@@ -39,16 +47,21 @@ export async function GET(request: Request) {
   const sourceRound = round === 3 || round === 16 ? round - 1 : round;
 
   const [playersRes, scoresSnapRes, actionsRes] = await Promise.all([
-    supabase.from("players").select("id, nickname, created_at"),
+    supabase
+      .from("players")
+      .select("id, nickname, created_at")
+      .eq("room_code", room),
     supabase
       .from("defense_score_snapshot")
       .select("player_id, round, points")
+      .eq("room_code", room)
       .eq("round", sourceRound),
     supabase
       .from("defense_action")
       .select(
         "round, player_id, action_type, used_card_value"
       )
+      .eq("room_code", room)
       .lte("round", sourceRound)
       .eq("action_type", "combat"),
   ]);

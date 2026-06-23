@@ -42,10 +42,10 @@ export function MafiaAuctionTab({ myAuctionBet, playerCash }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const { player } = usePlayerAuth();
+  const { player, roomCode } = usePlayerAuth();
 
   const handleSubmitBet = async () => {
-    if (!player?.nickname) return;
+    if (!player?.nickname || !roomCode) return;
     if (!selectedJobId) return;
 
     const value = Number(amount);
@@ -63,6 +63,7 @@ export function MafiaAuctionTab({ myAuctionBet, playerCash }: Props) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          room: roomCode,
           nickname: player.nickname,
           type: "bet",
           payload: { job: selectedJobId, amount: value },
@@ -96,7 +97,7 @@ export function MafiaAuctionTab({ myAuctionBet, playerCash }: Props) {
   };
 
   const handleSubmitGiveUp = async () => {
-    if (!player?.nickname) return;
+    if (!player?.nickname || !roomCode) return;
     setSubmitting(true);
     setError(null);
 
@@ -107,6 +108,7 @@ export function MafiaAuctionTab({ myAuctionBet, playerCash }: Props) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          room: roomCode,
           nickname: player.nickname,
           type: "bet",
           payload: { job: null, give_up: true },

@@ -25,7 +25,7 @@ export function MafiaAbilityTab({
   hasUsedAbilityThisPhase,
   myAbilityActionThisPhase,
 }: Props) {
-  const { player } = usePlayerAuth();
+  const { player, roomCode } = usePlayerAuth();
   const [selectedStockKey, setSelectedStockKey] = useState<string | null>(null);
   const [robberTargets, setRobberTargets] = useState<string[]>([]);
   const [policeTargets, setPoliceTargets] = useState<string[]>([]);
@@ -109,7 +109,7 @@ export function MafiaAbilityTab({
   };
 
   const handleSubmit = async () => {
-    if (!player?.nickname || !normalizedJob) return;
+    if (!player?.nickname || !roomCode || !normalizedJob) return;
     if (submitted) return;
 
     setError(null);
@@ -136,6 +136,7 @@ export function MafiaAbilityTab({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          room: roomCode,
           nickname: player.nickname,
           type: "ability",
           payload,

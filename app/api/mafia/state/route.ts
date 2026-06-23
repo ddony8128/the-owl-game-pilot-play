@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type {
   MafiaAbilityResult,
   MafiaPhaseState,
@@ -13,14 +14,19 @@ import type {
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(request.url);
+  const room = normalizeRoomCode(searchParams.get("room") ?? "");
   const nickname = searchParams.get("nickname");
   const all = searchParams.get("all") === "1";
+
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
 
   // phase
   const { data: phaseRow, error: phaseError } = await supabase
     .from("mafia_phase_state")
-    .select("id, round_number, phase, updated_at")
-    .eq("id", 1)
+    .select("room_code, round_number, phase, updated_at")
+    .eq("room_code", room)
     .maybeSingle();
 
   if (phaseError) {
@@ -32,7 +38,8 @@ export async function GET(request: Request) {
   // stocks
   const { data: stockRows, error: stockError } = await supabase
     .from("mafia_stock_state")
-    .select("stock_key, price, updated_at");
+    .select("stock_key, price, updated_at")
+    .eq("room_code", room);
 
   if (stockError) {
     return NextResponse.json({ error: stockError.message }, { status: 500 });
@@ -44,6 +51,7 @@ export async function GET(request: Request) {
   const { data: historyRows, error: historyError } = await supabase
     .from("mafia_stock_history")
     .select("stock_key, round_number, price_before, price_after, created_at")
+    .eq("room_code", room)
     .order("round_number", { ascending: true });
 
   if (historyError) {
@@ -77,6 +85,7 @@ export async function GET(request: Request) {
   const { data: logRows, error: logError } = await supabase
     .from("mafia_public_logs")
     .select("id, content, created_at")
+    .eq("room_code", room)
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -90,7 +99,8 @@ export async function GET(request: Request) {
     // GM용 전체 플레이어 상태
     const { data: playerStateRows, error: playerStateError } = await supabase
       .from("mafia_player_state")
-      .select("player_id, cash, is_mafia, job, stocks, updated_at");
+      .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("room_code", room);
 
     if (playerStateError) {
       return NextResponse.json(
@@ -104,7 +114,8 @@ export async function GET(request: Request) {
     // 플레이어 닉네임 매핑
     const { data: nameRows, error: namesError } = await supabase
       .from("players")
-      .select("id, nickname, created_at");
+      .select("id, nickname, created_at")
+      .eq("room_code", room);
 
     if (namesError) {
       return NextResponse.json({ error: namesError.message }, { status: 500 });
@@ -157,6 +168,7 @@ export async function GET(request: Request) {
     const playerRes = await supabase
       .from("players")
       .select("id, nickname, created_at")
+      .eq("room_code", room)
       .eq("nickname", nickname)
       .maybeSingle();
 
@@ -179,6 +191,7 @@ export async function GET(request: Request) {
     const { data: stateRow, error: stateError } = await supabase
       .from("mafia_player_state")
       .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .maybeSingle();
 
@@ -191,7 +204,8 @@ export async function GET(request: Request) {
     // 전체 플레이어 리스트 (능력/투표 대상 선택용)
     const { data: playersRows, error: playersError } = await supabase
       .from("players")
-      .select("id, nickname, created_at");
+      .select("id, nickname, created_at")
+      .eq("room_code", room);
 
     if (playersError) {
       return NextResponse.json(
@@ -206,6 +220,7 @@ export async function GET(request: Request) {
       const { data: betRow, error: betError } = await supabase
         .from("mafia_actions")
         .select("payload")
+        .eq("room_code", room)
         .eq("round_number", phase.round_number)
         .eq("phase", "auction")
         .eq("action_type", "bet")
@@ -238,6 +253,7 @@ export async function GET(request: Request) {
       .select(
         "id, player_id, round_number, phase, job, category, message, payload, created_at"
       )
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .order("round_number", { ascending: true })
       .order("created_at", { ascending: true });
@@ -258,6 +274,7 @@ export async function GET(request: Request) {
         await supabase
           .from("mafia_actions")
           .select("payload")
+          .eq("room_code", room)
           .eq("round_number", phase.round_number)
           .eq("phase", "trade")
           .eq("action_type", "ability");
@@ -283,6 +300,7 @@ export async function GET(request: Request) {
       const { data: myVotesRows, error: myVotesError } = await supabase
         .from("mafia_votes")
         .select("target_id, vote_count, unit_price")
+        .eq("room_code", room)
         .eq("round_number", phase.round_number)
         .eq("voter_id", player.id);
 
@@ -336,6 +354,7 @@ export async function GET(request: Request) {
       const { data: myTradeRows, error: myTradesError } = await supabase
         .from("mafia_actions")
         .select("action_type, payload")
+        .eq("room_code", room)
         .eq("round_number", phase.round_number)
         .eq("phase", "trade")
         .eq("player_id", player.id);
@@ -377,6 +396,7 @@ export async function GET(request: Request) {
         await supabase
           .from("mafia_actions")
           .select("payload")
+          .eq("room_code", room)
           .eq("round_number", phase.round_number)
           .eq("phase", phase.phase)
           .eq("action_type", "ability")

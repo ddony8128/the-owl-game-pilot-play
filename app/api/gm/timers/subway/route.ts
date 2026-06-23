@@ -1,23 +1,25 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 
 // 1게임 – 이상교통 전역 카운트다운은 항상 40분(2400초)을 기준으로 한다.
 const TOTAL_SECONDS = 40 * 60;
 
-async function markAllPlayersFinishedOnTimeout() {
+async function markAllPlayersFinishedOnTimeout(room: string) {
   const supabase = createServerSupabaseClient();
   await supabase
     .from("subway_player_state")
     .update({ is_finished: true })
+    .eq("room_code", room)
     .eq("is_finished", false);
 }
 
-async function getGameStateTimer() {
+async function getGameStateTimer(room: string) {
   const supabase = createServerSupabaseClient();
   const { data: gameRow, error } = await supabase
     .from("game_state")
-    .select("id, timer_start, timer_start_at, pause_at")
-    .eq("id", 1)
+    .select("room_code, timer_start, timer_start_at, pause_at")
+    .eq("room_code", room)
     .maybeSingle();
 
   if (error) {
@@ -56,17 +58,25 @@ async function getGameStateTimer() {
   return { supabase, gameRow, remainingSeconds, isRunning };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const room = normalizeRoomCode(
+    new URL(request.url).searchParams.get("room") ?? ""
+  );
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
   try {
-    const { supabase, gameRow, remainingSeconds } = await getGameStateTimer();
+    const { supabase, gameRow, remainingSeconds } = await getGameStateTimer(
+      room
+    );
 
     // 실행 중인데 남은 시간이 0이 된 경우: 이 시점에서 종료 처리
     if (remainingSeconds === 0 && gameRow?.timer_start) {
-      await markAllPlayersFinishedOnTimeout();
+      await markAllPlayersFinishedOnTimeout(room);
       await supabase
         .from("game_state")
         .update({ timer_start: false, pause_at: null })
-        .eq("id", 1);
+        .eq("room_code", room);
     }
 
     // 서버는 "기준점"만 내려주고, 남은 시간 계산과 표시 책임은 클라이언트가 진다.
@@ -87,8 +97,14 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     action?: "start" | "pause" | "reset";
+    room?: string;
   } | null;
   const action = body?.action;
+
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" }, { status: 400 });
+  }
 
   if (!action || !["start", "pause", "reset"].includes(action)) {
     return NextResponse.json({ error: "invalid action" }, { status: 400 });
@@ -100,7 +116,7 @@ export async function POST(request: Request) {
       gameRow,
       remainingSeconds: currentRemaining,
       isRunning: currentRunning,
-    } = await getGameStateTimer();
+    } = await getGameStateTimer(room);
 
     let remainingSeconds = currentRemaining;
     let isRunning = currentRunning;
@@ -109,11 +125,11 @@ export async function POST(request: Request) {
 
     // 실행 중인데 이미 0초가 된 상태에서의 조작은 종료 처리 후 무시
     if (remainingSeconds === 0 && gameRow?.timer_start) {
-      await markAllPlayersFinishedOnTimeout();
+      await markAllPlayersFinishedOnTimeout(room);
       await supabase
         .from("game_state")
         .update({ timer_start: false, pause_at: null })
-        .eq("id", 1);
+        .eq("room_code", room);
       isRunning = false;
     }
 
@@ -126,7 +142,7 @@ export async function POST(request: Request) {
           timer_start_at: null,
           pause_at: null,
         })
-        .eq("id", 1);
+        .eq("room_code", room);
       remainingSeconds = TOTAL_SECONDS;
       isRunning = false;
     } else if (action === "pause") {
@@ -140,7 +156,7 @@ export async function POST(request: Request) {
             timer_start_at: gameRow.timer_start_at,
             pause_at: new Date(now).toISOString(),
           })
-          .eq("id", 1);
+          .eq("room_code", room);
         isRunning = false;
         // remainingSeconds는 getGameStateTimer 로직에 의해 일시정지 기준으로 유지
       }
@@ -157,7 +173,7 @@ export async function POST(request: Request) {
               timer_start_at: startIso,
               pause_at: null,
             })
-            .eq("id", 1);
+            .eq("room_code", room);
           remainingSeconds = TOTAL_SECONDS;
           isRunning = true;
         } else if (gameRow.pause_at && gameRow.timer_start_at) {
@@ -183,7 +199,7 @@ export async function POST(request: Request) {
                 timer_start_at: new Date(newStartMs).toISOString(),
                 pause_at: null,
               })
-              .eq("id", 1);
+              .eq("room_code", room);
             isRunning = remainingSeconds > 0;
           }
         }

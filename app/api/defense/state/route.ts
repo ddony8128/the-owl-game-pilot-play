@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type {
   DefensePhaseState,
   DefenseMonsterInstance,
@@ -76,14 +77,22 @@ type DefensePlayerStateResponse =
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(request.url);
+  const room = normalizeRoomCode(searchParams.get("room") ?? "");
   const nickname = searchParams.get("nickname");
+
+  if (!room) {
+    return NextResponse.json(
+      { error: "room 필요" } as DefenseGlobalStateResponse,
+      { status: 400 }
+    );
+  }
 
   // 닉네임이 없으면 전역 round 값만 반환 (GM/클라이언트 공통)
   if (!nickname) {
     const { data, error } = await supabase
       .from("defense_phase_state")
-      .select("id, round, updated_at")
-      .eq("id", 1)
+      .select("room_code, round, updated_at")
+      .eq("room_code", room)
       .maybeSingle();
 
     if (error) {
@@ -107,6 +116,7 @@ export async function GET(request: Request) {
   const playerRes = await supabase
     .from("players")
     .select("id, nickname, created_at")
+    .eq("room_code", room)
     .eq("nickname", nickname)
     .maybeSingle();
 
@@ -137,25 +147,29 @@ export async function GET(request: Request) {
   ] = await Promise.all([
     supabase
       .from("defense_phase_state")
-      .select("id, round, updated_at")
-      .eq("id", 1)
+      .select("room_code, round, updated_at")
+      .eq("room_code", room)
       .maybeSingle(),
     supabase
       .from("defense_monster_instance")
       .select(
         "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
       )
+      .eq("room_code", room)
       .in("status", ["active", "defeated", "expired"]),
     supabase
       .from("defense_monster_count")
-      .select("id, count"),
+      .select("id, count")
+      .eq("room_code", room),
     supabase
       .from("defense_card_state")
       .select("player_id, card_slot, card_value, is_active")
+      .eq("room_code", room)
       .eq("player_id", player.id),
     supabase
       .from("defense_score")
       .select("player_id, points")
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .maybeSingle(),
     supabase
@@ -163,6 +177,7 @@ export async function GET(request: Request) {
       .select(
         "round, player_id, action_type, target_monster_id, used_card_value, training_from, training_to"
       )
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .order("round", { ascending: false })
       .limit(1)
@@ -170,6 +185,7 @@ export async function GET(request: Request) {
     supabase
       .from("defense_player_log")
       .select("player_id, round, log, created_at")
+      .eq("room_code", room)
       .eq("player_id", player.id)
       .order("round", { ascending: false })
       .order("created_at", { ascending: false }),

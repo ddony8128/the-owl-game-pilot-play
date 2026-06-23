@@ -17,7 +17,7 @@ type MafiaAdminState = {
   reload: () => void;
 };
 
-export function useMafiaAdminState(): MafiaAdminState {
+export function useMafiaAdminState(room: string | null): MafiaAdminState {
   const [phase, setPhase] = useState<MafiaPhaseState | null>(null);
   const [stocks, setStocks] = useState<MafiaStockState[]>([]);
   const [players, setPlayers] = useState<MafiaPlayerState[]>([]);
@@ -28,13 +28,20 @@ export function useMafiaAdminState(): MafiaAdminState {
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
+    if (!room) {
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     // silent=true 면 주기 폴링 시 로딩 스피너를 띄우지 않고 조용히 갱신한다.
     const load = async (silent = false) => {
       if (!silent) setLoading(true);
       try {
-        const res = await fetch("/api/mafia/state?all=1");
+        const res = await fetch(
+          `/api/mafia/state?all=1&room=${encodeURIComponent(room)}`
+        );
         const json = (await res.json().catch(() => null)) as
           | {
               phase: MafiaPhaseState | null;
@@ -79,7 +86,7 @@ export function useMafiaAdminState(): MafiaAdminState {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [reloadToken]);
+  }, [reloadToken, room]);
 
   const reload = () => setReloadToken((v) => v + 1);
 

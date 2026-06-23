@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type { MafiaPhaseState } from "@/lib/types";
 
 type Body = {
+  room?: string;
   round?: number;
 };
 
@@ -11,6 +13,13 @@ type ResponseBody = { ok: true; phase: MafiaPhaseState } | { error: string };
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as Body | null;
+
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as ResponseBody, {
+      status: 400,
+    });
+  }
 
   if (!body || typeof body.round !== "number") {
     return NextResponse.json({ error: "round is required" } as ResponseBody, {
@@ -28,8 +37,8 @@ export async function POST(request: Request) {
 
   const { data: phaseRow, error: phaseError } = await supabase
     .from("mafia_phase_state")
-    .select("id, round_number, phase, updated_at")
-    .eq("id", 1)
+    .select("room_code, round_number, phase, updated_at")
+    .eq("room_code", room)
     .maybeSingle();
 
   if (phaseError) {
@@ -59,8 +68,8 @@ export async function POST(request: Request) {
   const { data: updatedPhase, error: updateError } = await supabase
     .from("mafia_phase_state")
     .update({ round_number: nextRound, phase: "prepare" })
-    .eq("id", 1)
-    .select("id, round_number, phase, updated_at")
+    .eq("room_code", room)
+    .select("room_code, round_number, phase, updated_at")
     .maybeSingle();
 
   if (updateError || !updatedPhase) {
@@ -81,7 +90,7 @@ export async function POST(request: Request) {
       job: null,
       is_mafia: false,
     })
-    .not("player_id", "is", null);
+    .eq("room_code", room);
 
   if (resetError) {
     return NextResponse.json(
