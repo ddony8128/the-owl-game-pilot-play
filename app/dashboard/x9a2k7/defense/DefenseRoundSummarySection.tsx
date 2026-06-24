@@ -126,20 +126,9 @@ export function DefenseRoundSummarySection({
 
   return (
     <section className="space-y-3 text-base">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">라운드별 상황 요약</h2>
-          <button
-            type="button"
-            onClick={() => void load(selectedRound)}
-            disabled={loading}
-            className="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-            title="현재 선택된 라운드 정보를 다시 불러옵니다"
-          >
-            ↻ 새로고침
-          </button>
-        </div>
-        <div className="flex items-center gap-2 text-base">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">라운드별 상황 요약</h2>
+        <div className="flex flex-wrap items-center gap-2 text-base">
           <span className="text-sm text-zinc-400">라운드 선택:</span>
           {[1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((round) => (
             <button
@@ -155,6 +144,15 @@ export function DefenseRoundSummarySection({
               {getRoundLabel(round)}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => void load(selectedRound)}
+            disabled={loading}
+            className="ml-1 rounded bg-zinc-800 px-3 py-1 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+            title="현재 선택된 라운드 정보를 다시 불러옵니다"
+          >
+            ↻ 새로고침
+          </button>
         </div>
       </div>
 
