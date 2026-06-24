@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type { PlayerVote } from "@/lib/types";
 
 type VoteSummary = {
@@ -12,12 +13,21 @@ type VoteSummary = {
 
 type GetResponse = { summaries: VoteSummary[] } | { error: string };
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
+  const room = normalizeRoomCode(
+    new URL(request.url).searchParams.get("room") ?? "",
+  );
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as GetResponse, {
+      status: 400,
+    });
+  }
 
   const { data: voteData, error: voteError } = await supabase
     .from("player_votes")
-    .select("id, voter_id, topic, target_id, reason, created_at");
+    .select("id, voter_id, topic, target_id, reason, created_at")
+    .eq("room_code", room);
 
   if (voteError) {
     return NextResponse.json({ error: voteError.message } as GetResponse, {
@@ -27,7 +37,8 @@ export async function GET() {
 
   const { data: playerData, error: playerError } = await supabase
     .from("players")
-    .select("id, nickname");
+    .select("id, nickname")
+    .eq("room_code", room);
 
   if (playerError) {
     return NextResponse.json({ error: playerError.message } as GetResponse, {

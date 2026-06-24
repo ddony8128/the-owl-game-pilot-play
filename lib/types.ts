@@ -220,7 +220,8 @@ export type DefensePhaseState = {
 export type DefenseMonsterCount = {
   room_code: string;
   id: number; // 1~6
-  count: number;
+  count: number; // 진행 중 남은 풀
+  base_count: number; // GM 기준값(본게임 시작 시 count 가 이 값으로 리셋)
 };
 
 export type DefenseMonsterInstanceStatus = "active" | "defeated" | "expired";

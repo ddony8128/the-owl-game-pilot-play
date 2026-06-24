@@ -14,12 +14,23 @@ export async function handleDefenseInitRound(
   nextRound: number,
   room: string
 ) {
-  // 몬스터 카운트 초기화 (각 몬스터의 baseCount 값 사용)
-  const initialCounts = DEFENSE_MONSTERS.map((m) => ({
-    room_code: room,
-    id: m.id,
-    count: m.baseCount,
-  }));
+  // 몬스터 카운트 초기화 — 그 방의 GM 기준값(base_count)으로 풀(count)을 리셋한다.
+  // (base_count 가 없으면 코드 기본값 baseCount 로 폴백)
+  const { data: cfgRows } = await supabase
+    .from("defense_monster_count")
+    .select("id, base_count")
+    .eq("room_code", room);
+  const baseMap = new Map<number, number>();
+  ((cfgRows ?? []) as { id: number; base_count: number | null }[]).forEach(
+    (r) => {
+      if (typeof r.base_count === "number") baseMap.set(r.id, r.base_count);
+    },
+  );
+
+  const initialCounts = DEFENSE_MONSTERS.map((m) => {
+    const base = baseMap.get(m.id) ?? m.baseCount;
+    return { room_code: room, id: m.id, count: base, base_count: base };
+  });
 
   await supabase.from("defense_monster_count").upsert(initialCounts, {
     onConflict: "room_code,id",
@@ -183,11 +194,12 @@ export async function handleDefenseInitRound(
       throw new Error(insertError.message);
     }
 
-    // 카운트 반영
+    // 카운트 반영 (base_count 는 그대로 유지해야 NOT NULL 위반이 없다)
     const updatedCounts = DEFENSE_MONSTERS.map((m) => ({
       room_code: room,
       id: m.id,
       count: countsMap.get(m.id) ?? 0,
+      base_count: baseMap.get(m.id) ?? m.baseCount,
     }));
 
     const { error: updateCountsError } = await supabase

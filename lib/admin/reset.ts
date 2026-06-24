@@ -119,8 +119,10 @@ export async function restoreDefenseConfig(
   if (phase.error) errors.push(`defense_phase_state: ${phase.error.message}`);
 
   const counts = DEFENSE_MONSTER_COUNT_SEED.map((m) => ({
-    ...m,
     room_code: room,
+    id: m.id,
+    count: m.count,
+    base_count: m.count, // NOT NULL — 시드 기준값
   }));
   const countRes = await supabase
     .from("defense_monster_count")

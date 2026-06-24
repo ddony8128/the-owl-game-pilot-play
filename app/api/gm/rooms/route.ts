@@ -9,34 +9,24 @@ import {
 
 const VALID_GAMES: RoomGame[] = ["mafia", "defense", "subway"];
 
-// GET /api/gm/rooms            → 모든 방
-// GET /api/gm/rooms?code=A3F82 → 단일 방
-// GET /api/gm/rooms?game=mafia → 게임별 방 목록
+// GET /api/gm/rooms?code=A3F82 → 단일 방 (코드를 아는 경우에만 조회 가능)
+// 전역 목록 조회는 제공하지 않는다 — 방 관리자는 코드를 직접 가진 방만 다룰 수 있다.
 export async function GET(request: Request) {
-  const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const game = searchParams.get("game");
 
-  if (code) {
-    const room = await getRoom(code);
-    if (!room) {
-      return NextResponse.json({ room: null }, { status: 404 });
-    }
-    return NextResponse.json({ room });
+  if (!code) {
+    return NextResponse.json(
+      { error: "code 필요 (방 코드를 입력해야 조회할 수 있습니다)" },
+      { status: 400 },
+    );
   }
 
-  let query = supabase
-    .from("rooms")
-    .select("code, game, status, ended_normally, created_at")
-    .order("created_at", { ascending: false });
-  if (game) query = query.eq("game", game);
-
-  const { data, error } = await query;
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const room = await getRoom(code);
+  if (!room) {
+    return NextResponse.json({ room: null }, { status: 404 });
   }
-  return NextResponse.json({ rooms: data ?? [] });
+  return NextResponse.json({ room });
 }
 
 // POST /api/gm/rooms  { game }  → 방 생성(+상태 시드), 코드 발급

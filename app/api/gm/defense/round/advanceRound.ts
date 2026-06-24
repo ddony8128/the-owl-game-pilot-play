@@ -320,12 +320,18 @@ export async function handleDefenseAdvanceRound(
   // 4. 대기열 빈 슬롯에 새 몬스터 소환 (count를 고려)
   const countsRes = await supabase
     .from("defense_monster_count")
-    .select("id, count")
+    .select("id, count, base_count")
     .eq("room_code", room);
   if (countsRes.error) throw new Error(countsRes.error.message);
-  const counts = (countsRes.data || []) as DefenseMonsterCount[];
+  const counts = (countsRes.data || []) as (DefenseMonsterCount & {
+    base_count: number | null;
+  })[];
   const countsMap = new Map<number, number>();
-  counts.forEach((c) => countsMap.set(c.id, c.count));
+  const baseMap = new Map<number, number>();
+  counts.forEach((c) => {
+    countsMap.set(c.id, c.count);
+    if (typeof c.base_count === "number") baseMap.set(c.id, c.base_count);
+  });
 
   const activeNowRes = await supabase
     .from("defense_monster_instance")
@@ -406,6 +412,7 @@ export async function handleDefenseAdvanceRound(
       room_code: room,
       id: m.id,
       count: countsMap.get(m.id) ?? 0,
+      base_count: baseMap.get(m.id) ?? m.baseCount,
     }));
 
     const { error: updateCountsError } = await supabase

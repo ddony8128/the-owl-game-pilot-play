@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { normalizeRoomCode } from "@/lib/rooms";
 import type { MafiaLog, MafiaPhaseState } from "@/lib/types";
 
 type Body = {
   content?: string;
+  room?: string;
 };
 
 type ResponseBody = { ok: true; log: MafiaLog } | { error: string };
@@ -12,6 +14,12 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as Body | null;
 
+  const room = normalizeRoomCode(body?.room ?? "");
+  if (!room) {
+    return NextResponse.json({ error: "room 필요" } as ResponseBody, {
+      status: 400,
+    });
+  }
   if (!body || typeof body.content !== "string" || !body.content.trim()) {
     return NextResponse.json({ error: "content is required" } as ResponseBody, {
       status: 400,
@@ -22,7 +30,7 @@ export async function POST(request: Request) {
   const { data: phaseRow, error: phaseError } = await supabase
     .from("mafia_phase_state")
     .select("room_code, round_number, phase, updated_at")
-    .eq("id", 1)
+    .eq("room_code", room)
     .maybeSingle();
 
   if (phaseError) {
@@ -42,6 +50,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from("mafia_public_logs")
     .insert({
+      room_code: room,
       round_number: phase.round_number,
       phase: phase.phase,
       content: body.content.trim(),

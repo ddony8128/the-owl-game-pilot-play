@@ -9,31 +9,51 @@ const GAME_LABEL: Record<RoomGame, string> = {
   subway: "이상교통",
 };
 
-export default function RoomRegistryPage() {
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const MY_ROOMS_KEY = "owlgm:rooms";
 
-  const reload = useCallback(async () => {
+type MyRoom = { code: string; game: RoomGame };
+
+export default function RoomRegistryPage() {
+  // 내가 만들었거나 코드를 직접 입력해 연 방만 보관(전역 목록은 제공하지 않음)
+  const [myRooms, setMyRooms] = useState<MyRoom[]>([]);
+  const [codeInput, setCodeInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [lastCreated, setLastCreated] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     try {
-      const res = await fetch("/api/gm/rooms");
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      setRooms(json.rooms ?? []);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "방 목록 조회 실패");
-    } finally {
-      setLoading(false);
+      const raw = localStorage.getItem(MY_ROOMS_KEY);
+      if (raw) setMyRooms(JSON.parse(raw));
+    } catch {
+      /* ignore */
     }
   }, []);
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const persist = useCallback((rooms: MyRoom[]) => {
+    setMyRooms(rooms);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(MY_ROOMS_KEY, JSON.stringify(rooms));
+    }
+  }, []);
+
+  const addRoom = useCallback(
+    (room: MyRoom) => {
+      setMyRooms((prev) => {
+        if (prev.some((r) => r.code === room.code)) return prev;
+        const next = [room, ...prev];
+        if (typeof window !== "undefined") {
+          localStorage.setItem(MY_ROOMS_KEY, JSON.stringify(next));
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const createRoom = async (game: RoomGame) => {
     setError(null);
+    setLastCreated(null);
     try {
       const res = await fetch("/api/gm/rooms", {
         method: "POST",
@@ -42,9 +62,26 @@ export default function RoomRegistryPage() {
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
-      await reload();
+      addRoom({ code: json.room.code, game });
+      setLastCreated(json.room.code);
     } catch (e) {
       setError(e instanceof Error ? e.message : "방 생성 실패");
+    }
+  };
+
+  const enterByCode = async () => {
+    const code = codeInput.trim().toUpperCase();
+    if (!code) return;
+    setError(null);
+    try {
+      const res = await fetch(`/api/gm/rooms?code=${encodeURIComponent(code)}`);
+      if (res.status === 404) throw new Error("그런 방 코드가 없습니다.");
+      const json = await res.json();
+      if (json.error || !json.room) throw new Error(json.error ?? "방을 찾을 수 없습니다.");
+      addRoom({ code: json.room.code, game: json.room.game });
+      setCodeInput("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "방 조회 실패");
     }
   };
 
@@ -54,15 +91,17 @@ export default function RoomRegistryPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code, status: "ended", ended_normally: true }),
     });
-    await reload();
   };
 
+  const removeFromList = (code: string) =>
+    persist(myRooms.filter((r) => r.code !== code));
+
   return (
-    <div className="space-y-4 text-sm text-zinc-100">
+    <div className="space-y-5 text-sm text-zinc-100">
       <div>
         <h1 className="text-lg font-bold">방(room) 관리</h1>
         <p className="text-xs text-zinc-400">
-          새 방을 만들면 코드가 발급됩니다. 참가자는 코드 + 닉네임으로 입장합니다.
+          방을 만들면 코드가 발급됩니다. <b>방 코드를 가진 방만</b> 관리할 수 있습니다(전체 목록은 보이지 않습니다).
         </p>
       </div>
 
@@ -72,6 +111,7 @@ export default function RoomRegistryPage() {
         </div>
       )}
 
+      {/* 새 방 만들기 */}
       <div className="space-y-1">
         <h2 className="text-sm font-semibold">새 방 만들기</h2>
         <div className="flex gap-2">
@@ -88,23 +128,61 @@ export default function RoomRegistryPage() {
             + 디펜스 방
           </button>
         </div>
+        {lastCreated && (
+          <p className="text-xs text-amber-300">
+            새 방 코드: <b className="font-mono tracking-widest">{lastCreated}</b> — 참가자에게 안내하세요.
+          </p>
+        )}
       </div>
 
+      {/* 방 코드로 관리 */}
+      <div className="space-y-1">
+        <h2 className="text-sm font-semibold">방 코드로 관리</h2>
+        <div className="flex gap-2">
+          <input
+            value={codeInput}
+            onChange={(e) => setCodeInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void enterByCode()}
+            placeholder="방 코드 입력 (예: A3F82)"
+            className="h-8 w-48 rounded border border-zinc-700 bg-zinc-950 px-2 font-mono uppercase outline-none"
+          />
+          <button
+            onClick={() => void enterByCode()}
+            className="rounded bg-zinc-800 px-3 hover:bg-zinc-700"
+          >
+            불러오기
+          </button>
+        </div>
+      </div>
+
+      {/* 내가 여는 방 목록(세션) */}
       <div className="space-y-2">
-        <h2 className="text-sm font-semibold">방 목록</h2>
-        {loading && <p className="text-zinc-500">불러오는 중…</p>}
-        {!loading && rooms.length === 0 && (
-          <p className="text-zinc-500">아직 만든 방이 없습니다.</p>
+        <h2 className="text-sm font-semibold">내 방 ({myRooms.length})</h2>
+        {myRooms.length === 0 && (
+          <p className="text-zinc-500">아직 만들거나 불러온 방이 없습니다.</p>
         )}
-        {rooms.map((room) => (
-          <RoomRow key={room.code} room={room} onEnd={() => void endRoom(room.code)} />
+        {myRooms.map((room) => (
+          <RoomRow
+            key={room.code}
+            room={room}
+            onEnd={() => void endRoom(room.code)}
+            onRemove={() => removeFromList(room.code)}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function RoomRow({ room, onEnd }: { room: Room; onEnd: () => void }) {
+function RoomRow({
+  room,
+  onEnd,
+  onRemove,
+}: {
+  room: MyRoom;
+  onEnd: () => void;
+  onRemove: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const dashboardHref = `/dashboard/x9a2k7/${room.game}?room=${room.code}`;
 
@@ -115,15 +193,6 @@ function RoomRow({ room, onEnd }: { room: Room; onEnd: () => void }) {
           {room.code}
         </span>
         <span className="text-zinc-300">{GAME_LABEL[room.game] ?? room.game}</span>
-        <span
-          className={`rounded px-1.5 py-0.5 text-xs ${
-            room.status === "active"
-              ? "bg-green-900 text-green-300"
-              : "bg-zinc-800 text-zinc-500"
-          }`}
-        >
-          {room.status === "active" ? "진행" : "종료"}
-        </span>
         <div className="ml-auto flex gap-2">
           <button
             onClick={() => setOpen((v) => !v)}
@@ -142,6 +211,13 @@ function RoomRow({ room, onEnd }: { room: Room; onEnd: () => void }) {
             className="rounded bg-red-900 px-2 py-1 text-red-200 hover:bg-red-800"
           >
             종료
+          </button>
+          <button
+            onClick={onRemove}
+            className="rounded bg-zinc-800 px-2 py-1 text-zinc-400 hover:bg-zinc-700"
+            title="이 목록에서만 치움(방은 유지)"
+          >
+            ✕
           </button>
         </div>
       </div>

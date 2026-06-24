@@ -83,6 +83,20 @@ export default function DashboardMafiaPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 text-sm">
+      <div className="flex items-center gap-3 text-sm">
+        <span className="text-zinc-400">
+          방 <b className="font-mono text-amber-300">{room}</b>
+        </span>
+        <a
+          href={`/mafia-board?room=${room}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto rounded bg-zinc-800 px-3 py-1.5 text-amber-300 hover:bg-zinc-700"
+        >
+          결과 페이지 ↗
+        </a>
+      </div>
+
       <MafiaCountdownSection phase={phase} room={room} />
 
       <MafiaPhaseSection

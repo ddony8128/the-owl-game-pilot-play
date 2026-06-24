@@ -16,15 +16,21 @@ const htmls = readdirSync(ROOT).filter(
 
 for (const file of htmls) {
   let html = readFileSync(join(ROOT, file), "utf8");
-  html = html.replace(/src="img\/([^"]+)"/g, (m, name) => {
-    const p = join(IMG, name);
-    if (!existsSync(p)) {
-      console.warn("  ! 이미지 없음:", name);
-      return m;
-    }
-    const b64 = readFileSync(p).toString("base64");
-    return `src="data:image/png;base64,${b64}"`;
-  });
+  // src="img/..." (이미지 표시) + href="img/..." (다운로드 버튼) 모두 base64 로 인라인.
+  const inline = (attr) =>
+    new RegExp(`${attr}="img\\/([^"]+)"`, "g");
+  for (const attr of ["src", "href"]) {
+    html = html.replace(inline(attr), (m, name) => {
+      const p = join(IMG, name);
+      if (!existsSync(p)) {
+        console.warn("  ! 이미지 없음:", name);
+        return m;
+      }
+      const b64 = readFileSync(p).toString("base64");
+      const mime = /\.jpe?g$/i.test(name) ? "image/jpeg" : "image/png";
+      return `${attr}="data:${mime};base64,${b64}"`;
+    });
+  }
   const out = join(DIST, file);
   writeFileSync(out, html, "utf8");
   console.log("생성:", out, `(${Math.round(html.length / 1024)} KB)`);

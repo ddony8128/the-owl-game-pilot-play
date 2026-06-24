@@ -119,7 +119,12 @@ export async function createRoomWithSeed(game: RoomGame): Promise<Room> {
     await supabase
       .from("defense_monster_count")
       .insert(
-        DEFENSE_MONSTER_COUNT_SEED.map((m) => ({ ...m, room_code: code })),
+        DEFENSE_MONSTER_COUNT_SEED.map((m) => ({
+          room_code: code,
+          id: m.id,
+          count: m.count,
+          base_count: m.count, // GM 조절 기준값(기본 = 시드)
+        })),
       );
   }
 

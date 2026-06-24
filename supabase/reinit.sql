@@ -200,7 +200,8 @@ CREATE TABLE defense_phase_state (
 CREATE TABLE defense_monster_count (
   room_code TEXT NOT NULL REFERENCES rooms(code),
   id INTEGER NOT NULL,                          -- 몬스터 종류 1~6
-  count INTEGER NOT NULL,
+  count INTEGER NOT NULL,                        -- 진행 중 남은 풀(소모됨)
+  base_count INTEGER NOT NULL,                   -- GM이 정하는 기준값(본게임 시작 시 count 가 이 값으로 리셋)
   PRIMARY KEY (room_code, id)
 );
 
