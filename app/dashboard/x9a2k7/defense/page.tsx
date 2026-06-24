@@ -121,7 +121,7 @@ export default function DashboardDefensePage() {
       <DefenseRoundSection round={round} onAdvanceRound={advanceRound} />
       <MonsterConfigSection room={room} />
       <DefenseScoreSection players={players} onChangeScore={changeScore} />
-      <DefenseRoundSummarySection room={room} />
+      <DefenseRoundSummarySection room={room} currentRound={round} />
     </div>
   );
 }

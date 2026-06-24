@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type RoundPlayerSummary = {
   player_id: string;
@@ -40,8 +40,25 @@ type RoundState = {
   monsters: RoundMonsterSummary[];
 } | null;
 
-export function DefenseRoundSummarySection({ room }: { room: string }) {
-  const [selectedRound, setSelectedRound] = useState<number>(1);
+export function DefenseRoundSummarySection({
+  room,
+  currentRound,
+}: {
+  room: string;
+  currentRound: number | null;
+}) {
+  // 대시보드의 현재 라운드(DB round)를 선택 가능한 라운드(1·2·4~15)로 매핑한다.
+  const toSelectable = (r: number | null): number => {
+    if (r == null || r <= 0) return 1; // 준비 단계
+    if (r === 3) return 2; // 튜토리얼 결과 → 튜토리얼 2
+    if (r >= 16) return 15; // 종료 → 마지막 라운드
+    return r; // 1·2·4~15
+  };
+
+  const [selectedRound, setSelectedRound] = useState<number>(() =>
+    toSelectable(currentRound)
+  );
+  const lastCurrentRef = useRef<number | null>(currentRound);
   const [data, setData] = useState<RoundState>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +105,15 @@ export function DefenseRoundSummarySection({ room }: { room: string }) {
     void load(selectedRound);
   }, [selectedRound]);
 
+  // 대시보드의 현재 라운드가 바뀌면 자동으로 그 라운드로 따라간다.
+  // (GM이 수동으로 다른 라운드를 골랐다면, 라운드가 다시 바뀔 때까지는 그 선택을 유지)
+  useEffect(() => {
+    if (currentRound !== lastCurrentRef.current) {
+      lastCurrentRef.current = currentRound;
+      setSelectedRound(toSelectable(currentRound));
+    }
+  }, [currentRound]);
+
   const getRoundLabel = (r: number) => {
     if (r === 1) return "튜토리얼 1라운드";
     if (r === 2) return "튜토리얼 2라운드";
@@ -101,7 +127,18 @@ export function DefenseRoundSummarySection({ room }: { room: string }) {
   return (
     <section className="space-y-3 text-base">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">라운드별 상황 요약</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">라운드별 상황 요약</h2>
+          <button
+            type="button"
+            onClick={() => void load(selectedRound)}
+            disabled={loading}
+            className="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+            title="현재 선택된 라운드 정보를 다시 불러옵니다"
+          >
+            ↻ 새로고침
+          </button>
+        </div>
         <div className="flex items-center gap-2 text-base">
           <span className="text-sm text-zinc-400">라운드 선택:</span>
           {[1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((round) => (
