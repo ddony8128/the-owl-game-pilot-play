@@ -5,39 +5,6 @@ import { useRef, useState } from "react";
 const TRACKS = [
   { id: "rest_1", name: "휴식 1", src: "/bgm/rest_bgm_01.mp3" },
   { id: "rest_2", name: "휴식 2", src: "/bgm/rest_bgm_02.mp3" },
-  { id: "subway_1", name: "이상교통 1", src: "/bgm/subway_bgm_00.mp3" },
-  { id: "subway_2", name: "이상교통 2", src: "/bgm/subway_bgm_01.mp3" },
-  { id: "subway_3", name: "이상교통 3", src: "/bgm/subway_bgm_02.mp3" },
-  {
-    id: "train_1",
-    name: "지하철 지나가는 소리 1",
-    src: "/bgm/subway_train_01.mp3",
-  },
-  {
-    id: "train_2",
-    name: "지하철 지나가는 소리 2",
-    src: "/bgm/subway_train_02.mp3",
-  },
-  {
-    id: "train_3",
-    name: "지하철 지나가는 소리 3",
-    src: "/bgm/subway_train_03.mp3",
-  },
-  {
-    id: "announce_1",
-    name: "지하철역 안내 방송 1",
-    src: "/bgm/subway_announce_01.mp3",
-  },
-  {
-    id: "announce_2",
-    name: "지하철역 안내 방송 2",
-    src: "/bgm/subway_announce_02.mp3",
-  },
-  {
-    id: "announce_3",
-    name: "지하철역 안내 방송 3",
-    src: "/bgm/subway_announce_03.mp3",
-  },
   { id: "mafia_1", name: "자본주의 마피아", src: "/bgm/mafia_bgm_01.mp3" },
   { id: "defense_1", name: "디펜스 딜레마 1", src: "/bgm/defense_bgm_01.mp3" },
   { id: "defense_2", name: "디펜스 딜레마 2", src: "/bgm/defense_bgm_02.mp3" },

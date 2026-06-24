@@ -14,12 +14,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </Link>
         <Link
           className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/memo"
-        >
-          메모
-        </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
           href="/dashboard/x9a2k7/bgm"
         >
           BGM
