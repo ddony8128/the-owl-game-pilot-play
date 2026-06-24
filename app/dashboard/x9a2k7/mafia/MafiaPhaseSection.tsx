@@ -38,8 +38,13 @@ export function MafiaPhaseSection({
     <section className="space-y-2 text-sm">
       <h2 className="text-base font-semibold">라운드 / 페이즈</h2>
       <p className="text-sm text-zinc-400">
-        현재 라운드: {phase?.round_number ?? "-"} / 페이즈:{" "}
-        {getMafiaPhaseLabel(currentPhase)}
+        현재 라운드:{" "}
+        {typeof phase?.round_number === "number"
+          ? phase.round_number === 0
+            ? "튜토리얼"
+            : `${phase.round_number}라운드`
+          : "-"}{" "}
+        / 페이즈: {getMafiaPhaseLabel(currentPhase)}
       </p>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-sm text-zinc-400">라운드 선택:</span>
