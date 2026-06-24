@@ -108,6 +108,51 @@ export async function GET(request: Request) {
     nicknameById.set(p.id, p.nickname);
   }
 
+  // 현재 라이브 라운드/페이즈. 진행 중인 라운드는 스냅샷이 아직 직업을 담기 전일
+  // 수 있어(경매 직업은 trade→apply 전환 때 스냅샷됨) 라이브 상태를 우선 사용한다.
+  const { data: livePhaseRow } = await supabase
+    .from("mafia_phase_state")
+    .select("round_number, phase")
+    .eq("room_code", room)
+    .maybeSingle();
+  const liveRound =
+    typeof livePhaseRow?.round_number === "number"
+      ? livePhaseRow.round_number
+      : null;
+  const livePhase = (livePhaseRow?.phase as string | null) ?? null;
+  // 그 라운드의 직업은 경매가 끝난 뒤(trade 단계 이후)에야 확정된다.
+  const auctionSettled =
+    livePhase === "trade" ||
+    livePhase === "apply" ||
+    livePhase === "vote" ||
+    livePhase === "end";
+  const isLiveRound = liveRound != null && liveRound === round;
+
+  const liveStateById = new Map<
+    string,
+    { job: string | null; is_mafia: boolean; cash: number | null; stocks: unknown }
+  >();
+  if (isLiveRound) {
+    const { data: liveRows } = await supabase
+      .from("mafia_player_state")
+      .select("player_id, job, is_mafia, cash, stocks")
+      .eq("room_code", room);
+    for (const r of (liveRows || []) as Array<{
+      player_id: string;
+      job: string | null;
+      is_mafia: boolean;
+      cash: number | null;
+      stocks: unknown;
+    }>) {
+      liveStateById.set(r.player_id, {
+        job: r.job ?? null,
+        is_mafia: !!r.is_mafia,
+        cash: typeof r.cash === "number" ? r.cash : null,
+        stocks: r.stocks ?? null,
+      });
+    }
+  }
+
   // 해당 라운드의 플레이어 스냅샷
   const { data: snapshotRows, error: snapshotError } = await supabase
     .from("mafia_player_snapshots")
@@ -226,30 +271,43 @@ export async function GET(request: Request) {
     let summary = byPlayer.get(playerId);
     if (summary) return summary;
     const snap = bestSnapshotByPlayer.get(playerId) ?? null;
-    const rawStocks = (snap as unknown as { stocks?: unknown })?.stocks;
+    const live = isLiveRound ? liveStateById.get(playerId) ?? null : null;
+
+    // 직업/마피아/현금/주식: 진행 중인 라운드는 라이브 상태가 정확하다.
+    // (직업은 경매가 끝난 뒤에만 확정되므로, 경매 전이면 null로 둔다.)
+    let job: string | null;
+    let isMafia: boolean;
+    let cash: number | null;
+    let rawStocks: unknown;
+    if (live) {
+      job = auctionSettled ? live.job : null;
+      isMafia = auctionSettled ? live.is_mafia : false;
+      cash = live.cash;
+      rawStocks = live.stocks;
+    } else {
+      job = (snap as unknown as { job?: string | null })?.job ?? null;
+      // 스냅샷에는 is_mafia를 따로 저장하지 않으므로 직업 기준으로 다시 계산.
+      isMafia =
+        job === "up_manipulator" ||
+        job === "down_manipulator" ||
+        job === "robber";
+      cash =
+        typeof (snap as unknown as { cash?: number | null })?.cash === "number"
+          ? ((snap as unknown as { cash?: number | null }).cash as number)
+          : null;
+      rawStocks = (snap as unknown as { stocks?: unknown })?.stocks;
+    }
     const stocks: Record<string, { amount: number }> | null =
       rawStocks && typeof rawStocks === "object"
         ? { ...(rawStocks as Record<string, { amount: number }>) }
         : null;
-
-    const job =
-      (snap as unknown as { job?: string | null })?.job ?? null;
-    // 스냅샷에는 is_mafia 필드를 별도로 저장하지 않으므로,
-    // 직업 기준으로 마피아 여부를 다시 계산한다.
-    const isMafia =
-      job === "up_manipulator" ||
-      job === "down_manipulator" ||
-      job === "robber";
 
     summary = {
       player_id: playerId,
       nickname: nicknameById.get(playerId) ?? null,
       job,
       is_mafia: isMafia,
-      cash:
-        typeof (snap as unknown as { cash?: number | null })?.cash === "number"
-          ? ((snap as unknown as { cash?: number | null }).cash as number)
-          : null,
+      cash,
       stocks,
       auction_bets: [],
       abilities: [],
