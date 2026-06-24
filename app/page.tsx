@@ -50,8 +50,8 @@ export default function EntryPage() {
   if (authLoading || (player && gamePath(roomGame))) return <LoadingScreen />;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 px-4 text-zinc-50">
-      <div className="w-full max-w-sm rounded-2xl bg-zinc-900/80 p-6 shadow-xl ring-1 ring-zinc-800/60">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-linear-to-b from-sky-600 via-sky-700 to-sky-600 px-4 text-zinc-50">
+      <div className="w-full max-w-sm rounded-2xl bg-zinc-950/85 p-6 shadow-xl ring-1 ring-zinc-800/60 backdrop-blur-sm">
         <h1 className="mb-1 text-xl font-semibold">입장하기</h1>
         <p className="mb-5 text-xs text-zinc-400">
           GM이 안내한 <b>방 코드</b>와 <b>등록된 닉네임</b>을 입력하세요.
