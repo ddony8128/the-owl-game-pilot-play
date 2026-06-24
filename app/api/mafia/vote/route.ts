@@ -97,6 +97,26 @@ export async function POST(request: Request) {
   const player = playerRow as Player;
   const roundNumber = phaseState.round_number;
 
+  // 투표 대상이 같은 방의 실제 플레이어인지 검증 (위조된 target_id로 집계 무효화 방지)
+  const { data: targetRow, error: targetError } = await supabase
+    .from("players")
+    .select("id")
+    .eq("room_code", room)
+    .eq("id", body.target_id)
+    .maybeSingle();
+
+  if (targetError) {
+    return NextResponse.json({ error: targetError.message } as VoteResponse, {
+      status: 500,
+    });
+  }
+  if (!targetRow) {
+    return NextResponse.json(
+      { error: "투표 대상이 올바르지 않습니다." } as VoteResponse,
+      { status: 400 }
+    );
+  }
+
   // 시장 능력에서 표 가격 결정: apply 페이즈 ability 중 job='mayor'의 ticket_price 사용, 없으면 1원
   let ticketPrice = 1;
   const { data: abilityRows, error: abilityError } = await supabase

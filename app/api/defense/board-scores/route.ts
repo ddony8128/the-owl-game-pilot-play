@@ -62,6 +62,8 @@ export async function GET(request: Request) {
         "round, player_id, action_type, used_card_value"
       )
       .eq("room_code", room)
+      // 본게임(DB round 4~15)만 누적 데미지 타이브레이커에 반영. 튜토리얼(1·2)은 제외.
+      .gte("round", 4)
       .lte("round", sourceRound)
       .eq("action_type", "combat"),
   ]);

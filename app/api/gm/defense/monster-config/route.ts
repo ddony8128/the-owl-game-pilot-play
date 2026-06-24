@@ -58,9 +58,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "counts 필요" }, { status: 400 });
   }
 
+  // 본게임이 이미 진행 중(라운드 ≥ 4)이면 살아있는 풀(count)을 건드리지 않고
+  // base_count 만 갱신한다(다음 본게임 시작 시 반영). 시작 전(튜토리얼/대기)에는
+  // 미리보기를 위해 count 도 함께 맞춰 둔다.
+  const { data: phase } = await supabase
+    .from("defense_phase_state")
+    .select("round")
+    .eq("room_code", room)
+    .maybeSingle();
+  const mainStarted = ((phase?.round as number | null) ?? 0) >= 4;
+
   const validIds = new Set(DEFENSE_MONSTERS.map((m) => m.id));
-  const rows: { room_code: string; id: number; count: number; base_count: number }[] =
-    [];
+  const rows: {
+    room_code: string;
+    id: number;
+    count?: number;
+    base_count: number;
+  }[] = [];
   for (const [key, raw] of Object.entries(counts)) {
     const id = Number(key);
     const value = Number(raw);
@@ -70,8 +84,12 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    // base_count 와 (시작 전) 현재 풀을 함께 맞춰 둔다. 진행 중에도 다음 본게임 시작 시 적용.
-    rows.push({ room_code: room, id, count: Math.floor(value), base_count: Math.floor(value) });
+    const v = Math.floor(value);
+    rows.push(
+      mainStarted
+        ? { room_code: room, id, base_count: v }
+        : { room_code: room, id, count: v, base_count: v },
+    );
   }
 
   if (rows.length === 0) {
@@ -86,5 +104,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  // 진행 중 변경은 base_count 만 저장됐고, 적용은 다음 본게임 시작부터임을 알린다.
+  return NextResponse.json(
+    mainStarted ? { ok: true, applied: "next_game" } : { ok: true },
+  );
 }

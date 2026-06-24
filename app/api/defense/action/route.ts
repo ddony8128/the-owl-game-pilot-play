@@ -78,11 +78,16 @@ export async function POST(request: Request) {
   }
 
   const currentRound = phase.round;
-  if (currentRound <= 0) {
+  // 행동 가능 라운드: 튜토리얼(1·2) + 본게임(4~15). 준비(≤0)·튜토리얼 결과(3)·종료(≥16)는 불가.
+  const playable =
+    currentRound === 1 ||
+    currentRound === 2 ||
+    (currentRound >= 4 && currentRound <= 15);
+  if (!playable) {
     return NextResponse.json(
       {
         error:
-          "준비 단계에서는 행동을 할 수 없습니다. 튜토리얼 또는 본 게임 라운드에서만 가능합니다.",
+          "지금은 행동할 수 없는 단계입니다(준비/결과/종료 화면). 라운드가 진행 중일 때만 가능합니다.",
       } as ResponseBody,
       { status: 400 }
     );

@@ -81,18 +81,36 @@ export async function POST(request: Request) {
     );
   }
 
-  // 스냅샷 생성 (현재 phase 종료 시점)
-  const { data: playerStates, error: playerStatesError } = await supabase
-    .from("mafia_player_state")
-    .select("player_id, cash, is_mafia, job, stocks, updated_at")
-    .eq("room_code", room);
+  // 동시 더블클릭/중복요청 방지: 현재 phase일 때만 to로 전환되도록 compare-and-swap.
+  // 이 전환을 단독으로 획득(정확히 1행 갱신)한 요청만 아래 비즈니스 로직을 실행한다.
+  const { data: updatedPhase, error: updateError } = await supabase
+    .from("mafia_phase_state")
+    .update({ round_number: current.round_number, phase: to })
+    .eq("room_code", room)
+    .eq("phase", current.phase)
+    .eq("round_number", current.round_number)
+    .select("room_code, round_number, phase, updated_at")
+    .maybeSingle();
 
-  if (playerStatesError) {
+  if (updateError) {
     return NextResponse.json(
-      { error: playerStatesError.message } as AdvanceResponse,
+      { error: updateError.message } as AdvanceResponse,
       { status: 500 }
     );
   }
+  if (!updatedPhase) {
+    // 다른 요청이 이미 이 전환을 처리했거나 그 사이 phase가 바뀜 → 중복 적용 방지
+    return NextResponse.json(
+      { error: "이미 처리되었거나 페이즈가 변경되었습니다." } as AdvanceResponse,
+      { status: 409 }
+    );
+  }
+
+  // 스냅샷 생성 (현재 phase 종료 시점)
+  const { data: playerStates } = await supabase
+    .from("mafia_player_state")
+    .select("player_id, cash, is_mafia, job, stocks, updated_at")
+    .eq("room_code", room);
 
   const snapshots = (playerStates || []) as MafiaPlayerState[];
 
@@ -112,7 +130,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // 페이즈 전환별 비즈니스 로직
+  // 페이즈 전환별 비즈니스 로직 (이 전환을 단독 획득한 요청에서만 1회 실행)
   try {
     if (current.phase === "prepare" && to === "auction") {
       await handlePrepareToAuction(supabase, current, room);
@@ -124,6 +142,12 @@ export async function POST(request: Request) {
       await handleVoteToEnd(supabase, current, room);
     }
   } catch (e: unknown) {
+    // 비즈니스 로직 실패 시 phase를 원복해 재시도 가능하게 한다.
+    await supabase
+      .from("mafia_phase_state")
+      .update({ phase: current.phase })
+      .eq("room_code", room)
+      .eq("phase", to);
     const message =
       e instanceof Error
         ? e.message
@@ -131,24 +155,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message } as AdvanceResponse, {
       status: 500,
     });
-  }
-
-  const { data: updatedPhase, error: updateError } = await supabase
-    .from("mafia_phase_state")
-    .update({ round_number: current.round_number, phase: to })
-    .eq("room_code", room)
-    .select("room_code, round_number, phase, updated_at")
-    .maybeSingle();
-
-  if (updateError || !updatedPhase) {
-    return NextResponse.json(
-      {
-        error:
-          updateError?.message ??
-          "mafia_phase_state를 업데이트하지 못했습니다.",
-      } as AdvanceResponse,
-      { status: 500 }
-    );
   }
 
   // 특정 페이즈 전환 시 타이머를 해당 페이즈 기본값으로 리셋한다.
