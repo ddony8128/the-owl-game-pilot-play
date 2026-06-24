@@ -45,3 +45,6 @@ dev.log
 build.log
 test-results/
 playwright-report/
+e2e/_*.spec.ts
+docs/gm-guide/_*.png
+start.log

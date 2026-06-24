@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>자본주의 마피아 — GM 가이드</title>
+<style>
+  :root{
+    --bg:#0a0a0b; --panel:#18181b; --panel2:#27272a; --line:#3f3f46;
+    --txt:#e4e4e7; --mut:#a1a1aa; --amber:#fbbf24; --red:#f87171; --green:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,"Segoe UI","Malgun Gothic",sans-serif;line-height:1.65;}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 20px 80px;}
+  h1{font-size:30px;margin:0 0 4px;}
+  h2{font-size:21px;margin:42px 0 12px;padding-bottom:6px;border-bottom:2px solid var(--amber);}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--amber);}
+  .sub{color:var(--mut);margin:0 0 8px;}
+  .lead{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--amber);
+    border-radius:8px;padding:12px 16px;margin:16px 0;}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px;}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);color:var(--amber);}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+  code,.code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-family:ui-monospace,Consolas,monospace;color:#fde68a;}
+  figure{margin:16px 0;}
+  figure img{width:100%;border:1px solid var(--line);border-radius:10px;display:block;}
+  figure.mobile img{max-width:330px;margin:0 auto;}
+  figcaption{color:var(--mut);font-size:13px;text-align:center;margin-top:6px;}
+  ol,ul{padding-left:22px;} li{margin:4px 0;}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 18px;margin:12px 0;}
+  .tag-h{color:#e4e4e7;font-weight:600} .tag-d{color:var(--amber);font-weight:600} .tag-b{color:var(--red);font-weight:600}
+  .note{color:var(--mut);font-size:13px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}
+  .zone{padding:8px;border-radius:6px;text-align:center;font-size:13px;}
+  a{color:#fcd34d;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>🦉 자본주의 마피아 <span style="font-size:16px;color:var(--mut)">— GM 가이드</span></h1>
+<p class="sub">무너진 도시의 경제를 재건하는 머니 게임입니다. 참가자는 라운드마다 <b class="tag-d">직업</b>을 경매로 얻고, <b class="tag-h">주식</b>을 사고팔고, <b class="tag-b">경제사범</b>을 투표로 가려냅니다. 그 속에 숨은 <b class="tag-b">마피아</b>는 몰래 주가를 흔듭니다. 규칙 · 진행 · 대시보드 사용법 · 플레이어 플레이 방식을 모두 담았습니다.</p>
+
+<div class="lead">
+  <b>빠른 정보</b><br>
+  • <b>권장 인원</b> — 약 4~8명 (화면 예시는 4명)<br>
+  • <b>예상 소요시간</b> — 약 1.5~2시간 (튜토리얼 2라운드 + 본게임 5라운드, 각 라운드 4단계)<br>
+  • <b>한 줄 목표</b> — 최종 자산(보유 주식 평가액 + 현금)이 가장 많은 사람이 우승. 시작 현금은 30원입니다.
+</div>
+
+<h2>링크</h2>
+<p>아래 세 가지만 있으면 진행할 수 있습니다. 모두 새 탭으로 열립니다.</p>
+<ul>
+  <li><b>룰북(PDF)</b> — <a href="https://the-owl-game-pilot-play-real.vercel.app/rulebook/1141rfwkvm_mafia.pdf" target="_blank" rel="noopener">자본주의 마피아 룰북 ↗</a></li>
+  <li><b>방 관리 화면(GM)</b> — <a href="https://the-owl-game-pilot-play-real.vercel.app/dashboard/x9a2k7" target="_blank" rel="noopener">방 만들기 · 참가자 등록 · 대시보드 입장 ↗</a></li>
+  <li><b>플레이어 입장</b> — <a href="https://the-owl-game-pilot-play-real.vercel.app/" target="_blank" rel="noopener">참가자가 방 코드 + 닉네임으로 들어오는 곳 ↗</a></li>
+</ul>
+
+<h2>게임 소개 · 목표</h2>
+<p><b>도입 멘트(예시)</b> — "도시의 경제 기반이 무너졌습니다. 직업을 얻고, 투표하고, 돈을 벌어 경제를 재건하세요. 최종 자산이 가장 많은 사람이 우승합니다."</p>
+<p>모든 참가자는 현금 <b>30원</b>으로 시작합니다. 라운드마다 직업을 경매로 사고, 주식을 거래하고, 경제사범을 투표로 가립니다. 참가자 중 일부는 비밀리에 <b class="tag-b">마피아</b>이며, 몰래 주가를 조작합니다. 게임이 끝났을 때 <b>보유 주식 평가액 + 현금</b>이 가장 많은 사람이 우승합니다(동점이면 현금이 많은 쪽).</p>
+<div class="lead"><b>승리 판정</b> — 최종 자산 = (보유 주식 수 × 그 주식의 마지막 주가) + 현금. 가장 큰 사람이 1등입니다.</div>
+
+<h2>1. 방 만들기 + 참가자 등록</h2>
+<p>한 개의 사이트가 여러 방을 동시에 운영합니다. GM이 방을 만들면 <b>방 코드</b>(예 <span class="code">A3F82</span>)가 발급되고, 그 코드를 받은 참가자만 입장합니다. 마피아 방과 디펜스 방은 <b>각각 따로</b> 만들어 운영합니다.</p>
+<div class="step">
+<ol>
+  <li><b>방 관리 화면</b>(<span class="code">/dashboard/x9a2k7</span>)을 엽니다. → <a href="https://the-owl-game-pilot-play-real.vercel.app/dashboard/x9a2k7" target="_blank" rel="noopener">바로 열기 ↗</a></li>
+  <li><b>[+ 마피아 방]</b> 버튼을 누릅니다. 방 코드(예 <span class="code">A3F82</span>)가 발급됩니다.</li>
+  <li>그 방의 <b>[참가자]</b>에서 이번 팀의 닉네임을 모두 등록합니다. <span class="note">(여기 등록한 사람만 입장할 수 있습니다.)</span></li>
+  <li>발급된 <b>방 코드를 참가자에게 안내</b>합니다.</li>
+</ol>
+<p class="note">참가자는 닉네임을 등록하고 방 코드를 받으면 바로 입장할 수 있습니다. GM이 따로 "준비 상태"로 만들 필요는 없습니다. 입장하면 초기 상태로 대기합니다.</p>
+<figure><img src="img/room-mgmt.png" alt="방 관리 화면" /><figcaption>방 관리: 방 생성 버튼 · 방 목록 · 참가자 등록 · 대시보드 입장</figcaption></figure>
+</div>
+
+<h2>2. 진행 순서 (GM 대시보드)</h2>
+<p>방 관리에서 그 방의 <b>[대시보드 입장]</b>을 누르면 아래 화면이 열립니다. 화면에는 <b>카운트다운(타이머), 현재 라운드 · 단계, 모든 참가자의 자산 현황, 종목별 주가</b>가 보입니다. 버튼은 <b>지금 눌러야 할 것 위주</b>로 보이니, 화면 흐름대로 따라가면 됩니다.</p>
+<figure><img src="img/mafia-dashboard.png" alt="마피아 GM 대시보드" /><figcaption>마피아 GM 대시보드 — 카운트다운, 라운드 · 단계, 자산 현황, 주가</figcaption></figure>
+
+<h3>① 게임 만들기 · 튜토리얼</h3>
+<div class="step">
+<p>먼저 <b>이 방으로 게임을 시작</b>합니다. 이 방에 등록한 참가자 명단으로 게임이 만들어지고, 모두 현금 30원으로 시작합니다.
+처음이라면 <b>튜토리얼 2라운드</b>를 돌려 흐름을 익히게 하는 것을 권합니다. 튜토리얼도 본게임과 같은 4단계로 진행됩니다.</p>
+</div>
+
+<h3>② 본게임 (5라운드) — 라운드마다 4단계 반복</h3>
+<p>본게임은 <b>총 5라운드</b>입니다. 한 라운드 안에서 아래 네 단계를 차례로 진행합니다. 각 단계마다 화면의 타이머가 돌고, 시간이 끝나면 다음 단계 버튼을 누릅니다.</p>
+
+<div class="step">
+<p><b>단계 1 — 직업 경매 (약 3분)</b></p>
+<ol>
+  <li>경매 단계를 시작하면 참가자들이 7개 직업 중 <b>하나에만</b> 베팅 금액을 비공개로 적습니다.</li>
+  <li>시간이 끝나면 경매를 정산합니다. 직업마다 <b>가장 높은 금액을 적은 사람이 낙찰</b>받고, 그 금액을 즉시 지불합니다. 떨어진 사람은 베팅액을 전액 돌려받습니다.</li>
+  <li>아무 직업도 낙찰받지 못한 사람은 <b>월급쟁이</b>가 됩니다(현금 +3원).</li>
+</ol>
+<p class="note">같은 금액(동률)이면 그다음으로 높은 금액을 적은 사람이 차지합니다. 직업은 라운드마다 초기화되어 다시 경매합니다.</p>
+</div>
+
+<div class="step">
+<p><b>단계 2 — 주식 거래 + 능력 사용 (약 10분)</b></p>
+<ol>
+  <li>참가자들이 <b>비공개로</b> 주식을 매수/매도하고, 가진 <b>직업 능력</b>도 이 단계에 비공개로 사용합니다.</li>
+  <li>같은 라운드에 같은 종목을 동시에 사고팔 수는 없습니다. 현금이 모자라거나 음수가 되는 매수는 불가합니다.</li>
+  <li>시간이 끝나면 다음 단계(주가 변동)로 넘깁니다.</li>
+</ol>
+</div>
+
+<div class="step">
+<p><b>단계 3 — 주가 변동 적용</b></p>
+<ol>
+  <li>화면이 매수/매도량을 집계해 주가를 자동으로 움직입니다. <b>결과만 공개</b>되고, 변동 규칙 자체는 참가자에게 비공개입니다.</li>
+  <li>이때 <b>결과 중계 페이지</b>를 빔/모니터에 띄워 바뀐 주가를 보여주세요(아래 3번).</li>
+</ol>
+<p class="note">참고(GM용): 매수량 1위 종목 +2, 2위 +1, 매도량 1위 종목 -1(공동 순위 포함). 거래량이 1개 이상일 때만 적용됩니다. 마피아의 주가조작도 여기서 함께 반영됩니다(국채는 조작 대상에서 제외). 최소 주가는 1원입니다.</p>
+</div>
+
+<div class="step">
+<p><b>단계 4 — 경제사범 투표 (약 5분)</b></p>
+<ol>
+  <li>참가자들이 <b>비공개로</b> 경제사범 후보에게 투표합니다. 표를 던지려면 <b>표 값(기본 1원, 시장 능력으로 최대 3원)</b>을 내야 합니다.</li>
+  <li>시간이 끝나면 집계합니다. <b>최다 득표자가 경제사범</b>이 되어 국채 가격만큼 벌금을 냅니다(현금이 음수가 될 수 있음). 최다 득표가 2명 이상이면 경제사범은 없습니다.</li>
+  <li>화면이 마피아 관련 효과를 자동으로 처리합니다(아래 규칙 참고). 결과를 중계 페이지로 보여주세요.</li>
+  <li>다음 라운드로 넘어가 다시 단계 1부터 반복합니다.</li>
+</ol>
+</div>
+
+<h3>③ 종료</h3>
+<div class="step">
+<p>본게임 <b>5라운드</b>의 투표까지 끝내면 게임이 종료되고, 화면에 <b>최종 자산 순위</b>가 표시됩니다. 순위를 보고 시상하세요(아래 6번).</p>
+</div>
+
+<h2>3. 결과 중계 페이지 (빔/모니터 송출)</h2>
+<p>GM 대시보드에서 <b>[결과 페이지 ↗]</b>(또는 결과 화면 열기) 버튼을 누르면 <b>그 방의 마피아 중계 화면</b>이 새 탭으로 열립니다. 빔/모니터에 띄워 참가자 전체에게 보여주세요.</p>
+<div class="lead"><b>주가 변동(단계 3)과 투표 결과(단계 4) 때마다 이 결과 페이지로 중계하세요.</b> 종목별 주가가 어떻게 움직였는지, 누가 경제사범이 되었는지를 크게 보여주며 해설하는 것이 진행의 핵심입니다.</div>
+<figure><img src="img/mafia-board.png" alt="마피아 결과 중계 페이지" /><figcaption>결과 중계 페이지 — 주가 · 순위 · 라운드 결과를 크게 송출</figcaption></figure>
+
+<h2>4. 플레이어 입장 & 플레이 방식</h2>
+<div class="grid2">
+  <div>
+    <p>참가자는 <a href="https://the-owl-game-pilot-play-real.vercel.app/" target="_blank" rel="noopener">플레이어 입장 페이지 ↗</a>에서 <b>방 코드 + 닉네임</b>을 입력해 들어옵니다(아래 휴대폰 화면 참고). 입장하면 바로 게임에 참여합니다.</p>
+    <ul>
+      <li><b>경매</b>에서 직업 하나에 베팅 금액 입력.</li>
+      <li><b>거래</b>에서 주식 매수/매도 + 직업 능력 사용(모두 비공개).</li>
+      <li><b>투표</b>에서 경제사범 후보에 투표(표 값 지불).</li>
+      <li>결과는 단계가 정산될 때 결과 페이지/내 화면에서 확인.</li>
+    </ul>
+  </div>
+  <figure class="mobile"><img src="img/join.png" alt="플레이어 입장 화면" /><figcaption>입장: 방 코드 + 닉네임 입력(휴대폰)</figcaption></figure>
+</div>
+<figure class="mobile"><img src="img/mafia-player.png" alt="마피아 플레이어 화면" /><figcaption>마피아 플레이어 화면(휴대폰)</figcaption></figure>
+
+<h2>5. 규칙 (상세)</h2>
+
+<h3>주식 4종목</h3>
+<p>초기 주가는 모두 <b>5원</b>. 최소 주가 1원, 최대 제한 없음. <b>국채는 주가 조작 대상에서 제외</b>됩니다.</p>
+<table>
+<tr><th>종목</th><th>비고</th></tr>
+<tr><td>국채</td><td>마피아 주가조작 대상 아님 · 경제사범 벌금/시민 보상의 기준 가격</td></tr>
+<tr><td>번쩍전기</td><td>일반 종목</td></tr>
+<tr><td>이상교통</td><td>일반 종목</td></tr>
+<tr><td>부엉교육</td><td>일반 종목</td></tr>
+</table>
+
+<h3>라운드 4단계 요약</h3>
+<table>
+<tr><th>단계</th><th>시간</th><th>내용</th></tr>
+<tr><td>1. 직업 경매</td><td>약 3분</td><td>7개 직업 중 하나에 비공개 베팅 → 최고액 낙찰(즉시 지불), 떨어지면 전액 환불, 미낙찰자는 월급쟁이</td></tr>
+<tr><td>2. 주식 거래 + 능력</td><td>약 10분</td><td>매수/매도 비공개 입력 + 직업 능력 비공개 사용(다음 단계 반영)</td></tr>
+<tr><td>3. 주가 변동</td><td>—</td><td>매수/매도량으로 주가 변동 + 마피아 조작 반영, 결과만 공개</td></tr>
+<tr><td>4. 경제사범 투표</td><td>약 5분</td><td>표 값 내고 비공개 투표 → 최다 득표자 경제사범(벌금) · 마피아 효과 처리</td></tr>
+</table>
+
+<h3>주가 변동 규칙 (단계 3, GM 참고용 · 참가자에게 비공개)</h3>
+<ul>
+  <li>매수량 <b>1위 종목 +2</b>, 2위 종목 <b>+1</b> (공동 순위 포함).</li>
+  <li>매도량 <b>1위 종목 -1</b> (공동 순위 포함).</li>
+  <li>해당 거래량이 1개 이상일 때만 적용됩니다.</li>
+  <li>여기에 마피아의 주가조작이 더해집니다(국채 제외). 최소 주가 1원.</li>
+</ul>
+
+<h3>경제사범 투표 결과 (단계 4)</h3>
+<ul>
+  <li><b>최다 득표자 = 경제사범</b> → 국채 가격만큼 벌금(현금 음수 가능). 최다 득표 2명 이상이면 경제사범 없음.</li>
+  <li><b>마피아가 경제사범이면</b> → 국채 +1원, 시민 전원 국채 1개 획득(경제사범은 오른 가격으로 벌금).</li>
+  <li><b>마피아가 경제사범이 아니거나 경제사범이 없으면</b> → 모든 마피아에게 최고가 주식 1주 지급(동률이면 무작위).</li>
+</ul>
+
+<h3>직업 (라운드마다 경매로 획득)</h3>
+<p>괄호의 금액은 그 직업을 얻으면 받는 현금입니다.</p>
+<table>
+<tr><th>진영</th><th>직업</th><th>능력</th></tr>
+<tr><td class="tag-b">마피아</td><td>상승 주가조작범</td><td>국채 외 1종목 +1 (그 종목이 최대 매도 종목이면 +1 추가)</td></tr>
+<tr><td class="tag-b">마피아</td><td>하락 주가조작범</td><td>1종목 -2 (그 종목이 최대 매수 종목이면 -1 추가)</td></tr>
+<tr><td class="tag-b">마피아</td><td>강도</td><td>자신 외 2명 선택 → 각자 이번 라운드 수익의 25%(버림) 강탈 (시장은 면역이며 강도 정체를 알게 됨)</td></tr>
+<tr><td class="tag-h">시민</td><td>경찰 (+5원)</td><td>2명을 지정해 마피아 포함 여부 확인(비공개). 마피아가 경제사범이면 국채 1개 추가</td></tr>
+<tr><td class="tag-h">시민</td><td>세무조사원 (+5원)</td><td>2명의 보유 주식 · 이번 라운드 매매 내역 확인(비공개)</td></tr>
+<tr><td class="tag-h">시민</td><td>시장</td><td>강도 면역 + 강도 정체 인지 · 그 라운드 표 값을 1~3원으로 결정</td></tr>
+<tr><td class="tag-h">시민</td><td>증권사 직원</td><td>국채 외 1종목의 총 거래금액(매수+매도)의 10%(버림) 획득</td></tr>
+<tr><td class="tag-h">시민</td><td>CEO (+10원)</td><td>1명 지정 → 그 사람 +5원, 그 사람은 CEO 정체를 알게 됨</td></tr>
+<tr><td class="tag-h">시민</td><td>월급쟁이 (+3원)</td><td>경매에서 아무 직업도 못 받으면 자동으로 배정</td></tr>
+</table>
+<p class="note">직업은 라운드마다 다시 경매하므로, 같은 사람이 매 라운드 다른 직업을 맡을 수 있습니다.</p>
+
+<h2>6. 실수했을 때 (복구)</h2>
+<div class="lead"><b>당황하지 마세요.</b> 대부분은 새 방을 만들거나 리셋 버튼으로 해결됩니다.</div>
+<ul>
+  <li><b>진행이 꼬였을 때</b> — 마피아 대시보드의 <b>[리셋]</b> 버튼을 누르면 그 방을 처음 상태로 되돌릴 수 있습니다.</li>
+  <li><b>방 자체가 엉켰을 때</b> — 방 관리 화면에서 <b>[+ 마피아 방]</b>으로 새 방을 만들면 됩니다. 이전 방은 <b>[종료]</b> 표시만 해두면 됩니다(기록은 보존).</li>
+  <li><b>다음 팀</b> — 팀이 바뀌면 새 방을 만들어 진행합니다. 마피아 방과 디펜스 방은 각각 따로 운영합니다.</li>
+</ul>
+
+<h2>7. 시상 (부엉깃털)</h2>
+<p>게임이 산출한 <b>최종 자산 순위</b>를 보고 GM이 부엉깃털을 나눠줍니다.</p>
+<table>
+<tr><th>순위</th><th>부엉깃털</th></tr>
+<tr><td>1등</td><td>4개</td></tr>
+<tr><td>2등</td><td>3개</td></tr>
+<tr><td>3등</td><td>2개</td></tr>
+<tr><td>4 · 5 · 6등</td><td>각 1개</td></tr>
+</table>
+<p class="note">깃털은 게임이 자동으로 주지 않습니다. GM이 시상할 때 직접 부여하세요(게임은 점수 순위까지 산출).</p>
+
+</div>
+</body>
+</html>
