@@ -86,11 +86,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
-    action?: "start" | "pause" | "reset";
+    action?: "start" | "pause" | "reset" | "force_end";
   } | null;
   const action = body?.action;
 
-  if (!action || !["start", "pause", "reset"].includes(action)) {
+  if (!action || !["start", "pause", "reset", "force_end"].includes(action)) {
     return NextResponse.json({ error: "invalid action" }, { status: 400 });
   }
 
@@ -117,7 +117,19 @@ export async function POST(request: Request) {
       isRunning = false;
     }
 
-    if (action === "reset") {
+    if (action === "force_end") {
+      // 강제 종료: 시간이 남아 있어도 즉시 게임을 끝낸다.
+      // 타임아웃과 동일하게, 아직 끝내지 못한 모든 플레이어를 종료 처리한다.
+      // (이미 탈출한 플레이어의 finished_rank/상태는 보존됨 → is_finished=false인 행만 갱신)
+      // 미탈출자는 finished_rank=null 그대로 → 플레이어 화면에서 "탈출 실패"로 표시.
+      await markAllPlayersFinishedOnTimeout();
+      await supabase
+        .from("game_state")
+        .update({ timer_start: false, pause_at: null })
+        .eq("id", 1);
+      remainingSeconds = 0;
+      isRunning = false;
+    } else if (action === "reset") {
       // 완전 초기화: DB 상에서 타이머를 끄고, 다시 35분 대기로 만든다.
       await supabase
         .from("game_state")

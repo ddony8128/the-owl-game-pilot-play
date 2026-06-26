@@ -107,7 +107,9 @@ export function SubwayCountdownSection() {
     };
   }, []);
 
-  const sendAction = async (action: "start" | "pause" | "reset") => {
+  const sendAction = async (
+    action: "start" | "pause" | "reset" | "force_end"
+  ) => {
     try {
       const res = await fetch("/api/gm/timers/subway", {
         method: "POST",
@@ -156,7 +158,25 @@ export function SubwayCountdownSection() {
         >
           리셋
         </button>
+        <button
+          className="h-8 rounded bg-red-600 px-3 text-[11px] font-semibold text-zinc-50 hover:bg-red-500"
+          onClick={() => {
+            if (
+              window.confirm(
+                "지금 게임을 강제로 종료합니다.\n아직 탈출하지 못한 모든 플레이어는 '탈출 실패'로 처리됩니다.\n계속할까요?"
+              )
+            ) {
+              void sendAction("force_end");
+            }
+          }}
+        >
+          강제 종료
+        </button>
       </div>
+      <p className="text-[11px] text-zinc-500">
+        강제 종료 시 미탈출 플레이어는 즉시 결과 화면에서 &lsquo;탈출
+        실패&rsquo;로 표시됩니다.
+      </p>
     </section>
   );
 }
