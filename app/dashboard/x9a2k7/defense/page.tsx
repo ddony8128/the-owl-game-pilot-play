@@ -119,7 +119,7 @@ export default function DashboardDefensePage() {
       </div>
       <DefenseCountdownSection room={room} />
       <DefenseRoundSection round={round} onAdvanceRound={advanceRound} />
-      <MonsterConfigSection room={room} />
+      <MonsterConfigSection room={room} playerCount={players.length} />
       <DefenseScoreSection players={players} onChangeScore={changeScore} />
       <DefenseRoundSummarySection room={room} currentRound={round} />
     </div>

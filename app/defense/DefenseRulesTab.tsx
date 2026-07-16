@@ -11,7 +11,7 @@ export function DefenseRulesTab() {
           <li>
             <span className="font-semibold">게임 종료</span>
             <ul className="ml-4 list-disc">
-              <li>몬스터 24마리가 모두 쓰러지거나 도망가면 게임 종료</li>
+              <li>대기열의 모든 몬스터가 쓰러지거나 도망가면 게임 종료</li>
               <li>또는 12라운드 종료 시 게임 종료</li>
             </ul>
           </li>
@@ -49,14 +49,19 @@ export function DefenseRulesTab() {
           <li>
             <span className="font-semibold">몬스터</span>
             <ul className="ml-4 list-disc">
-              <li>총 6종류, 각각 2 ~ 6마리씩 총 24마리</li>
+              <li>
+                총 6종류. 마릿수는 참가 인원에 따라 조정됩니다(기준 24마리).
+              </li>
               <li>각 몬스터에 대한 정보는 몬스터 도감 탭에 있습니다.</li>
             </ul>
           </li>
           <li>
             <span className="font-semibold">대기열</span>
             <ul className="ml-4 list-disc">
-              <li>몬스터 대기열은 4칸입니다.</li>
+              <li>
+                몬스터 대기열은 참가 인원에 따라 4~5칸입니다(7~9명 4칸 / 10~12명
+                5칸). 현재 방의 칸 수는 플레이 화면에서 확인하세요.
+              </li>
               <li>
                 빈 칸이 생기면 다음 라운드 시작 시 새 몬스터가 공개됩니다.
               </li>
@@ -73,7 +78,7 @@ export function DefenseRulesTab() {
             각 플레이어는 숫자 카드 1 / 2 / 3 / 4를 모두 활성화한 상태로
             시작합니다.
           </li>
-          <li>몬스터 대기열 4칸을 무작위 몬스터로 채웁니다.</li>
+          <li>몬스터 대기열을 무작위 몬스터로 채웁니다.</li>
           <li>1라운드를 시작합니다.</li>
         </ul>
       </div>

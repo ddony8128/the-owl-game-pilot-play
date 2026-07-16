@@ -12,6 +12,7 @@ import {
   DEFENSE_MONSTERS,
   DEFENSE_MONSTERS_BY_ID,
 } from "@/lib/defense/monsters";
+import { computeQueueSize } from "@/lib/defense/queue";
 import { randomUUID } from "crypto";
 
 function getRoundLabelForLog(round: number): string {
@@ -363,7 +364,10 @@ export async function handleDefenseAdvanceRound(
 
   const newlyChosenTypes = new Set<number>();
 
-  for (let slot = 0; slot < 4; slot += 1) {
+  // 대기열 칸 수는 참가 인원에 따라 유동적으로 정해진다(7~9명 4칸 / 10~12명 5칸).
+  const queueSize = computeQueueSize(players.length);
+
+  for (let slot = 0; slot < queueSize; slot += 1) {
     if (activeBySlot.has(slot)) continue;
 
     const forbidden = new Set<number>([

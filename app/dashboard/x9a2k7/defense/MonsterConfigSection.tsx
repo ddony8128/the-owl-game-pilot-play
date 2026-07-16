@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { recommendedMonsterCounts } from "@/lib/defense/composition";
+import { computeQueueSize } from "@/lib/defense/queue";
 
 type MonsterConfig = {
   id: number;
@@ -12,7 +14,13 @@ type MonsterConfig = {
 };
 
 // 방별 몬스터 수(비율) 조절. base_count 를 수정하면 본게임 시작 시 그 값으로 풀이 리셋된다.
-export function MonsterConfigSection({ room }: { room: string }) {
+export function MonsterConfigSection({
+  room,
+  playerCount = 0,
+}: {
+  room: string;
+  playerCount?: number;
+}) {
   const [monsters, setMonsters] = useState<MonsterConfig[]>([]);
   const [draft, setDraft] = useState<Record<number, number>>({});
   const [status, setStatus] = useState<string | null>(null);
@@ -38,6 +46,15 @@ export function MonsterConfigSection({ room }: { room: string }) {
   }, [load]);
 
   const total = Object.values(draft).reduce((s, v) => s + (Number(v) || 0), 0);
+
+  // 등록 인원 기준 권장 조합을 draft 에 채운다(저장은 별도 [저장] 버튼).
+  const applyPreset = () => {
+    const rec = recommendedMonsterCounts(playerCount);
+    setDraft(Object.fromEntries(Object.entries(rec).map(([k, v]) => [Number(k), v])));
+    setStatus(
+      `${playerCount}명 기준 권장 조합을 불러왔습니다. 확인 후 [저장]을 누르세요.`,
+    );
+  };
 
   const save = async () => {
     setSaving(true);
@@ -66,6 +83,20 @@ export function MonsterConfigSection({ room }: { room: string }) {
         인원에 맞춰 몬스터 종류별 마릿수를 정합니다. <b>본게임 시작(라운드 진입) 전에</b> 조절하세요.
         저장하면 본게임 시작 시 이 값으로 몬스터 풀이 채워집니다. (이 방에만 적용)
       </p>
+
+      <div className="mt-2 flex items-center gap-2 rounded bg-zinc-950/60 px-2 py-1.5 text-xs text-zinc-400">
+        <span>
+          등록 인원 <b className="text-zinc-200">{playerCount}명</b> · 대기열{" "}
+          <b className="text-amber-300">{computeQueueSize(playerCount)}칸</b>
+        </span>
+        <button
+          onClick={applyPreset}
+          disabled={playerCount <= 0}
+          className="ml-auto rounded bg-zinc-800 px-2.5 py-1 font-semibold text-amber-300 hover:bg-zinc-700 disabled:opacity-40"
+        >
+          인원 기준 자동 세팅
+        </button>
+      </div>
 
       <div className="mt-3 space-y-1.5">
         {monsters.map((m) => (
