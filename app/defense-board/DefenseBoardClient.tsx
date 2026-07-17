@@ -75,11 +75,13 @@ function getRoundLabel(round: number | null): string {
 }
 
 export function DefenseBoardClient() {
-  const [room] = useState<string | null>(() =>
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("room")
-      : null
-  );
+  // 하이드레이션 안전: URL(room)은 서버에서 알 수 없으므로 마운트 후에만 읽는다.
+  const [room, setRoom] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setRoom(new URLSearchParams(window.location.search).get("room"));
+    setMounted(true);
+  }, []);
   const [roomInput, setRoomInput] = useState("");
   const [stepState, setStepState] = useState<StepState>({ step: 0 });
   const [dataByRound, setDataByRound] = useState<Map<number, BoardApiResponse>>(
@@ -271,6 +273,11 @@ export function DefenseBoardClient() {
     if (!currentData) return [];
     return currentData.monsters;
   }, [currentData]);
+
+  // 마운트 전에는 서버 렌더와 동일한 빈 화면을 그려 하이드레이션 불일치를 피한다.
+  if (!mounted) {
+    return <div className="min-h-screen bg-zinc-950" />;
+  }
 
   if (!room) {
     const goToRoom = () => {

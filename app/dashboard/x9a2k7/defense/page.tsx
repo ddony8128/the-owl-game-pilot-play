@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
@@ -12,11 +12,14 @@ import { DefenseRoundSummarySection } from "./DefenseRoundSummarySection";
 import { MonsterConfigSection } from "./MonsterConfigSection";
 
 export default function DashboardDefensePage() {
-  const [room] = useState<string | null>(() =>
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("room")
-      : null
-  );
+  // 하이드레이션 안전: room(URL)·mounted 는 서버에서 알 수 없으므로 마운트 후에만 읽는다.
+  // (서버·클라 첫 렌더가 동일한 로딩 화면이 되도록 하여 SSR/CSR 불일치를 방지)
+  const [room, setRoom] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setRoom(new URLSearchParams(window.location.search).get("room"));
+    setMounted(true);
+  }, []);
 
   const { round, players, loading, error, reload } = useDefenseAdminState(room);
 
@@ -78,6 +81,8 @@ export default function DashboardDefensePage() {
       console.error(e);
     }
   };
+
+  if (!mounted) return <LoadingScreen />;
 
   if (!room) {
     return (
