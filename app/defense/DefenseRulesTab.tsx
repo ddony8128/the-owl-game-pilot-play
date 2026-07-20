@@ -4,6 +4,36 @@ export function DefenseRulesTab() {
       <p>디펜스 딜레마 규칙 요약이다부엉!</p>
       <br />
 
+      {/* 0. 인원에 따라 달라지는 것 */}
+      <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+        <p className="font-semibold text-amber-300">
+          참가 인원에 따라 달라지는 규칙
+        </p>
+        <p className="text-sm text-zinc-300">
+          아래 <span className="font-semibold">두 가지만</span> 인원에 따라
+          바뀌고, 나머지 규칙(카드·전투·점수 분배·도망 페널티 등)은 인원과
+          무관하게 동일합니다.
+        </p>
+        <ul className="list-disc pl-4 text-sm">
+          <li>
+            <span className="font-semibold">대기열 칸 수</span> — 7~9명{" "}
+            <span className="font-semibold text-amber-300">4칸</span> / 10~12명{" "}
+            <span className="font-semibold text-amber-300">5칸</span>. (현재 방의
+            칸 수는 <span className="font-semibold">정보</span> 탭 대기열에서 바로
+            보입니다.)
+          </li>
+          <li>
+            <span className="font-semibold">몬스터 총 수</span> — 대략{" "}
+            <span className="font-semibold text-amber-300">인원 × 3</span>마리
+            (인원이 많을수록 몬스터도 많아집니다).
+          </li>
+        </ul>
+        <p className="text-sm text-zinc-400">
+          인원이 많을수록 한 마리를 나눠 갖는 사람이 늘어 <span className="font-semibold">1인당 점수는 작아질 수</span> 있으니, 어디에 카드를 낼지가 더 중요해집니다.
+        </p>
+      </div>
+      <br />
+
       {/* 1. 기본 정보 */}
       <div className="space-y-2">
         <p className="font-semibold text-zinc-100">게임 종료 및 순위 결정</p>

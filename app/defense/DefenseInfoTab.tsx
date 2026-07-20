@@ -43,6 +43,9 @@ export function DefenseInfoTab({
       {showQueue && (
         <section className="space-y-2">
           <h2 className="text-lg font-semibold">대기열 몬스터</h2>
+          <p className="text-xs text-zinc-500">
+            대기열 칸 수는 참가 인원에 따라 달라집니다 (7~9명 4칸 / 10~12명 5칸).
+          </p>
           {isLoading ? (
             <p className="text-sm text-zinc-400">몬스터들이 습격 중입니다!</p>
           ) : sortedMonsters.length === 0 ? (
