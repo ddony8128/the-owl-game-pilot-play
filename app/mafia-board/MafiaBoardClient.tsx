@@ -39,11 +39,13 @@ function jobLabel(job: string | null): string {
 const RANK_ACCENT = ["text-amber-300", "text-zinc-200", "text-orange-400"];
 
 export function MafiaBoardClient() {
-  const [room] = useState<string | null>(() =>
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("room")
-      : null
-  );
+  // 하이드레이션 안전: URL(room)은 서버에서 알 수 없으므로 마운트 후에만 읽는다.
+  const [room, setRoom] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setRoom(new URLSearchParams(window.location.search).get("room"));
+    setMounted(true);
+  }, []);
   const [roomInput, setRoomInput] = useState("");
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +98,11 @@ export function MafiaBoardClient() {
     }
     return { rowOrder: order, byPlayerRound: map, roundList: rounds };
   }, [data]);
+
+  // 마운트 전에는 서버 렌더와 동일한 빈 화면을 그려 하이드레이션 불일치를 피한다.
+  if (!mounted) {
+    return <div className="min-h-screen bg-zinc-950" />;
+  }
 
   if (!room) {
     return (

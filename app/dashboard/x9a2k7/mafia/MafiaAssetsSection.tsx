@@ -42,7 +42,16 @@ export function MafiaAssetsSection({ players, playerNames, stocks }: Props) {
     <section className="space-y-2 text-sm">
       <h2 className="text-base font-semibold">자산 현황</h2>
       {players.length === 0 ? (
-        <p className="text-sm text-zinc-400">플레이어 데이터가 없습니다.</p>
+        <div className="space-y-1 rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-sm">
+          <p className="text-zinc-300">
+            자산은 직업 경매가 시작될 때 생성됩니다.
+          </p>
+          <p className="text-zinc-400">
+            {Object.keys(playerNames).length > 0
+              ? `등록 인원 ${Object.keys(playerNames).length}명: ${Object.values(playerNames).join(", ")}`
+              : "아직 등록된 플레이어가 없습니다."}
+          </p>
+        </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {players.map((p) => {

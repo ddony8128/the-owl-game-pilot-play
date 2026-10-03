@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { RoomEndedNotice } from "../RoomEndedNotice";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { useDefenseAdminState } from "./useDefenseAdminState";
 import { DefenseCountdownSection } from "./DefenseCountdownSection";
@@ -17,6 +18,7 @@ export default function DashboardDefensePage() {
   const [room, setRoom] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL 은 마운트 후에만 읽을 수 있다
     setRoom(new URLSearchParams(window.location.search).get("room"));
     setMounted(true);
   }, []);
@@ -122,6 +124,7 @@ export default function DashboardDefensePage() {
           결과 페이지 ↗
         </a>
       </div>
+      <RoomEndedNotice room={room} />
       <DefenseCountdownSection room={room} />
       <DefenseRoundSection round={round} onAdvanceRound={advanceRound} />
       <MonsterConfigSection room={room} playerCount={players.length} />

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { RoomGame, Player } from "@/lib/types";
+import { RoomEndedBadge, useRoomStatus } from "./RoomEndedNotice";
 
 const GAME_LABEL: Record<RoomGame, string> = {
   mafia: "자본주의 마피아",
@@ -152,6 +153,7 @@ function RoomPanel({
   onLeave: () => void;
 }) {
   const dashboardHref = `/dashboard/x9a2k7/${room.game}?room=${room.code}`;
+  const ended = useRoomStatus(room.code) === "ended";
 
   const endRoom = async () => {
     if (!window.confirm(`방 ${room.code}을(를) 종료 처리할까요?`)) return;
@@ -183,22 +185,31 @@ function RoomPanel({
           <span className="rounded bg-zinc-800 px-2 py-0.5 text-zinc-300">
             {GAME_LABEL[room.game] ?? room.game}
           </span>
+          {ended && <RoomEndedBadge />}
         </div>
-        <p className="mt-1 text-xs text-zinc-500">이 코드를 참가자에게 안내하세요.</p>
+        {ended ? (
+          <p className="mt-1 text-xs text-red-300">
+            종료된 방입니다. 대시보드는 기록 확인용(읽기 전용)으로만 보세요. 게임을 다시 진행하려면 새 방을 만드세요.
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-zinc-500">이 코드를 참가자에게 안내하세요.</p>
+        )}
 
         <div className="mt-3 flex gap-2">
           <a
             href={dashboardHref}
             className="rounded bg-amber-500 px-3 py-1.5 font-semibold text-zinc-950 hover:bg-amber-400"
           >
-            대시보드 입장 →
+            {ended ? "대시보드 보기(읽기 전용) →" : "대시보드 입장 →"}
           </a>
-          <button
-            onClick={() => void endRoom()}
-            className="rounded bg-red-900 px-3 py-1.5 text-red-200 hover:bg-red-800"
-          >
-            방 종료
-          </button>
+          {!ended && (
+            <button
+              onClick={() => void endRoom()}
+              className="rounded bg-red-900 px-3 py-1.5 text-red-200 hover:bg-red-800"
+            >
+              방 종료
+            </button>
+          )}
         </div>
       </div>
 
@@ -222,6 +233,7 @@ function RoomRoster({ room }: { room: string }) {
   }, [room]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 명단을 서버에서 불러온다
     void reload();
   }, [reload]);
 

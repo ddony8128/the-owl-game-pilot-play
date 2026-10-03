@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { RoomEndedNotice } from "../RoomEndedNotice";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { useMafiaAdminState } from "./useMafiaAdminState";
 import { MafiaCountdownSection } from "./MafiaCountdownSection";
@@ -14,11 +15,15 @@ import { MafiaRoundSummarySection } from "./MafiaRoundSummarySection";
 import type { MafiaLog } from "@/lib/types";
 
 export default function DashboardMafiaPage() {
-  const [room] = useState<string | null>(() =>
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("room")
-      : null
-  );
+  // 하이드레이션 안전: room(URL)·mounted 는 서버에서 알 수 없으므로 마운트 후에만 읽는다.
+  // (서버·클라 첫 렌더가 동일한 로딩 화면이 되도록 하여 SSR/CSR 불일치를 방지)
+  const [room, setRoom] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL 은 마운트 후에만 읽을 수 있다
+    setRoom(new URLSearchParams(window.location.search).get("room"));
+    setMounted(true);
+  }, []);
 
   const { phase, stocks, players, playerNames, logs, loading, error, reload } =
     useMafiaAdminState(room);
@@ -57,6 +62,8 @@ export default function DashboardMafiaPage() {
     // 현재는 별도 리프레시 없이 화면상 목록에만 추가.
     logs.unshift(log);
   };
+
+  if (!mounted) return <LoadingScreen />;
 
   if (!room) {
     return (
@@ -97,6 +104,7 @@ export default function DashboardMafiaPage() {
         </a>
       </div>
 
+      <RoomEndedNotice room={room} />
       <MafiaCountdownSection phase={phase} room={room} />
 
       <MafiaPhaseSection
