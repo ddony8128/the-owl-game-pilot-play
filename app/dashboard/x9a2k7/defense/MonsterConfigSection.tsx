@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { recommendedMonsterCounts } from "@/lib/defense/composition";
 import { computeQueueSize } from "@/lib/defense/queue";
 
@@ -25,6 +25,14 @@ export function MonsterConfigSection({
   const [draft, setDraft] = useState<Record<number, number>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // 초기 로드 완료 전에는 편집 버튼을 막고, 로드가 사용자 편집(dirty)을 덮어쓰지 않게 한다.
+  const [loaded, setLoaded] = useState(false);
+  const dirtyRef = useRef(false);
+
+  const edit = (updater: (d: Record<number, number>) => Record<number, number>) => {
+    dirtyRef.current = true;
+    setDraft(updater);
+  };
 
   const load = useCallback(async () => {
     const res = await fetch(
@@ -33,11 +41,14 @@ export function MonsterConfigSection({
     const json = await res.json();
     if (json.monsters) {
       setMonsters(json.monsters);
-      setDraft(
-        Object.fromEntries(
-          (json.monsters as MonsterConfig[]).map((m) => [m.id, m.base_count]),
-        ),
-      );
+      if (!dirtyRef.current) {
+        setDraft(
+          Object.fromEntries(
+            (json.monsters as MonsterConfig[]).map((m) => [m.id, m.base_count]),
+          ),
+        );
+      }
+      setLoaded(true);
     }
   }, [room]);
 
@@ -50,7 +61,7 @@ export function MonsterConfigSection({
   // 등록 인원 기준 권장 조합을 draft 에 채운다(저장은 별도 [저장] 버튼).
   const applyPreset = () => {
     const rec = recommendedMonsterCounts(playerCount);
-    setDraft(Object.fromEntries(Object.entries(rec).map(([k, v]) => [Number(k), v])));
+    edit(() => Object.fromEntries(Object.entries(rec).map(([k, v]) => [Number(k), v])));
     setStatus(
       `${playerCount}명 기준 권장 조합을 불러왔습니다. 확인 후 [저장]을 누르세요.`,
     );
@@ -68,6 +79,7 @@ export function MonsterConfigSection({
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? "저장 실패");
       setStatus("저장됨 — 본게임 시작 시 이 비율이 적용됩니다.");
+      dirtyRef.current = false;
       await load();
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "저장 실패");
@@ -91,7 +103,7 @@ export function MonsterConfigSection({
         </span>
         <button
           onClick={applyPreset}
-          disabled={playerCount <= 0}
+          disabled={!loaded || playerCount <= 0}
           className="ml-auto rounded bg-zinc-800 px-2.5 py-1 font-semibold text-amber-300 hover:bg-zinc-700 disabled:opacity-40"
         >
           인원 기준 자동 세팅
@@ -109,7 +121,7 @@ export function MonsterConfigSection({
               <button
                 className="h-7 w-7 rounded bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
                 onClick={() =>
-                  setDraft((d) => ({
+                  edit((d) => ({
                     ...d,
                     [m.id]: Math.max(0, (Number(d[m.id]) || 0) - 1),
                   }))
@@ -123,7 +135,7 @@ export function MonsterConfigSection({
                 className="h-7 w-14 rounded border border-zinc-700 bg-zinc-950 px-2 text-center text-zinc-100"
                 value={draft[m.id] ?? 0}
                 onChange={(e) =>
-                  setDraft((d) => ({
+                  edit((d) => ({
                     ...d,
                     [m.id]: Math.max(0, Math.floor(Number(e.target.value) || 0)),
                   }))
@@ -132,7 +144,7 @@ export function MonsterConfigSection({
               <button
                 className="h-7 w-7 rounded bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
                 onClick={() =>
-                  setDraft((d) => ({
+                  edit((d) => ({
                     ...d,
                     [m.id]: (Number(d[m.id]) || 0) + 1,
                   }))
@@ -149,7 +161,7 @@ export function MonsterConfigSection({
         <span className="text-xs text-zinc-400">합계: <b className="text-zinc-200">{total}</b>마리</span>
         <button
           onClick={() => void save()}
-          disabled={saving}
+          disabled={saving || !loaded}
           className="ml-auto rounded bg-amber-500 px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-amber-400 disabled:opacity-50"
         >
           {saving ? "저장 중…" : "저장"}
