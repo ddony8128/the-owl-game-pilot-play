@@ -63,9 +63,16 @@ export function DefenseRoundSummarySection({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async (round: number) => {
-    setLoading(true);
-    setError(null);
+  // 진행 중 제출이 보이도록 대시보드 상태 폴링(4초)과 같은 주기로 조용히 다시 불러온다.
+  // silent 갱신은 로딩 표시·에러 초기화를 하지 않고, 라운드를 바꾼 뒤 늦게 온 응답은 버린다.
+  const selectedRoundRef = useRef<number | null>(null);
+  selectedRoundRef.current = selectedRound;
+
+  const load = async (round: number, silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const params = new URLSearchParams({ round: String(round), room });
       const res = await fetch(
@@ -88,8 +95,11 @@ export function DefenseRoundSummarySection({
         );
       }
 
+      if (round !== selectedRoundRef.current) return;
       setData(json);
+      setError(null);
     } catch (e: unknown) {
+      if (silent || round !== selectedRoundRef.current) return;
       const message =
         e instanceof Error
           ? e.message
@@ -97,9 +107,16 @@ export function DefenseRoundSummarySection({
       setError(message);
       setData(null);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedRound == null) return;
+    const id = setInterval(() => void load(selectedRound, true), 4000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRound, room]);
 
   useEffect(() => {
     void load(selectedRound);
