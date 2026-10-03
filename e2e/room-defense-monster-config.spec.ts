@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+type MonsterRow = { id: number; base_count: number; count: number };
+
 // 두 디펜스 방이 서로 다른 몬스터 비율로, 간섭 없이 운영되는지 검증.
 test("디펜스 방별 몬스터 비율 조절 — 간섭 없음", async ({ request }) => {
   // 방 A: 스컬 스파이더(1)만 20마리, 나머지 0
@@ -17,10 +19,10 @@ test("디펜스 방별 몬스터 비율 조절 — 간섭 없음", async ({ requ
   // 설정이 방별로 분리되어 저장됐는지
   const readA = (await (await request.get(`/api/gm/defense/monster-config?room=${a}`)).json()).monsters;
   const readB = (await (await request.get(`/api/gm/defense/monster-config?room=${b}`)).json()).monsters;
-  expect(readA.find((m: any) => m.id === 1).base_count).toBe(20);
-  expect(readA.find((m: any) => m.id === 6).base_count).toBe(0);
-  expect(readB.find((m: any) => m.id === 6).base_count).toBe(4);
-  expect(readB.find((m: any) => m.id === 1).base_count).toBe(0);
+  expect(readA.find((m: MonsterRow) => m.id === 1).base_count).toBe(20);
+  expect(readA.find((m: MonsterRow) => m.id === 6).base_count).toBe(0);
+  expect(readB.find((m: MonsterRow) => m.id === 6).base_count).toBe(4);
+  expect(readB.find((m: MonsterRow) => m.id === 1).base_count).toBe(0);
 
   // 본게임 시작(라운드 진입) → 각 방이 자기 base_count 로 풀을 채움
   expect((await request.post("/api/gm/defense/round", { data: { round: 1, room: a } })).ok()).toBeTruthy();
@@ -30,13 +32,13 @@ test("디펜스 방별 몬스터 비율 조절 — 간섭 없음", async ({ requ
   const afterA = (await (await request.get(`/api/gm/defense/monster-config?room=${a}`)).json()).monsters;
   const afterB = (await (await request.get(`/api/gm/defense/monster-config?room=${b}`)).json()).monsters;
   // 방 A: 스파이더 20 → 4칸 채우며 일부 소모(다른 종류는 0이라 스파이더만 뽑힘), 6번은 계속 0
-  expect(afterA.find((m: any) => m.id === 6).count).toBe(0);
-  expect(afterA.find((m: any) => m.id === 1).count).toBeLessThan(20);
+  expect(afterA.find((m: MonsterRow) => m.id === 6).count).toBe(0);
+  expect(afterA.find((m: MonsterRow) => m.id === 1).count).toBeLessThan(20);
   // 방 B: 서브웨이맨만, 1번은 계속 0
-  expect(afterB.find((m: any) => m.id === 1).count).toBe(0);
-  expect(afterB.find((m: any) => m.id === 6).count).toBeLessThanOrEqual(4);
+  expect(afterB.find((m: MonsterRow) => m.id === 1).count).toBe(0);
+  expect(afterB.find((m: MonsterRow) => m.id === 6).count).toBeLessThanOrEqual(4);
 
   // 한 방의 설정이 다른 방을 건드리지 않음(교차 확인)
-  expect(afterA.find((m: any) => m.id === 1).base_count).toBe(20);
-  expect(afterB.find((m: any) => m.id === 6).base_count).toBe(4);
+  expect(afterA.find((m: MonsterRow) => m.id === 1).base_count).toBe(20);
+  expect(afterB.find((m: MonsterRow) => m.id === 6).base_count).toBe(4);
 });
