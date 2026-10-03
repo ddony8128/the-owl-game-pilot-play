@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
+import type { Player } from "@/lib/types";
 import { ErrorMessage } from "@/components/ErrorMessage";
 
 const JOBS: { id: string; label: string; icon: string | null }[] = [
@@ -27,6 +27,9 @@ const JOBS: { id: string; label: string; icon: string | null }[] = [
 type Step = "pickJob" | "enterAmount" | "confirmGiveUp";
 
 type Props = {
+  // 인증은 상위(MafiaInner)에서 한 번만 확인하고 내려준다 — 탭마다 재확인하면 직후 제출이 버려진다.
+  player: Pick<Player, "nickname">;
+  roomCode: string;
   myAuctionBet: {
     job: string | null;
     amount: number | null;
@@ -35,14 +38,18 @@ type Props = {
   playerCash: number | null;
 };
 
-export function MafiaAuctionTab({ myAuctionBet, playerCash }: Props) {
+export function MafiaAuctionTab({
+  player,
+  roomCode,
+  myAuctionBet,
+  playerCash,
+}: Props) {
   const [step, setStep] = useState<Step>("pickJob");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const { player, roomCode } = usePlayerAuth();
 
   const handleSubmitBet = async () => {
     if (!player?.nickname || !roomCode) return;

@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import type { MafiaAbilityPayload } from "@/lib/mafia/abilities";
 import type { MafiaStockState, Player } from "@/lib/types";
 import { JOB_META } from "./MafiaInfoTab";
 
 type Props = {
+  // 인증은 상위(MafiaInner)에서 한 번만 확인하고 내려준다 — 탭마다 재확인하면 직후 제출이 버려진다.
+  player: Pick<Player, "nickname">;
+  roomCode: string;
   job: string | null;
   stocks: MafiaStockState[];
   players: Player[];
@@ -19,13 +21,14 @@ type Props = {
 };
 
 export function MafiaAbilityTab({
+  player,
+  roomCode,
   job,
   stocks,
   players,
   hasUsedAbilityThisPhase,
   myAbilityActionThisPhase,
 }: Props) {
-  const { player, roomCode } = usePlayerAuth();
   const [selectedStockKey, setSelectedStockKey] = useState<string | null>(null);
   const [robberTargets, setRobberTargets] = useState<string[]>([]);
   const [policeTargets, setPoliceTargets] = useState<string[]>([]);

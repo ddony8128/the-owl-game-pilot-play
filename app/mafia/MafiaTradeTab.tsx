@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import type { MafiaStockState, MafiaStocksHolding } from "@/lib/types";
-import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
+import type { MafiaStockState, MafiaStocksHolding, Player } from "@/lib/types";
 import { ErrorMessage } from "@/components/ErrorMessage";
 
 type Props = {
+  // 인증은 상위(MafiaInner)에서 한 번만 확인하고 내려준다 — 탭마다 재확인하면 직후 제출이 버려진다.
+  player: Pick<Player, "nickname">;
+  roomCode: string;
   stocks: MafiaStockState[];
   playerCash: number | null;
   holdings: MafiaStocksHolding | null;
@@ -31,6 +33,8 @@ const getStockLogoSrc = (key: string): string | null => {
 };
 
 export function MafiaTradeTab({
+  player,
+  roomCode,
   stocks,
   playerCash,
   holdings,
@@ -45,7 +49,6 @@ export function MafiaTradeTab({
   const [info, setInfo] = useState<string | null>(null);
   const [boughtStocks, setBoughtStocks] = useState<string[]>([]);
   const [soldStocks, setSoldStocks] = useState<string[]>([]);
-  const { player, roomCode } = usePlayerAuth();
 
   const holdingAmountFor = (key: string): number => {
     if (!holdings || typeof holdings !== "object") return 0;

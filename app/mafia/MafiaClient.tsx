@@ -461,12 +461,16 @@ function MafiaInner() {
           )}
           {activeTab === "auction" && (
             <MafiaAuctionTab
+              player={player}
+              roomCode={roomCode ?? player.room_code}
               myAuctionBet={myAuctionBet}
               playerCash={mafiaPlayer?.cash ?? null}
             />
           )}
           {activeTab === "trade" && (
             <MafiaTradeTab
+              player={player}
+              roomCode={roomCode ?? player.room_code}
               stocks={stocks}
               playerCash={mafiaPlayer?.cash ?? null}
               holdings={
@@ -479,6 +483,8 @@ function MafiaInner() {
           )}
           {activeTab === "ability" && (
             <MafiaAbilityTab
+              player={player}
+              roomCode={roomCode ?? player.room_code}
               job={mafiaPlayer?.job ?? null}
               stocks={stocks}
               players={players}
@@ -491,6 +497,8 @@ function MafiaInner() {
           )}
           {activeTab === "vote" && (
             <MafiaVoteTab
+              player={player}
+              roomCode={roomCode ?? player.room_code}
               ticketPrice={ticketPrice}
               playerCash={mafiaPlayer?.cash ?? null}
               players={players}

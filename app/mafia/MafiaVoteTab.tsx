@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from "react";
 import type { Player } from "@/lib/types";
-import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { ErrorMessage } from "@/components/ErrorMessage";
 
 type Props = {
+  // 인증은 상위(MafiaInner)에서 한 번만 확인하고 내려준다 — 탭마다 재확인하면 직후 제출이 버려진다.
+  player: Pick<Player, "nickname">;
+  roomCode: string;
   ticketPrice: number | null;
   playerCash: number | null;
   players: Player[];
@@ -17,12 +19,13 @@ type Props = {
 };
 
 export function MafiaVoteTab({
+  player,
+  roomCode,
   ticketPrice,
   playerCash,
   players,
   myVoteSummary,
 }: Props) {
-  const { player, roomCode } = usePlayerAuth();
   // 선택된 대상은 players.id (uuid)를 들고 있고,
   // 화면에는 nickname을 표시한다.
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
