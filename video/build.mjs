@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { ASSET_SOURCES } from './asset-sources.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const APP = join(ROOT, '..');
@@ -44,6 +45,28 @@ const STYLE = process.env.GEMINI_STYLE ?? '또렷하고 차분한 목소리로, 
 
 mkdirSync(join(PUB, 'audio'), { recursive: true });
 mkdirSync(join(ROOT, 'generated'), { recursive: true });
+
+// 0. 앱 그림 → video/public/{job,company,monster,shots}/ (Iteration 3)
+//   앱이 쓰는 기능 그림을 그대로 쓴다(플레이어 휴대폰과 같은 그림). 영상용 사본을 저장소에
+//   따로 두지 않고 **매번 덮어쓴다**(existsSync로 건너뛰면 앱 그림이 바뀌어도 옛 사본이 남는다).
+//   2048px 몬스터·회사 로고는 512px로 줄여 복사(렌더 시간·메모리). video/public은 gitignore.
+for (const [dir, src] of Object.entries(ASSET_SOURCES)) {
+  const to = join(PUB, dir);
+  mkdirSync(to, { recursive: true });
+  const files = (src.only ?? readdirSync(join(APP, src.from))).filter((f) => f.endsWith('.png'));
+  for (const f of files) {
+    const input = join(APP, src.from, f);
+    const output = join(to, f);
+    if (src.size) {
+      execSync(
+        `ffmpeg -v error -y -i "${input}" -vf "scale=${src.size}:${src.size}:force_original_aspect_ratio=decrease" "${output}"`,
+      );
+    } else {
+      writeFileSync(output, readFileSync(input));
+    }
+  }
+  console.log(`assets ${dir}: ${files.length}개 복사`);
+}
 
 // 1. 대본 로드 — esbuild로 타입만 걷어내 실행한다.
 const { SCRIPTS } = await importScenes();

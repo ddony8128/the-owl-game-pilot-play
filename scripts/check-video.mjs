@@ -5,11 +5,14 @@
 //     (종목 이름 "부엉교육"은 앱 화면 라벨이라 예외)
 //  ④ 장: scenes.ts의 chapter 순서 = generated/chapters.json = 정본 1.3
 //  ⑤ data.cues의 문구가 그 장면 나레이션에 실제로 있음(도식 등장 시점)
+//  ⑥ (Iteration 3) 장면별 필수 그림: REQUIRED_IMAGES의 그림이 그 장면 scenes.ts images에 있고,
+//     images·Diagrams.tsx의 그림 경로가 전부 앱 원본(video/asset-sources.mjs)에 실제로 있음
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseVideoPlan } from './lib/video-plan.mjs';
+import { ASSET_SOURCES } from '../video/asset-sources.mjs';
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), '..');
 const VIDEO = join(APP, 'video');
@@ -66,6 +69,69 @@ for (const id of ['defense', 'mafia']) {
   if (!same(jsonChapters, planChapters)) fail(`[${id}] chapters.json 장 ${jsonChapters.join('/')} ≠ 정본 1.3 ${planChapters.join('/')}`);
   else ok.push(`[${id}] 장 ${planChapters.length}개 = 정본 1.3 = chapters.json`);
 }
+
+// ⑥ 그림 — 지시서(Iteration 3)의 장면별 필수 그림
+const M = (n, v = '') => `monster/monster_${n}${v}.png`;
+const REQUIRED_IMAGES = {
+  defense: {
+    S4: ['shots/defense-action.png'],
+    S5: [1, 2, 3, 4, 5, 6].map((n) => M(n)),
+    S6: [M(1), M(2), M(3), M(4)],
+    S7: [M(3), M(3, '_dead')],
+    S8: [M(2)],
+    S9: [M(3), M(3, '_damaged')],
+    S10: [M(5), M(5, '_expired')],
+  },
+  mafia: {
+    S3: ['shots/mafia-auction.png', 'shots/mafia-trade.png', 'shots/mafia-vote.png'],
+    S4: ['up_manip', 'down_manip', 'robber', 'police', 'investor', 'financial', 'ceo', 'mayor', 'salaryman']
+      .map((j) => `job/${j}.png`)
+      .concat('shots/mafia-auction.png'),
+    S5: ['job/up_manip.png', 'job/down_manip.png', 'job/robber.png'],
+    S6: ['police', 'investor', 'financial', 'ceo', 'mayor', 'salaryman'].map((j) => `job/${j}.png`),
+    S7: ['edu', 'electricity', 'owl_flag', 'vehicle'].map((c) => `company/${c}.png`),
+    S8: ['edu', 'electricity', 'owl_flag', 'vehicle'].map((c) => `company/${c}.png`),
+    S10: ['company/owl_flag.png', 'job/police.png', 'job/up_manip.png', 'job/down_manip.png', 'job/robber.png'],
+  },
+};
+const sourceOf = (rel) => {
+  const [dir, ...rest] = rel.split('/');
+  const src = ASSET_SOURCES[dir];
+  if (!src) return null;
+  if (src.only && !src.only.includes(rest.join('/'))) return null;
+  return join(APP, src.from, ...rest);
+};
+let imgCount = 0;
+let imgMissing = 0;
+for (const id of ['defense', 'mafia']) {
+  const scenes = SCRIPTS.find((s) => s.id === id)?.scenes ?? [];
+  for (const sc of scenes) {
+    for (const need of REQUIRED_IMAGES[id][sc.id] ?? []) {
+      if (!(sc.images ?? []).includes(need)) {
+        imgMissing += 1;
+        fail(`[${id}] ${sc.id} 필수 그림이 images에 없음: ${need}`);
+      }
+    }
+    for (const rel of sc.images ?? []) {
+      imgCount += 1;
+      const f = sourceOf(rel);
+      if (!f || !existsSync(f)) {
+        imgMissing += 1;
+        fail(`[${id}] ${sc.id} 그림 파일 없음: ${rel}`);
+      }
+    }
+  }
+}
+const diagSrc = readFileSync(join(VIDEO, 'src', 'Diagrams.tsx'), 'utf8');
+const literalPaths = [...new Set(diagSrc.match(/(?:job|company|shots)\/[\w-]+\.png/g) ?? [])];
+for (const rel of literalPaths) {
+  const f = sourceOf(rel);
+  if (!f || !existsSync(f)) {
+    imgMissing += 1;
+    fail(`Diagrams.tsx 그림 파일 없음: ${rel}`);
+  }
+}
+ok.push(`그림: scenes.ts images ${imgCount}개 + Diagrams.tsx 경로 ${literalPaths.length}개, 필수·파일 누락 ${imgMissing}`);
 
 // ③ 금지어 — scenes.ts·Diagrams.tsx 전체(주석 제외 없이 엄격하게)
 const FORBIDDEN = ['부엉이', '나폴리탄', '다부엉', '부엉'];

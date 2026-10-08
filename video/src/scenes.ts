@@ -41,6 +41,11 @@ export type Scene = {
   narration: string;
   /** 도식 보조 값 */
   data?: Record<string, unknown>;
+  /**
+   * 이 장면이 쓰는 앱 그림(video/public 기준 경로, 출처는 asset-sources.mjs). Diagrams.tsx는
+   * 이 목록에서 그림을 꺼내 쓰고, check:video가 파일이 실제로 있는지 확인한다.
+   */
+  images?: string[];
   /** 나레이션 뒤 여운(초) — 기본값은 build.mjs */
   hold?: number;
 };
@@ -85,6 +90,7 @@ const DEFENSE: Scene[] = [
   {
     id: "S4",
     variant: 'actions',
+    images: ["shots/defense-action.png"],
     screen: [
       "전투 / 휴식 / 훈련",
       "4 → 비활성 + 4 → 5",
@@ -96,6 +102,7 @@ const DEFENSE: Scene[] = [
   {
     id: "S5",
     variant: 'monsters',
+    images: ["monster/monster_1.png", "monster/monster_2.png", "monster/monster_3.png", "monster/monster_4.png", "monster/monster_5.png", "monster/monster_6.png"],
     chapter: "몬스터와 대기열",
     screen: [
       "이름 / 체력 / 남은 라운드 / 점수",
@@ -107,6 +114,7 @@ const DEFENSE: Scene[] = [
   {
     id: "S6",
     variant: 'queue',
+    images: ["monster/monster_1.png", "monster/monster_3.png", "monster/monster_2.png", "monster/monster_4.png"],
     screen: [
       "7~9명 4칸 / 10~12명 5칸",
       "몬스터 총 수 ≈ 인원 × 3",
@@ -118,6 +126,7 @@ const DEFENSE: Scene[] = [
   {
     id: "S7",
     variant: 'combat',
+    images: ["monster/monster_3.png", "monster/monster_3_dead.png"],
     chapter: "전투 처리",
     screen: [
       "체력 9",
@@ -130,6 +139,7 @@ const DEFENSE: Scene[] = [
   {
     id: "S8",
     variant: 'remainder',
+    images: ["monster/monster_2.png"],
     screen: [
       "4점 ÷ 3명 → 각 1점, 1점 소멸",
       "2점 ÷ 3명 → 각 0점",
@@ -141,6 +151,7 @@ const DEFENSE: Scene[] = [
   {
     id: "S9",
     variant: 'fail',
+    images: ["monster/monster_3.png", "monster/monster_3_damaged.png"],
     screen: [
       "체력 9",
       "체력 5, 다음 라운드로",
@@ -152,6 +163,7 @@ const DEFENSE: Scene[] = [
   {
     id: "S10",
     variant: 'escape',
+    images: ["monster/monster_2.png", "monster/monster_4.png", "monster/monster_5.png", "monster/monster_5_expired.png", "monster/monster_3.png"],
     chapter: "라운드 종료와 도망",
     screen: [
       "남은 라운드",
@@ -221,6 +233,7 @@ const MAFIA: Scene[] = [
   {
     id: "S3",
     variant: 'flow',
+    images: ["shots/mafia-auction.png", "shots/mafia-trade.png", "shots/mafia-stocks.png", "shots/mafia-vote.png"],
     chapter: "라운드 흐름",
     screen: [
       "준비 → 직업 경매 → 주식 거래 → 주가 변동 → 투표 → 라운드 종료",
@@ -232,6 +245,7 @@ const MAFIA: Scene[] = [
   {
     id: "S4",
     variant: 'auction',
+    images: ["job/up_manip.png", "job/down_manip.png", "job/robber.png", "job/police.png", "job/investor.png", "job/financial.png", "job/ceo.png", "job/mayor.png", "job/salaryman.png", "shots/mafia-auction.png"],
     chapter: "직업 경매",
     screen: [
       "가장 높은 금액 1명 낙찰 → 베팅액 지불",
@@ -246,6 +260,7 @@ const MAFIA: Scene[] = [
   {
     id: "S5",
     variant: 'jobs',
+    images: ["job/up_manip.png", "job/down_manip.png", "job/robber.png"],
     chapter: "직업 9종",
     screen: [
       "마피아 진영 — 정체 비공개, 월급 없음",
@@ -260,6 +275,7 @@ const MAFIA: Scene[] = [
   {
     id: "S6",
     variant: 'jobs',
+    images: ["job/police.png", "job/investor.png", "job/financial.png", "job/ceo.png", "job/mayor.png", "job/salaryman.png"],
     screen: [
       "시민 진영",
       "경찰 · 월급 5 · 2명 조사 → 그 안에 마피아가 있는지(누구인지 ×) · 마피아 검거 시 국채 2주",
@@ -276,6 +292,7 @@ const MAFIA: Scene[] = [
   {
     id: "S7",
     variant: 'stocks',
+    images: ["company/edu.png", "company/electricity.png", "company/owl_flag.png", "company/vehicle.png"],
     chapter: "주식 거래와 주가 변동",
     screen: [
       "부엉교육 · 번쩍전기 · 국채 · 이상교통",
@@ -289,6 +306,7 @@ const MAFIA: Scene[] = [
   {
     id: "S8",
     variant: 'steps',
+    images: ["company/electricity.png", "company/vehicle.png", "company/edu.png", "company/owl_flag.png"],
     screen: [
       "① 자연 변동: 매수량 1위 +2, 2위 +1, 매도량 1위 −1 (동률이면 모두)",
       "② 주가조작 합산 → 새 주가 (최소 1원, 국채는 조작 불가)",
@@ -302,6 +320,7 @@ const MAFIA: Scene[] = [
   {
     id: "S9",
     variant: 'vote',
+    images: ["job/mayor.png", "shots/mafia-vote.png"],
     chapter: "투표와 경제사범",
     screen: [
       "표 1장 = 시장이 정한 가격(기본 1원)",
@@ -315,6 +334,7 @@ const MAFIA: Scene[] = [
   {
     id: "S10",
     variant: 'criminal',
+    images: ["company/owl_flag.png", "job/police.png", "job/up_manip.png", "job/down_manip.png", "job/robber.png"],
     screen: [
       "경제사범 = 마피아 → 국채 +1 → 시민 국채 1주 / 경찰 국채 2주 → 경제사범은 오른 국채 가격만큼 벌금",
       "경제사범 ≠ 마피아 또는 경제사범 없음 → 모든 마피아에게 가장 비싼 주식 1주 (동률이면 무작위)",
@@ -327,6 +347,7 @@ const MAFIA: Scene[] = [
   {
     id: "S11",
     variant: 'info',
+    images: ["company/edu.png", "company/electricity.png", "company/owl_flag.png", "company/vehicle.png", "job/police.png", "job/ceo.png", "job/robber.png", "job/mayor.png"],
     screen: [
       "공개: 주가, 경제사범과 그 사람의 마피아 여부",
       "비공개: 직업, 능력 대상, 강도 피해",
@@ -338,6 +359,7 @@ const MAFIA: Scene[] = [
   {
     id: "S12",
     variant: 'ending',
+    images: ["shots/mafia-board.png"],
     chapter: "종료와 순위",
     screen: [
       "5라운드 종료 → 총자산 순위",
