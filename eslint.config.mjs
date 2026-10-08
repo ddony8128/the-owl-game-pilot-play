@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 룰 영상 렌더 프로젝트(Remotion) — 자체 tsconfig·node_modules를 쓴다.
+    "video/**",
   ]),
 ]);
 

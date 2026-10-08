@@ -1,0 +1,6 @@
+node_modules
+generated/scenes.tmp.mjs
+generated/scenes.tmp.gen.mjs
+out
+public
+generated/scenes.check.tmp.mjs

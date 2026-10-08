@@ -1,0 +1,20 @@
+{
+  "name": "owl-rule-video",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node build.mjs",
+    "render": "node build.mjs --render",
+    "preview": "remotion studio src/index.ts"
+  },
+  "type": "module",
+  "dependencies": {
+    "@remotion/cli": "^4.0.523",
+    "@remotion/google-fonts": "^4.0.523",
+    "@types/react": "^19.2.18",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "remotion": "^4.0.523",
+    "typescript": "^7.0.2"
+  },
+  "private": true
+}

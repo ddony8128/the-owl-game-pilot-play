@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "check:video": "node scripts/check-video.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.0",
