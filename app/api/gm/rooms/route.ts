@@ -71,5 +71,12 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (patch.status === "ended") {
+    // 종료된 방의 보드 영상은 끈다. board_video 컬럼이 없는 DB(마이그레이션 전)면 조용히 넘어간다.
+    await supabase
+      .from("rooms")
+      .update({ board_video: null, board_video_seek_sec: null })
+      .eq("code", code);
+  }
   return NextResponse.json({ ok: true });
 }

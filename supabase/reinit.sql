@@ -28,6 +28,8 @@ CREATE TABLE rooms (
   status TEXT NOT NULL DEFAULT 'active',       -- 'active' | 'ended'
   ended_normally BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
+  board_video TEXT NULL,                       -- 보드에서 재생 중인 룰 영상 'defense' | 'mafia' | NULL
+  board_video_seek_sec INTEGER NULL,           -- 그 영상의 시작/이동 위치(초)
   PRIMARY KEY (code)
 );
 

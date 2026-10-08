@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { RoomEndedNotice } from "../RoomEndedNotice";
+import { RuleVideoPanel } from "../RuleVideoPanel";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { useMafiaAdminState } from "./useMafiaAdminState";
 import { MafiaCountdownSection } from "./MafiaCountdownSection";
@@ -105,6 +106,7 @@ export default function DashboardMafiaPage() {
       </div>
 
       <RoomEndedNotice room={room} />
+      <RuleVideoPanel room={room} video="mafia" />
       <MafiaCountdownSection phase={phase} room={room} />
 
       <MafiaPhaseSection

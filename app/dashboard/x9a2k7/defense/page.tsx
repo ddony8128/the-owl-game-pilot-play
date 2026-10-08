@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { RoomEndedNotice } from "../RoomEndedNotice";
+import { RuleVideoPanel } from "../RuleVideoPanel";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { useDefenseAdminState } from "./useDefenseAdminState";
 import { DefenseCountdownSection } from "./DefenseCountdownSection";
@@ -125,6 +126,7 @@ export default function DashboardDefensePage() {
         </a>
       </div>
       <RoomEndedNotice room={room} />
+      <RuleVideoPanel room={room} video="defense" />
       <DefenseCountdownSection room={room} />
       <DefenseRoundSection round={round} onAdvanceRound={advanceRound} />
       <MonsterConfigSection room={room} playerCount={players.length} />
