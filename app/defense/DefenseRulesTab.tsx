@@ -16,7 +16,7 @@ export function DefenseRulesTab() {
         </p>
         <ul className="list-disc pl-4 text-sm">
           <li>
-            <span className="font-semibold">대기열 칸 수</span> — 7~9명{" "}
+            <span className="font-semibold">대기열 칸 수</span> — 6~9명{" "}
             <span className="font-semibold text-amber-300">4칸</span> / 10~12명{" "}
             <span className="font-semibold text-amber-300">5칸</span>. (현재 방의
             칸 수는 <span className="font-semibold">정보</span> 탭 대기열에서 바로
@@ -89,7 +89,7 @@ export function DefenseRulesTab() {
             <span className="font-semibold">대기열</span>
             <ul className="ml-4 list-disc">
               <li>
-                몬스터 대기열은 참가 인원에 따라 4~5칸입니다(7~9명 4칸 / 10~12명
+                몬스터 대기열은 참가 인원에 따라 4~5칸입니다(6~9명 4칸 / 10~12명
                 5칸). 현재 방의 칸 수는 플레이 화면에서 확인하세요.
               </li>
               <li>

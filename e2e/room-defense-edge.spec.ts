@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 
-// 디펜스 대기열 유동화(7~12명) + 12명 안정성 엣지 케이스 10종.
+// 디펜스 대기열 유동화(6~12명) + 12명 안정성 엣지 케이스 10종.
 // 라이브 Supabase 대상. 각 테스트는 독립 방을 생성한다.
 
 type Counts = Record<string, number>;
