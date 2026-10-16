@@ -69,7 +69,7 @@
 <h2>링크</h2>
 <p>아래 세 가지만 있으면 진행할 수 있습니다.</p>
 <ul>
-  <li><b>룰북(PDF)</b> — <a href="https://the-owl-game-pilot-play-real.vercel.app/rulebook/1141rfwkvm_mafia.pdf" target="_blank" rel="noopener">자본주의 마피아 룰북 ↗</a></li>
+  <li><b>룰북(PDF)</b> — <a href="https://the-owl-game-pilot-play-real.vercel.app/rulebook/rulesheet-2026-10-14_mafia.pdf" target="_blank" rel="noopener">자본주의 마피아 룰지(A4 2장 양면, 2026-10-14) ↗</a></li>
   <li><b>방 관리 화면(GM)</b> — <a href="https://the-owl-game-pilot-play-real.vercel.app/dashboard/x9a2k7" target="_blank" rel="noopener">방 만들기 · 참가자 등록 · 대시보드 입장 ↗</a></li>
   <li><b>플레이어 입장</b> — <a href="https://the-owl-game-pilot-play-real.vercel.app/" target="_blank" rel="noopener">참가자가 방 코드 + 닉네임으로 들어오는 곳 ↗</a></li>
 </ul>
@@ -120,7 +120,7 @@
 <div class="step">
 <p><b>단계 1 — 직업 경매 (약 3분)</b></p>
 <ol>
-  <li>경매 단계를 시작하면 참가자들이 7개 직업 중 <b>하나에만</b> 베팅 금액을 비공개로 적습니다.</li>
+  <li>경매 단계를 시작하면 참가자들이 8개 직업 중 <b>하나에만</b> 베팅 금액을 비공개로 적습니다.</li>
   <li>시간이 끝나면 경매를 정산합니다. 직업마다 <b>가장 높은 금액을 적은 사람이 낙찰</b>받고, 그 금액을 즉시 지불합니다. 떨어진 사람은 베팅액을 전액 돌려받습니다.</li>
   <li>아무 직업도 낙찰받지 못한 사람은 <b>월급쟁이</b>가 됩니다(현금 +3원).</li>
 </ol>
@@ -184,7 +184,7 @@
 <div class="grid2">
   <figure class="mobile"><img src="img/mafia-info.png" alt="정보 탭" /><figcaption>정보 탭 — 내 현금·보유 주식·직업 등 내 상태 확인</figcaption></figure>
   <figure class="mobile"><img src="img/mafia-stocks.png" alt="주가 탭" /><figcaption>주가 탭 — 종목별 현재 주가와 변동 추이 확인</figcaption></figure>
-  <figure class="mobile"><img src="img/mafia-auction.png" alt="경매 탭" /><figcaption>경매 탭(1단계) — 7개 직업 중 하나에 비공개 베팅</figcaption></figure>
+  <figure class="mobile"><img src="img/mafia-auction.png" alt="경매 탭" /><figcaption>경매 탭(1단계) — 8개 직업 중 하나에 비공개 베팅</figcaption></figure>
   <figure class="mobile"><img src="img/mafia-trade.png" alt="거래 탭" /><figcaption>거래 탭(2단계) — 주식 매수/매도(직업 능력은 ‘능력’ 탭에서 사용)</figcaption></figure>
 </div>
 <figure class="mobile"><img src="img/mafia-vote.png" alt="투표 탭" /><figcaption>투표 탭(4단계) — 경제사범으로 의심되는 사람에게 표 값을 내고 투표</figcaption></figure>
@@ -204,7 +204,7 @@
 <h3>라운드 4단계 요약</h3>
 <table>
 <tr><th>단계</th><th>시간</th><th>내용</th></tr>
-<tr><td>1. 직업 경매</td><td>약 3분</td><td>7개 직업 중 하나에 비공개 베팅 → 최고액 낙찰(즉시 지불), 떨어지면 전액 환불, 미낙찰자는 월급쟁이</td></tr>
+<tr><td>1. 직업 경매</td><td>약 3분</td><td>8개 직업 중 하나에 비공개 베팅 → 최고액 낙찰(즉시 지불), 떨어지면 전액 환불, 미낙찰자는 월급쟁이</td></tr>
 <tr><td>2. 주식 거래 + 능력</td><td>약 10분</td><td>매수/매도 비공개 입력 + 직업 능력 비공개 사용(다음 단계 반영)</td></tr>
 <tr><td>3. 주가 변동</td><td>—</td><td>매수/매도량으로 주가 변동 + 마피아 조작 반영, 결과만 공개</td></tr>
 <tr><td>4. 경제사범 투표</td><td>약 5분</td><td>표 값 내고 비공개 투표 → 최다 득표자 경제사범(벌금) · 마피아 효과 처리</td></tr>
@@ -222,7 +222,7 @@
 <h3>경제사범 투표 결과 (단계 4)</h3>
 <ul>
   <li><b>최다 득표자 = 경제사범</b> → 국채 가격만큼 벌금(현금 음수 가능). 최다 득표 2명 이상이면 경제사범 없음.</li>
-  <li><b>마피아가 경제사범이면</b> → 국채 +1원, 시민 전원 국채 1개 획득(경제사범은 오른 가격으로 벌금).</li>
+  <li><b>마피아가 경제사범이면</b> → 국채 +1원, 시민 전원 국채 1주 획득, <b>경찰은 2주</b>(시민 1주 + 경찰 보너스 1주). 경제사범은 오른 가격으로 벌금. 마피아는 받지 못합니다.</li>
   <li><b>마피아가 경제사범이 아니거나 경제사범이 없으면</b> → 모든 마피아에게 최고가 주식 1주 지급(동률이면 무작위).</li>
 </ul>
 

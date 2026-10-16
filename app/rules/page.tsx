@@ -44,8 +44,8 @@ export default function RulesPage() {
             const pdfMap: Record<string, string> = {
               intro: "/rulebook/avsmvlkdmv_intro.pdf",
               subway: "/rulebook/13fsm4wg_subway.pdf",
-              mafia: "/rulebook/1141rfwkvm_mafia.pdf",
-              defense: "/rulebook/1asdfd15v_defense.pdf",
+              mafia: "/rulebook/rulesheet-2026-10-14_mafia.pdf", // 2026-10-16 룰지 v8(코드와 대조 완료)로 교체 — 옛 6/24 이미지 PDF 삭제
+              defense: "/rulebook/rulesheet-2026-10-14_defense.pdf", // 2026-10-16 룰지 v8로 교체 — 옛 7/20 이미지 PDF 삭제
             };
 
             const url = pdfMap[key];
