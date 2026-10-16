@@ -27,9 +27,9 @@
         "narrSec": 14.76
       },
       {
-        "frames": 594,
-        "audio": "audio/defense-05-e0754d8a-x1.25.wav",
-        "narrSec": 18.18
+        "frames": 608,
+        "audio": "audio/defense-05-d3f90586-x1.25.wav",
+        "narrSec": 18.65
       },
       {
         "frames": 551,
@@ -67,7 +67,7 @@
         "narrSec": 21.2
       }
     ],
-    "total": 7372
+    "total": 7386
   },
   "mafia": {
     "scenes": [

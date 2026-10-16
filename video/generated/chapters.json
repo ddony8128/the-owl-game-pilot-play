@@ -14,23 +14,23 @@
     },
     {
       "label": "전투 처리",
-      "atSec": 116.43
+      "atSec": 116.9
     },
     {
       "label": "라운드 종료와 도망",
-      "atSec": 163.87
+      "atSec": 164.33
     },
     {
       "label": "종료와 순위",
-      "atSec": 203.03
+      "atSec": 203.5
     },
     {
       "label": "정리",
-      "atSec": 222.9
+      "atSec": 223.37
     },
     {
       "label": "끝",
-      "atSec": 245.73
+      "atSec": 246.2
     }
   ],
   "mafia": [
