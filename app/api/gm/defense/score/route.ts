@@ -4,6 +4,7 @@ import { normalizeRoomCode } from "@/lib/rooms";
 import type { DefenseScore } from "@/lib/types";
 import { gmError, loadRoomForWrite } from "@/lib/admin/gmResponse";
 import { addGmLog } from "@/lib/admin/gmLog";
+import { claimGmRequest, finishGmRequest, releaseGmRequest } from "@/lib/admin/gmRequest";
 
 type GetResponse =
   | {
@@ -15,6 +16,8 @@ type PostBody = {
   room?: string;
   playerId?: string;
   delta?: number;
+  /** 재전송 멱등 키(대시보드가 자동으로 붙인다) */
+  request_id?: unknown;
 };
 
 type PostResponse =
@@ -90,6 +93,13 @@ export async function POST(request: Request) {
   if (playerError) return gmError(500, playerError.message);
   if (!playerRow) return gmError(404, "그 방의 참가자가 아닙니다.", "invalid_input");
 
+  // 재전송 멱등: 같은 request_id 가 이미 처리됐으면 다시 더하지 않는다.
+  const claim = await claimGmRequest(supabase, { room, game: "defense", kind: "adjust", requestId: body.request_id });
+  if (claim.kind === "duplicate") {
+    const after = typeof claim.meta?.after === "number" ? (claim.meta.after as number) : null;
+    return NextResponse.json({ ok: true, idempotent: true, points: after }, { status: 200 });
+  }
+
   const { data: existingRow, error: existingError } = await supabase
     .from("defense_score")
     .select("player_id, points")
@@ -98,6 +108,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (existingError) {
+    if (claim.kind === "new") await releaseGmRequest(supabase, claim.logId);
     return gmError(500, existingError.message);
   }
 
@@ -119,16 +130,16 @@ export async function POST(request: Request) {
     );
 
   if (upsertError) {
+    if (claim.kind === "new") await releaseGmRequest(supabase, claim.logId);
     return gmError(500, upsertError.message);
   }
 
-  await addGmLog(supabase, {
-    room,
-    game: "defense",
-    kind: "adjust",
+  const logEntry = {
     content: `점수 보정: ${(playerRow as { nickname: string }).nickname} ${delta > 0 ? "+" : ""}${delta}점 (${currentPoints} → ${nextPoints})`,
     meta: { player_id: body.playerId, delta, before: currentPoints, after: nextPoints },
-  });
+  };
+  if (claim.kind === "new") await finishGmRequest(supabase, claim.logId, logEntry);
+  else await addGmLog(supabase, { room, game: "defense", kind: "adjust", ...logEntry });
 
   return NextResponse.json(
     { ok: true, points: nextPoints } as PostResponse,

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeGmFailure } from "@/lib/admin/gmFailure";
+import { newRequestId } from "@/lib/requestId";
 
 // GM 조작 공통(증권가 app/gm/[slug]/page.tsx act() 방식) — Iteration 5 WS-A 1.
 //  - 요청 1건이 끝날 때까지 모든 조작을 잠근다(연타 방지).
@@ -19,11 +20,17 @@ export async function gmRequest<T = unknown>(
   init?: { method?: string; body?: unknown },
   timeoutMs = GM_REQUEST_TIMEOUT_MS,
 ): Promise<GmResult<T>> {
+  // 변경 요청(POST/PATCH)에는 재전송 멱등 키를 자동으로 붙인다 — 점수/현금 ±1 같은 "두 번 적용되면 안 되는" API 가 거른다.
+  const method = init?.method ?? "POST";
+  const body =
+    init?.body !== undefined && init.body !== null && typeof init.body === "object" && !Array.isArray(init.body) && method !== "GET"
+      ? { request_id: newRequestId(), ...(init.body as Record<string, unknown>) }
+      : init?.body;
   try {
     const res = await fetch(url, {
-      method: init?.method ?? "POST",
+      method,
       headers: { "Content-Type": "application/json" },
-      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+      body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
     });

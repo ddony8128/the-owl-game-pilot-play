@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "e2e": "playwright test",
-    "check:video": "node scripts/check-video.mjs"
+    "check:video": "node scripts/check-video.mjs",
+    "verify:docs": "vitest run lib/__tests__/docsSync.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.0",

@@ -52,7 +52,7 @@ export function DefenseRulesTab() {
             <ul className="ml-4 list-disc">
               <li>포인트를 많이 얻은 순대로 순위 결정</li>
               <li>
-                동점이면 더 많은 데미지( 전투에 사용한 숫자 카드의 합 )를 입힌
+                동점이면 더 많은 피해( 전투에 사용한 숫자 카드의 합 )를 입힌
                 플레이어가 우선
               </li>
               <li>그래도 동점이면 공동 순위 처리</li>

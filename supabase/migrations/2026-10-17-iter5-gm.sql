@@ -15,3 +15,7 @@ CREATE TABLE IF NOT EXISTS gm_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS gm_logs_room_created_idx ON gm_logs (room_code, created_at DESC);
+
+-- 2026-10-17 (후속) GM 조작 재전송 멱등 — 점수/현금/주식 ±1 의 request_id 를 gm_logs 가 선점한다. 운영 DB 적용됨.
+ALTER TABLE gm_logs ADD COLUMN IF NOT EXISTS request_id TEXT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS gm_logs_room_request_key ON gm_logs (room_code, request_id) WHERE request_id IS NOT NULL;

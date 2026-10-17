@@ -387,6 +387,37 @@ test("[4] 마피아 현금·주식 ±1 보정 — 0주 미만 거부, 잘못된 
   expect(adjusts.some((l: { content: string }) => /현금 보정: b1 \+1원 \(30 → 31\)/.test(l.content))).toBe(true);
 });
 
+// ───────────────────────── 1-18. 점수/현금 ±1 재전송 멱등(request_id) ─────────────────────────
+test("[1-18] 점수 ±1 · 현금 ±1 을 같은 request_id 로 다시 보내면 한 번만 적용되고 idempotent 로 답한다", async ({ request }) => {
+  const d = await newRoom(request, "defense", ["i1"]);
+  const score = (request_id: string, delta = 1) =>
+    request.post("/api/gm/defense/score", { data: { room: d.code, playerId: d.ids.i1, delta, request_id } });
+  const first = await score("req-score-0001");
+  expect(first.ok()).toBeTruthy();
+  expect((await first.json()).points).toBe(1);
+  const again = await score("req-score-0001");
+  expect(again.ok()).toBeTruthy();
+  expect(await again.json()).toMatchObject({ idempotent: true, points: 1 });
+  expect((await (await score("req-score-0002")).json()).points).toBe(2);
+  // 형식이 안 맞는 request_id 는 멱등 없이 그냥 적용(옛 호출자 호환)
+  expect((await (await score("x")).json()).points).toBe(3);
+  const dash = await (await request.get(`/api/gm/defense/dashboard?room=${d.code}`)).json();
+  expect(dash.gmLogs.filter((l: { kind: string; content: string }) => l.kind === "adjust" && !l.content.includes("처리 중")).length).toBe(3);
+
+  const m = await newRoom(request, "mafia", ["j1", "j2", "j3", "j4", "j5"]);
+  await mafAdv(request, m.code, "auction");
+  const adj = (request_id: string) =>
+    request.post("/api/gm/mafia/adjust", { data: { room: m.code, playerId: m.ids.j1, kind: "cash", delta: -1, request_id } });
+  expect((await (await adj("req-cash-0001")).json()).cash).toBe(29);
+  expect(await (await adj("req-cash-0001")).json()).toMatchObject({ idempotent: true, cash: 29 });
+  expect((await (await adj("req-cash-0002")).json()).cash).toBe(28);
+  // 실패한 요청(0주에서 −1)은 선점을 풀어 같은 request_id 로 다시 시도할 수 있다
+  const bad = () =>
+    request.post("/api/gm/mafia/adjust", { data: { room: m.code, playerId: m.ids.j1, kind: "stock", stock_key: "국채", delta: -1, request_id: "req-stock-0001" } });
+  expect((await bad()).status()).toBe(400);
+  expect((await bad()).status()).toBe(400);
+});
+
 test("[4] 결과 공개 토글: PATCH reveal_result 가 저장·조회되고 GM 로그에 남는다 · 잘못된 값 400", async ({ request }) => {
   const { code } = await newRoom(request, "mafia", ["v1"]);
   const get = async () => (await request.get(`/api/gm/rooms?code=${code}`)).json();

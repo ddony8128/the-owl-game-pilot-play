@@ -4,6 +4,7 @@ import { MAFIA_STOCK_SEED, normalizeRoomCode } from "@/lib/rooms";
 import type { MafiaPlayerState } from "@/lib/types";
 import { gmError, loadRoomForWrite } from "@/lib/admin/gmResponse";
 import { addGmLog } from "@/lib/admin/gmLog";
+import { claimGmRequest, finishGmRequest, releaseGmRequest } from "@/lib/admin/gmRequest";
 
 // POST /api/gm/mafia/adjust { room, playerId, kind: "cash" | "stock", stock_key?, delta: 1 | -1 }
 //  마피아 현금·보유 주식 수동 보정(디펜스 점수 ±와 같은 수준). 사유 없이 GM 로그만 남긴다 — Iteration 5 WS-A 4.
@@ -15,6 +16,8 @@ type Body = {
   kind?: unknown;
   stock_key?: unknown;
   delta?: unknown;
+  /** 재전송 멱등 키(대시보드가 자동으로 붙인다) */
+  request_id?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -55,6 +58,23 @@ export async function POST(request: Request) {
   const state = stateRow as MafiaPlayerState;
   const nickname = (playerRow as { nickname: string }).nickname;
 
+  // 재전송 멱등: 같은 request_id 가 이미 처리됐으면 다시 더하지 않는다.
+  const claim = await claimGmRequest(supabase, { room, game: "mafia", kind: "adjust", requestId: body?.request_id });
+  if (claim.kind === "duplicate") {
+    const after = typeof claim.meta?.after === "number" ? (claim.meta.after as number) : null;
+    return NextResponse.json(
+      kind === "cash" ? { ok: true, idempotent: true, cash: after } : { ok: true, idempotent: true, stock_key: stockKey, amount: after },
+    );
+  }
+  const log = async (content: string, meta: Record<string, unknown>) => {
+    if (claim.kind === "new") await finishGmRequest(supabase, claim.logId, { content, meta });
+    else await addGmLog(supabase, { room, game: "mafia", kind: "adjust", content, meta });
+  };
+  const fail = async (status: number, message: string, reason?: "invalid_input") => {
+    if (claim.kind === "new") await releaseGmRequest(supabase, claim.logId);
+    return gmError(status, message, reason);
+  };
+
   if (kind === "cash") {
     const before = typeof state.cash === "number" ? state.cash : 0;
     const after = before + delta;
@@ -63,14 +83,8 @@ export async function POST(request: Request) {
       .update({ cash: after })
       .eq("room_code", room)
       .eq("player_id", playerId);
-    if (error) return gmError(500, error.message);
-    await addGmLog(supabase, {
-      room,
-      game: "mafia",
-      kind: "adjust",
-      content: `현금 보정: ${nickname} ${delta > 0 ? "+" : ""}${delta}원 (${before} → ${after})`,
-      meta: { player_id: playerId, kind, delta, before, after },
-    });
+    if (error) return fail(500, error.message);
+    await log(`현금 보정: ${nickname} ${delta > 0 ? "+" : ""}${delta}원 (${before} → ${after})`, { player_id: playerId, kind, delta, before, after });
     return NextResponse.json({ ok: true, cash: after });
   }
 
@@ -81,7 +95,7 @@ export async function POST(request: Request) {
   const before = typeof stocks[key]?.amount === "number" ? stocks[key].amount : 0;
   const after = before + delta;
   if (after < 0) {
-    return gmError(400, `${nickname}의 ${key} 보유 수량이 0주여서 더 뺄 수 없습니다.`, "invalid_input");
+    return fail(400, `${nickname}의 ${key} 보유 수량이 0주여서 더 뺄 수 없습니다.`, "invalid_input");
   }
   stocks[key] = { amount: after };
   const { error } = await supabase
@@ -89,13 +103,7 @@ export async function POST(request: Request) {
     .update({ stocks })
     .eq("room_code", room)
     .eq("player_id", playerId);
-  if (error) return gmError(500, error.message);
-  await addGmLog(supabase, {
-    room,
-    game: "mafia",
-    kind: "adjust",
-    content: `주식 보정: ${nickname} ${key} ${delta > 0 ? "+" : ""}${delta}주 (${before} → ${after})`,
-    meta: { player_id: playerId, kind, stock_key: key, delta, before, after },
-  });
+  if (error) return fail(500, error.message);
+  await log(`주식 보정: ${nickname} ${key} ${delta > 0 ? "+" : ""}${delta}주 (${before} → ${after})`, { player_id: playerId, kind, stock_key: key, delta, before, after });
   return NextResponse.json({ ok: true, stock_key: key, amount: after });
 }
