@@ -40,3 +40,9 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* 사용자 입력 텍스트(닉네임 등) — 긴 문자열이 폰 폭을 넘치지 않게 어디서든 줄바꿈 (Iteration 5 넘침 방지) */
+.user-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

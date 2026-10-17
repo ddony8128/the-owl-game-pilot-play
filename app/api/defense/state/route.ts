@@ -15,6 +15,9 @@ import {
   DEFENSE_MONSTERS,
   DEFENSE_MONSTERS_BY_ID,
 } from "@/lib/defense/monsters";
+import { normalizeNickname } from "@/lib/nickname";
+import { loadRoom } from "@/lib/player/roomGuard";
+import { isLateCombat, lateCombatLog } from "@/lib/defense/action";
 
 type DefenseGlobalStateResponse =
   | {
@@ -25,6 +28,8 @@ type DefenseGlobalStateResponse =
 type DefensePlayerStateResponse =
   | {
       round: number | null;
+      roomStatus: "active" | "ended";
+      serverNow: string;
       monsters: {
         instanceId: string;
         monsterId: number;
@@ -50,9 +55,9 @@ type DefensePlayerStateResponse =
             round: number;
             actionType: string;
             targetMonsterId: string | null;
-            usedCardSlot: number | null;
-            trainingFromSlot: number | null;
-            trainingToSlot: number | null;
+            usedCardValue: number | null;
+            trainingFrom: number | null;
+            trainingTo: number | null;
           }
         | null;
       dex: {
@@ -72,13 +77,15 @@ type DefensePlayerStateResponse =
         createdAt: string;
       }[];
     }
-  | { error: string };
+  | { error: string; reason?: string };
+
+type ActionRow = DefenseAction & { id: number; used_card_slot: number | null };
 
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(request.url);
   const room = normalizeRoomCode(searchParams.get("room") ?? "");
-  const nickname = searchParams.get("nickname");
+  const nickname = normalizeNickname(searchParams.get("nickname"));
 
   if (!room) {
     return NextResponse.json(
@@ -112,6 +119,18 @@ export async function GET(request: Request) {
     );
   }
 
+  // 방 존재 여부(없으면 404 room_not_found — 폰은 토큰을 지우지 않고 안내만 한다)
+  const { room: roomRow, error: roomError } = await loadRoom(supabase, room);
+  if (roomError) {
+    return NextResponse.json({ error: roomError }, { status: 500 });
+  }
+  if (!roomRow) {
+    return NextResponse.json(
+      { error: "방을 찾을 수 없습니다.", reason: "room_not_found" } as DefensePlayerStateResponse,
+      { status: 404 }
+    );
+  }
+
   // 플레이어 전용 상세 상태
   const playerRes = await supabase
     .from("players")
@@ -128,28 +147,109 @@ export async function GET(request: Request) {
   }
 
   if (!playerRes.data) {
+    // 강퇴(명단에서 삭제)와 미등록은 서버가 구분할 수 없다 → 폰이 "이전엔 있었는데 지금 403"이면 강퇴로 안내한다.
     return NextResponse.json(
-      { error: "등록되지 않은 닉네임입니다." } as DefensePlayerStateResponse,
+      { error: "등록되지 않은 닉네임입니다.", reason: "not_registered" } as DefensePlayerStateResponse,
       { status: 403 }
     );
   }
 
   const player = playerRes.data as Player;
 
-  const [
-    phaseRes,
-    instancesRes,
-    countsRes,
-    cardsRes,
-    scoreRes,
-    actionRes,
-    logsRes,
-  ] = await Promise.all([
+  const [phaseRes, actionRes, logsRes] = await Promise.all([
     supabase
       .from("defense_phase_state")
       .select("room_code, round, updated_at")
       .eq("room_code", room)
       .maybeSingle(),
+    supabase
+      .from("defense_action")
+      .select(
+        "id, round, player_id, action_type, target_monster_id, used_card_value, used_card_slot, training_from, training_to"
+      )
+      .eq("room_code", room)
+      .eq("player_id", player.id)
+      .order("round", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("defense_player_log")
+      .select("player_id, round, log, created_at")
+      .eq("room_code", room)
+      .eq("player_id", player.id)
+      .order("round", { ascending: false })
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (phaseRes.error) {
+    return NextResponse.json(
+      { error: phaseRes.error.message } as DefensePlayerStateResponse,
+      { status: 500 }
+    );
+  }
+  if (actionRes.error) {
+    return NextResponse.json(
+      { error: actionRes.error.message } as DefensePlayerStateResponse,
+      { status: 500 }
+    );
+  }
+  if (logsRes.error) {
+    return NextResponse.json(
+      { error: logsRes.error.message } as DefensePlayerStateResponse,
+      { status: 500 }
+    );
+  }
+
+  const phase = (phaseRes.data || null) as DefensePhaseState | null;
+  const round =
+    typeof phase?.round === "number" && phase.round >= 0 ? phase.round : null;
+  let lastAction = (actionRes.data || null) as ActionRow | null;
+  let logs = (logsRes.data || []) as DefensePlayerLog[];
+
+  // 라운드 마감과 겹쳐 정산에서 빠진 전투(반면교사 1-4): 카드를 되돌리고 알림 로그를 남긴다. 조용한 유실 금지.
+  if (
+    lastAction &&
+    isLateCombat({
+      action: { round: lastAction.round, action_type: lastAction.action_type },
+      currentRound: round,
+      logs: logs.map((l) => ({ round: l.round, log: l.log })),
+    })
+  ) {
+    const del = await supabase
+      .from("defense_action")
+      .delete()
+      .eq("id", lastAction.id)
+      .select("id");
+    // 삭제에 성공한 요청만 되돌린다(동시 폴링 두 건이 두 번 되돌리지 않게).
+    if (!del.error && del.data && del.data.length > 0) {
+      if (typeof lastAction.used_card_slot === "number") {
+        await supabase
+          .from("defense_card_state")
+          .update({ is_active: true })
+          .eq("room_code", room)
+          .eq("player_id", player.id)
+          .eq("card_slot", lastAction.used_card_slot);
+      }
+      const noticeRound = typeof round === "number" ? round : lastAction.round;
+      await supabase.from("defense_player_log").insert({
+        room_code: room,
+        player_id: player.id,
+        round: noticeRound,
+        log: lateCombatLog(lastAction.used_card_value),
+      });
+      const relog = await supabase
+        .from("defense_player_log")
+        .select("player_id, round, log, created_at")
+        .eq("room_code", room)
+        .eq("player_id", player.id)
+        .order("round", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (!relog.error) logs = (relog.data || []) as DefensePlayerLog[];
+      lastAction = null;
+    }
+  }
+
+  const [instancesRes, countsRes, cardsRes, scoreRes] = await Promise.all([
     supabase
       .from("defense_monster_instance")
       .select(
@@ -172,84 +272,21 @@ export async function GET(request: Request) {
       .eq("room_code", room)
       .eq("player_id", player.id)
       .maybeSingle(),
-    supabase
-      .from("defense_action")
-      .select(
-        "round, player_id, action_type, target_monster_id, used_card_value, training_from, training_to"
-      )
-      .eq("room_code", room)
-      .eq("player_id", player.id)
-      .order("round", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("defense_player_log")
-      .select("player_id, round, log, created_at")
-      .eq("room_code", room)
-      .eq("player_id", player.id)
-      .order("round", { ascending: false })
-      .order("created_at", { ascending: false }),
   ]);
 
-  if (phaseRes.error) {
-    return NextResponse.json(
-      { error: phaseRes.error.message } as DefensePlayerStateResponse,
-      { status: 500 }
-    );
+  for (const r of [instancesRes, countsRes, cardsRes, scoreRes]) {
+    if (r.error) {
+      return NextResponse.json(
+        { error: r.error.message } as DefensePlayerStateResponse,
+        { status: 500 }
+      );
+    }
   }
-
-  if (instancesRes.error) {
-    return NextResponse.json(
-      { error: instancesRes.error.message } as DefensePlayerStateResponse,
-      { status: 500 }
-    );
-  }
-
-  if (countsRes.error) {
-    return NextResponse.json(
-      { error: countsRes.error.message } as DefensePlayerStateResponse,
-      { status: 500 }
-    );
-  }
-
-  if (cardsRes.error) {
-    return NextResponse.json(
-      { error: cardsRes.error.message } as DefensePlayerStateResponse,
-      { status: 500 }
-    );
-  }
-
-  if (scoreRes.error) {
-    return NextResponse.json(
-      { error: scoreRes.error.message } as DefensePlayerStateResponse,
-      { status: 500 }
-    );
-  }
-
-  if (actionRes.error) {
-    return NextResponse.json(
-      { error: actionRes.error.message } as DefensePlayerStateResponse,
-      { status: 500 }
-    );
-  }
-
-  if (logsRes.error) {
-    return NextResponse.json(
-      { error: logsRes.error.message } as DefensePlayerStateResponse,
-      { status: 500 }
-    );
-  }
-
-  const phase = (phaseRes.data || null) as DefensePhaseState | null;
-  const round =
-    typeof phase?.round === "number" && phase.round >= 0 ? phase.round : null;
 
   const instances = (instancesRes.data || []) as DefenseMonsterInstance[];
   const counts = (countsRes.data || []) as DefenseMonsterCount[];
   const cards = (cardsRes.data || []) as DefenseCardState[];
   const scoreRow = (scoreRes.data || null) as DefenseScore | null;
-  const lastAction = (actionRes.data || null) as DefenseAction | null;
-  const logs = (logsRes.data || []) as DefensePlayerLog[];
 
   const activeMonsters = instances.filter((m) => m.status === "active");
 
@@ -315,6 +352,8 @@ export async function GET(request: Request) {
   return NextResponse.json(
     {
       round,
+      roomStatus: roomRow.status === "ended" ? "ended" : "active",
+      serverNow: new Date().toISOString(),
       monsters: monstersForClient,
       cards: cardsForClient,
       score: scoreRow?.points ?? 0,
@@ -325,4 +364,3 @@ export async function GET(request: Request) {
     { status: 200 }
   );
 }
-

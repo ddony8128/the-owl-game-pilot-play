@@ -2,49 +2,54 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
 import type { MafiaPhaseState, Player } from "@/lib/types";
+import { isValidNickname, normalizeNickname } from "@/lib/nickname";
+import { isRequestIdShaped, parseRequestId } from "@/lib/requestId";
+import { isUniqueViolation, parsePositiveInt, requireActiveRoom } from "@/lib/player/roomGuard";
+import { casUpdate, computeTrade, normalizeStocks, type CasReadState } from "@/lib/mafia/cas";
 
+// POST /api/mafia/action — 베팅(bet) · 매수/매도(buy/sell) · 능력(ability)
+//  - 종료된 방 409 room_ended · 입력 열거/정수 검사(500 금지) · 닉네임 NFC 정규화
+//  - request_id(선택): 같은 (방, 플레이어, request_id)는 한 번만 반영(응답 유실 재전송 멱등)
+//  - 매수/매도는 cash CAS(읽은 값일 때만 갱신, 0행이면 다시 읽기)로 lost update 를 막는다
+//  - 베팅·능력은 라운드/페이즈당 1회(유니크 인덱스가 동시 제출을 막는다)
 type ActionBody = {
   room?: string;
   nickname?: string;
-  type?: string;
+  type?: unknown;
   payload?: unknown;
+  request_id?: unknown;
 };
 
-type ActionResponse = { ok: true } | { error: string };
+type ActionResponse = { ok: true; idempotent?: boolean } | { error: string; reason?: string };
+
+const ACTION_TYPES = ["bet", "buy", "sell", "ability"] as const;
+type ActionType = (typeof ACTION_TYPES)[number];
+const MAX_AMOUNT = 100000;
+
+const err = (status: number, error: string, reason?: string) =>
+  NextResponse.json({ error, ...(reason ? { reason } : {}) } as ActionResponse, { status });
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as ActionBody | null;
 
   const room = normalizeRoomCode(body?.room ?? "");
-  if (!room) {
-    return NextResponse.json({ error: "room 필요" } as ActionResponse, {
-      status: 400,
-    });
+  if (!room) return err(400, "room 필요", "bad_request");
+  if (!body || typeof body.nickname !== "string") return err(400, "nickname is required", "bad_request");
+  if (typeof body.type !== "string" || !(ACTION_TYPES as readonly string[]).includes(body.type.trim())) {
+    return err(400, "type 은 bet | buy | sell | ability 중 하나여야 합니다.", "bad_request");
   }
-
-  if (!body || typeof body.nickname !== "string") {
-    return NextResponse.json(
-      { error: "nickname is required" } as ActionResponse,
-      { status: 400 }
-    );
+  const nickname = normalizeNickname(body.nickname);
+  if (!isValidNickname(nickname)) return err(400, "invalid nickname", "bad_request");
+  const action_type = body.type.trim() as ActionType;
+  if (body.request_id !== undefined && body.request_id !== null && !isRequestIdShaped(body.request_id)) {
+    return err(400, "request_id 형식이 올바르지 않습니다.", "bad_request");
   }
+  const requestId = parseRequestId(body.request_id);
+  const payloadIn = (body.payload && typeof body.payload === "object" ? body.payload : {}) as Record<string, unknown>;
 
-  if (!body.type) {
-    return NextResponse.json({ error: "type is required" } as ActionResponse, {
-      status: 400,
-    });
-  }
-
-  const nickname = body.nickname.trim();
-  const action_type = body.type.trim();
-
-  if (!nickname || !action_type) {
-    return NextResponse.json(
-      { error: "invalid nickname or type" } as ActionResponse,
-      { status: 400 }
-    );
-  }
+  const guard = await requireActiveRoom(supabase, room);
+  if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status });
 
   // 현재 phase/round 조회
   const { data: phaseRow, error: phaseError } = await supabase
@@ -52,20 +57,9 @@ export async function POST(request: Request) {
     .select("room_code, round_number, phase, updated_at")
     .eq("room_code", room)
     .maybeSingle();
-
-  if (phaseError) {
-    return NextResponse.json({ error: phaseError.message } as ActionResponse, {
-      status: 500,
-    });
-  }
-
+  if (phaseError) return err(500, phaseError.message);
   const phaseState = (phaseRow || null) as MafiaPhaseState | null;
-  if (!phaseState) {
-    return NextResponse.json(
-      { error: "mafia_phase_state가 초기화되지 않았습니다." } as ActionResponse,
-      { status: 500 }
-    );
-  }
+  if (!phaseState) return err(500, "mafia_phase_state가 초기화되지 않았습니다.");
 
   const { data: playerRow, error: playerError } = await supabase
     .from("players")
@@ -73,53 +67,49 @@ export async function POST(request: Request) {
     .eq("room_code", room)
     .eq("nickname", nickname)
     .maybeSingle();
-
-  if (playerError) {
-    return NextResponse.json({ error: playerError.message } as ActionResponse, {
-      status: 500,
-    });
-  }
-
-  if (!playerRow) {
-    return NextResponse.json(
-      { error: "등록되지 않은 닉네임입니다." } as ActionResponse,
-      { status: 403 }
-    );
-  }
-
+  if (playerError) return err(500, playerError.message);
+  if (!playerRow) return err(403, "등록되지 않은 닉네임입니다.", "not_registered");
   const player = playerRow as Player;
   const phase = phaseState.phase;
 
   // 페이즈별로 허용되는 액션 제한
-  const isAllowedAction = (() => {
-    if (phase === "auction") {
-      // 경매 페이즈에서는 bet만 허용
-      return action_type === "bet";
-    }
-    if (phase === "trade") {
-      // 거래 페이즈에서는 주식 거래 및 능력 사용만 허용
-      return (
-        action_type === "buy" ||
-        action_type === "sell" ||
-        action_type === "ability"
-      );
-    }
-    // 그 외 페이즈에서는 액션을 허용하지 않는다.
-    return false;
-  })();
-
+  const isAllowedAction =
+    (phase === "auction" && action_type === "bet") ||
+    (phase === "trade" && (action_type === "buy" || action_type === "sell" || action_type === "ability"));
   if (!isAllowedAction) {
-    return NextResponse.json(
-      {
-        error: "현재 페이즈에서는 이 행동을 할 수 없습니다.",
-      } as ActionResponse,
-      { status: 400 }
-    );
+    return err(400, "현재 페이즈에서는 이 행동을 할 수 없습니다.", "wrong_phase");
   }
 
-  // 능력 사용은 라운드/페이즈당 1회만 허용
+  // 멱등: 같은 request_id 가 이미 반영됐으면 다시 하지 않는다.
+  if (requestId) {
+    const dup = await supabase
+      .from("mafia_actions")
+      .select("id")
+      .eq("room_code", room)
+      .eq("player_id", player.id)
+      .eq("payload->>request_id", requestId)
+      .maybeSingle();
+    if (dup.error) return err(500, dup.error.message);
+    if (dup.data) return NextResponse.json({ ok: true, idempotent: true } as ActionResponse, { status: 200 });
+  }
+
+  const insertAction = async (payload: Record<string, unknown>) =>
+    supabase
+      .from("mafia_actions")
+      .insert({
+        room_code: room,
+        player_id: player.id,
+        round_number: phaseState.round_number,
+        phase: phaseState.phase,
+        action_type,
+        payload: requestId ? { ...payload, request_id: requestId } : payload,
+      })
+      .select("id")
+      .maybeSingle();
+
+  // 능력 사용: 라운드/페이즈당 1회
   if (action_type === "ability") {
-    const { data: existingAbility, error: existingError } = await supabase
+    const existing = await supabase
       .from("mafia_actions")
       .select("id")
       .eq("room_code", room)
@@ -128,27 +118,21 @@ export async function POST(request: Request) {
       .eq("phase", phaseState.phase)
       .eq("action_type", "ability")
       .maybeSingle();
+    if (existing.error) return err(500, existing.error.message);
+    if (existing.data) return err(400, "이번 라운드에서는 이미 능력을 사용했습니다.", "already_used");
+    if (typeof payloadIn.job !== "string") return err(400, "능력 payload 에 job 이 필요합니다.", "bad_request");
 
-    if (existingError) {
-      return NextResponse.json(
-        { error: existingError.message } as ActionResponse,
-        { status: 500 }
-      );
+    const ins = await insertAction(payloadIn);
+    if (ins.error) {
+      if (isUniqueViolation(ins.error)) return err(400, "이번 라운드에서는 이미 능력을 사용했습니다.", "already_used");
+      return err(500, ins.error.message);
     }
-
-    if (existingAbility) {
-      return NextResponse.json(
-        {
-          error: "이번 라운드에서는 이미 능력을 사용했습니다.",
-        } as ActionResponse,
-        { status: 400 }
-      );
-    }
+    return NextResponse.json({ ok: true } as ActionResponse, { status: 200 });
   }
 
-  // 직업 경매 베팅도 라운드/페이즈당 1회만 허용
+  // 직업 경매 베팅: 라운드/페이즈당 1회
   if (action_type === "bet") {
-    const { data: existingBet, error: existingBetError } = await supabase
+    const existing = await supabase
       .from("mafia_actions")
       .select("id")
       .eq("room_code", room)
@@ -157,254 +141,126 @@ export async function POST(request: Request) {
       .eq("phase", phaseState.phase)
       .eq("action_type", "bet")
       .maybeSingle();
+    if (existing.error) return err(500, existing.error.message);
+    if (existing.data) return err(400, "이번 라운드에서는 이미 직업 경매에 베팅했습니다.", "already_bet");
 
-    if (existingBetError) {
-      return NextResponse.json(
-        { error: existingBetError.message } as ActionResponse,
-        { status: 500 }
-      );
-    }
-
-    if (existingBet) {
-      return NextResponse.json(
-        {
-          error: "이번 라운드에서는 이미 직업 경매에 베팅했습니다.",
-        } as ActionResponse,
-        { status: 400 }
-      );
-    }
-
-    const payload = (body.payload ?? {}) as {
-      job?: string | null;
-      amount?: number;
-      give_up?: boolean;
-    };
-
-    const amount =
-      typeof payload.amount === "number" && payload.amount > 0
-        ? Math.floor(payload.amount)
-        : 0;
-    const giveUp = payload.give_up === true;
-
-    // 포기(give_up)는 금액 검증 없이 허용
+    const giveUp = payloadIn.give_up === true;
+    const job = typeof payloadIn.job === "string" && payloadIn.job.length > 0 ? payloadIn.job : null;
+    let amount = 0;
     if (!giveUp) {
-      if (amount <= 0) {
-        return NextResponse.json(
-          { error: "유효한 베팅 금액을 입력해 주세요." } as ActionResponse,
-          { status: 400 }
-        );
-      }
+      const parsed = parsePositiveInt(
+        typeof payloadIn.amount === "number" ? Math.floor(payloadIn.amount) : payloadIn.amount,
+        MAX_AMOUNT,
+      );
+      if (parsed == null || !job) return err(400, "유효한 베팅 금액을 입력해 주세요.", "bad_request");
+      amount = parsed;
 
-      // 플레이어 현금 조회 후, 보유 현금을 초과하는 베팅은 거부
       const { data: stateRow, error: stateError } = await supabase
         .from("mafia_player_state")
-        .select("player_id, cash, is_mafia, job, stocks, updated_at")
+        .select("player_id, cash")
         .eq("room_code", room)
         .eq("player_id", player.id)
         .maybeSingle();
-
-      if (stateError) {
-        return NextResponse.json(
-          { error: stateError.message } as ActionResponse,
-          { status: 500 }
-        );
-      }
-
-      const currentCash =
-        stateRow && typeof stateRow.cash === "number" ? stateRow.cash : 0;
-
-      if (amount > currentCash) {
-        return NextResponse.json(
-          {
-            error: "보유 현금을 초과해서 베팅할 수 없습니다.",
-          } as ActionResponse,
-          { status: 400 }
-        );
-      }
+      if (stateError) return err(500, stateError.message);
+      const currentCash = stateRow && typeof stateRow.cash === "number" ? stateRow.cash : 0;
+      if (amount > currentCash) return err(400, "보유 현금을 초과해서 베팅할 수 없습니다.", "insufficient_cash");
     }
+
+    const ins = await insertAction(giveUp ? { job: null, give_up: true } : { job, amount });
+    if (ins.error) {
+      if (isUniqueViolation(ins.error)) return err(400, "이번 라운드에서는 이미 직업 경매에 베팅했습니다.", "already_bet");
+      return err(500, ins.error.message);
+    }
+    return NextResponse.json({ ok: true } as ActionResponse, { status: 200 });
   }
 
-  // 주식 거래: 즉시 현금/보유 주식에 반영 + 검증
-  if (action_type === "buy" || action_type === "sell") {
-    const payload = (body.payload ?? {}) as {
-      stock_key?: string;
-      amount?: number;
-    };
+  // 주식 거래: 즉시 현금/보유 주식에 반영(CAS)
+  const stockKey = typeof payloadIn.stock_key === "string" && payloadIn.stock_key.length > 0 && payloadIn.stock_key.length <= 32 ? payloadIn.stock_key : null;
+  const amount = parsePositiveInt(
+    typeof payloadIn.amount === "number" ? Math.floor(payloadIn.amount) : payloadIn.amount,
+    MAX_AMOUNT,
+  );
+  if (!stockKey || amount == null) return err(400, "유효한 종목과 수량을 입력해 주세요.", "bad_request");
 
-    const stockKey =
-      typeof payload.stock_key === "string" && payload.stock_key.length > 0
-        ? payload.stock_key
-        : null;
-    const amount =
-      typeof payload.amount === "number" && payload.amount > 0
-        ? Math.floor(payload.amount)
-        : 0;
+  // 같은 라운드/페이즈/종목에 대해 매수·매도를 동시에 할 수 없음
+  const oppositeType = action_type === "buy" ? "sell" : "buy";
+  const opposite = await supabase
+    .from("mafia_actions")
+    .select("id")
+    .eq("room_code", room)
+    .eq("player_id", player.id)
+    .eq("round_number", phaseState.round_number)
+    .eq("phase", phaseState.phase)
+    .eq("action_type", oppositeType)
+    .eq("payload->>stock_key", stockKey)
+    .maybeSingle();
+  if (opposite.error) return err(500, opposite.error.message);
+  if (opposite.data) {
+    return err(400, "같은 라운드에서는 같은 종목을 매수와 매도 둘 다 할 수 없습니다.", "opposite_trade");
+  }
 
-    if (!stockKey || amount <= 0) {
-      return NextResponse.json(
-        { error: "유효한 종목과 수량을 입력해 주세요." } as ActionResponse,
-        { status: 400 }
-      );
-    }
+  const { data: stockRow, error: stockError } = await supabase
+    .from("mafia_stock_state")
+    .select("stock_key, price")
+    .eq("room_code", room)
+    .eq("stock_key", stockKey)
+    .maybeSingle();
+  if (stockError) return err(500, stockError.message);
+  const price = stockRow && typeof stockRow.price === "number" ? stockRow.price : 0;
+  if (price <= 0) return err(400, "유효하지 않은 주가입니다.", "bad_request");
 
-    // 같은 라운드/페이즈/종목에 대해 매수·매도를 동시에 할 수 없음
-    const oppositeType = action_type === "buy" ? "sell" : "buy";
-    const { data: oppositeRow, error: oppositeError } = await supabase
-      .from("mafia_actions")
-      .select("id")
-      .eq("room_code", room)
-      .eq("player_id", player.id)
-      .eq("round_number", phaseState.round_number)
-      .eq("phase", phaseState.phase)
-      .eq("action_type", oppositeType)
-      // JSON 필드 stock_key가 동일한 경우만 막는다
-      .eq("payload->>stock_key", stockKey)
-      .maybeSingle();
-
-    if (oppositeError) {
-      return NextResponse.json(
-        { error: oppositeError.message } as ActionResponse,
-        { status: 500 }
-      );
-    }
-
-    if (oppositeRow) {
-      return NextResponse.json(
-        {
-          error:
-            "같은 라운드에서는 같은 종목을 매수와 매도 둘 다 할 수 없습니다.",
-        } as ActionResponse,
-        { status: 400 }
-      );
-    }
-
-    // 현재 주가 조회
-    const { data: stockRow, error: stockError } = await supabase
-      .from("mafia_stock_state")
-      .select("stock_key, price")
-      .eq("room_code", room)
-      .eq("stock_key", stockKey)
-      .maybeSingle();
-
-    if (stockError) {
-      return NextResponse.json(
-        { error: stockError.message } as ActionResponse,
-        { status: 500 }
-      );
-    }
-
-    const price =
-      stockRow && typeof stockRow.price === "number" ? stockRow.price : 0;
-    if (price <= 0) {
-      return NextResponse.json(
-        { error: "유효하지 않은 주가입니다." } as ActionResponse,
-        { status: 400 }
-      );
-    }
-
-    // 플레이어 자산 상태 조회
-    const { data: stateRow, error: stateError } = await supabase
+  const readState = async (): Promise<CasReadState | null> => {
+    const { data, error } = await supabase
       .from("mafia_player_state")
-      .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .select("player_id, cash, stocks")
       .eq("room_code", room)
       .eq("player_id", player.id)
       .maybeSingle();
-
-    if (stateError) {
-      return NextResponse.json(
-        { error: stateError.message } as ActionResponse,
-        { status: 500 }
-      );
-    }
-
-    if (!stateRow) {
-      return NextResponse.json(
-        {
-          error:
-            "플레이어 자산 상태가 초기화되지 않았습니다. GM에게 문의해 주세요.",
-        } as ActionResponse,
-        { status: 500 }
-      );
-    }
-
-    const currentCash = typeof stateRow.cash === "number" ? stateRow.cash : 0;
-    const rawStocks = (stateRow as unknown as { stocks?: unknown }).stocks;
-    const stocks: Record<string, { amount: number }> =
-      rawStocks && typeof rawStocks === "object"
-        ? { ...(rawStocks as Record<string, { amount: number }>) }
-        : {};
-
-    const prevAmount =
-      typeof stocks[stockKey]?.amount === "number"
-        ? stocks[stockKey].amount
-        : 0;
-
-    let nextCash = currentCash;
-    let nextAmount = prevAmount;
-
-    if (action_type === "buy") {
-      const totalCost = price * amount;
-      nextCash = currentCash - totalCost;
-      if (nextCash < 0) {
-        return NextResponse.json(
-          { error: "현금이 부족합니다." } as ActionResponse,
-          { status: 400 }
-        );
-      }
-      nextAmount = prevAmount + amount;
-    } else {
-      // sell
-      if (prevAmount < amount) {
-        return NextResponse.json(
-          {
-            error: "보유 수량보다 많이 매도할 수 없습니다.",
-          } as ActionResponse,
-          { status: 400 }
-        );
-      }
-      const revenue = price * amount;
-      nextCash = currentCash + revenue;
-      nextAmount = prevAmount - amount;
-    }
-
-    stocks[stockKey] = { amount: nextAmount };
-
-    const { error: updateStateError } = await supabase
-      .from("mafia_player_state")
-      .update({
-        cash: nextCash,
-        stocks,
-      })
-      .eq("room_code", room)
-      .eq("player_id", player.id);
-
-    if (updateStateError) {
-      return NextResponse.json(
-        { error: updateStateError.message } as ActionResponse,
-        { status: 500 }
-      );
-    }
-
-    // payload는 이후 주가 변동/강도 계산 등을 위해 그대로 기록
-    body.payload = {
-      stock_key: stockKey,
-      amount,
+    if (error || !data) return null;
+    return {
+      cash: typeof data.cash === "number" ? data.cash : 0,
+      stocks: normalizeStocks((data as { stocks?: unknown }).stocks),
     };
-  }
+  };
+  const writeState = async (expectCash: number, next: CasReadState) => {
+    const { data, error } = await supabase
+      .from("mafia_player_state")
+      .update({ cash: next.cash, stocks: next.stocks })
+      .eq("room_code", room)
+      .eq("player_id", player.id)
+      .eq("cash", expectCash)
+      .select("player_id");
+    return { updated: data?.length ?? 0, error: error?.message ?? null };
+  };
 
-  const { error: insertError } = await supabase.from("mafia_actions").insert({
-    room_code: room,
-    player_id: player.id,
-    round_number: phaseState.round_number,
-    phase: phaseState.phase,
-    action_type,
-    payload: body.payload ?? {},
+  const outcome = await casUpdate({
+    read: readState,
+    compute: (cur) => computeTrade(cur, { type: action_type, stockKey, amount, price }),
+    write: writeState,
   });
 
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message } as ActionResponse, {
-      status: 500,
+  if (outcome.status === "missing") {
+    return err(500, "플레이어 자산 상태가 초기화되지 않았습니다. GM에게 문의해 주세요.");
+  }
+  if (outcome.status === "rejected") return err(400, outcome.error, "insufficient");
+  if (outcome.status === "db_error") return err(500, outcome.error);
+  if (outcome.status === "exhausted") {
+    return err(409, "거래가 몰려 처리하지 못했습니다. 다시 시도해 주세요.", "busy");
+  }
+
+  const ins = await insertAction({ stock_key: stockKey, amount, price, total: outcome.extra.total });
+  if (ins.error) {
+    // 기록 실패 → 현금/수량을 되돌린다(반대 거래를 CAS 로 적용).
+    await casUpdate({
+      read: readState,
+      compute: (cur) => computeTrade(cur, { type: oppositeType, stockKey, amount, price }),
+      write: writeState,
     });
+    if (isUniqueViolation(ins.error)) {
+      // 같은 request_id 가 동시에 두 번 → 먼저 간 요청이 반영됐으니 멱등 성공으로 답한다.
+      return NextResponse.json({ ok: true, idempotent: true } as ActionResponse, { status: 200 });
+    }
+    return err(500, ins.error.message);
   }
 
   return NextResponse.json({ ok: true } as ActionResponse, { status: 200 });

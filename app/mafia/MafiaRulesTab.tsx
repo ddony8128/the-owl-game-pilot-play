@@ -1,8 +1,10 @@
 "use client";
 
+import { RulesheetLink } from "@/components/PhoneNotices";
+
 export function MafiaRulesTab() {
   return (
-    <div className="space-y-3 text-base leadingrelaxed text-zinc-300">
+    <div className="space-y-3 text-base leading-relaxed text-zinc-300">
       <p>자본주의 마피아 규칙 요약이다부엉!</p>
 
       <div className="space-y-3">
@@ -109,6 +111,15 @@ export function MafiaRulesTab() {
           </li>
         </ul>
       </div>
+
+      <div className="space-y-1">
+        <p className="font-semibold text-zinc-100">내 기록</p>
+        <p className="text-sm">
+          <span className="font-semibold">로그</span> 탭에서 라운드별 내 경매·거래·정산·투표 기록을 볼 수 있습니다(게임이 끝난 뒤에도).
+          남의 직업·남의 표는 보이지 않습니다. 최종 결과는 GM이 공개한 뒤에 보입니다.
+        </p>
+      </div>
+      <RulesheetLink game="mafia" />
     </div>
   );
 }
