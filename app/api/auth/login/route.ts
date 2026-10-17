@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getRoom, normalizeRoomCode } from "@/lib/rooms";
 import type { Player } from "@/lib/types";
+import { isValidNickname, normalizeNickname } from "@/lib/nickname";
 
 // 플레이어 입장: 방 코드 + 닉네임.
 //  - 방 코드가 틀리면        → "방 코드를 확인해 주세요." (reason: room_not_found)
@@ -11,11 +12,18 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
   const room = normalizeRoomCode(body?.room ?? body?.room_code ?? "");
-  const nickname = (body?.nickname ?? "").trim();
+  // 제로폭·NBSP·조합형 한글 차이로 "다른 사람"이 되지 않게 정규화한다(GM 등록 닉네임과 같은 규칙).
+  const nickname = normalizeNickname(body?.nickname);
 
   if (!room || !nickname) {
     return NextResponse.json(
       { error: "room, nickname 필요" },
+      { status: 400 },
+    );
+  }
+  if (!isValidNickname(nickname)) {
+    return NextResponse.json(
+      { error: "닉네임은 20자 이내여야 합니다.", reason: "bad_nickname" },
       { status: 400 },
     );
   }

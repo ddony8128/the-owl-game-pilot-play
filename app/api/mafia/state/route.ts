@@ -10,17 +10,41 @@ import type {
   Player,
   MafiaStockHistory,
 } from "@/lib/types";
+import { normalizeNickname } from "@/lib/nickname";
+import { loadRoom } from "@/lib/player/roomGuard";
+import {
+  buildMafiaPlayerLog,
+  type MafiaLogActionRow,
+  type MafiaLogSnapshotRow,
+  type MafiaLogVoteRow,
+  type MafiaRoundLog,
+} from "@/lib/mafia/playerLog";
 
+// GET /api/mafia/state?room=코드&nickname=닉 — 플레이어 화면 상태.
+// 비공개 원칙: 남의 직업·남의 표·강도 대상은 절대 내려주지 않는다(players 는 id·닉네임만).
+// all=1 은 GM 대시보드 전용(전원 상태) — 폰은 쓰지 않는다.
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
   const { searchParams } = new URL(request.url);
   const room = normalizeRoomCode(searchParams.get("room") ?? "");
-  const nickname = searchParams.get("nickname");
+  const nickname = normalizeNickname(searchParams.get("nickname")) || null;
   const all = searchParams.get("all") === "1";
 
   if (!room) {
     return NextResponse.json({ error: "room 필요" }, { status: 400 });
   }
+
+  const { room: roomRow, error: roomError } = await loadRoom(supabase, room);
+  if (roomError) {
+    return NextResponse.json({ error: roomError }, { status: 500 });
+  }
+  if (!roomRow) {
+    return NextResponse.json(
+      { error: "방을 찾을 수 없습니다.", reason: "room_not_found" },
+      { status: 404 }
+    );
+  }
+  const roomStatus: "active" | "ended" = roomRow.status === "ended" ? "ended" : "active";
 
   // phase
   const { data: phaseRow, error: phaseError } = await supabase
@@ -163,6 +187,7 @@ export async function GET(request: Request) {
     string,
     { bought: boolean; sold: boolean }
   > | null = null;
+  let myLog: MafiaRoundLog[] = [];
 
   if (nickname) {
     const playerRes = await supabase
@@ -180,8 +205,9 @@ export async function GET(request: Request) {
     }
 
     if (!playerRes.data) {
+      // 강퇴(명단 삭제)와 미등록은 서버가 구분할 수 없다 → 폰이 "이전엔 있었는데 지금 403"이면 강퇴로 안내한다.
       return NextResponse.json(
-        { error: "등록되지 않은 닉네임입니다." },
+        { error: "등록되지 않은 닉네임입니다.", reason: "not_registered" },
         { status: 403 }
       );
     }
@@ -417,10 +443,49 @@ export async function GET(request: Request) {
         };
       }
     }
+
+    // 로그 탭: 내 행동(경매·거래·능력)·내 표·내 능력결과·내 스냅샷만 모아 라운드별로 정리한다.
+    // 쿼리부터 player_id 로 좁히고, buildMafiaPlayerLog 가 한 번 더 내 행만 남긴다(이중 방어).
+    const [myActionsRes, myVotesRes, mySnapsRes] = await Promise.all([
+      supabase
+        .from("mafia_actions")
+        .select("player_id, round_number, phase, action_type, payload, created_at")
+        .eq("room_code", room)
+        .eq("player_id", player.id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("mafia_votes")
+        .select("voter_id, round_number, target_id, vote_count, unit_price")
+        .eq("room_code", room)
+        .eq("voter_id", player.id),
+      supabase
+        .from("mafia_player_snapshots")
+        .select("player_id, round_number, phase, job, cash")
+        .eq("room_code", room)
+        .eq("player_id", player.id),
+    ]);
+    const nicknameById = new Map<string, string>();
+    for (const p of players) nicknameById.set(p.id, p.nickname);
+    myLog = buildMafiaPlayerLog({
+      playerId: player.id,
+      actions: (myActionsRes.data || []) as MafiaLogActionRow[],
+      votes: (myVotesRes.data || []) as MafiaLogVoteRow[],
+      abilityResults: abilityResults.map((r) => ({
+        player_id: r.player_id,
+        round_number: r.round_number,
+        phase: r.phase,
+        category: r.category,
+        message: r.message,
+      })),
+      snapshots: (mySnapsRes.data || []) as MafiaLogSnapshotRow[],
+      nicknameById,
+    });
   }
 
   return NextResponse.json({
     phase,
+    roomStatus,
+    serverNow: new Date().toISOString(),
     stocks,
     playerState,
     players,
@@ -433,5 +498,6 @@ export async function GET(request: Request) {
     myAuctionBet,
     myAbilityActionThisPhase,
     myTradesThisRound,
+    myLog,
   });
 }

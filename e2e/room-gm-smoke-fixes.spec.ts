@@ -62,7 +62,7 @@ test("[1] 마피아 탭을 연 직후(100ms) 제출해도 조용히 버려지지
   await page.goto("/mafia");
 
   // 경매: 탭이 나타나면 열고 100ms 뒤 바로 제출
-  const auctionTab = page.getByRole("button", { name: "경매", exact: true });
+  const auctionTab = page.getByTestId("tab-auction"); // Iteration 5: 탭은 role=tab
   await auctionTab.waitFor({ timeout: 20_000 });
   await auctionTab.click();
   await page.waitForTimeout(100);
@@ -76,11 +76,11 @@ test("[1] 마피아 탭을 연 직후(100ms) 제출해도 조용히 버려지지
 
   // 거래: 단계 전환 → 폴링으로 탭이 나타나면 열고 100ms 뒤 바로 제출
   await mafiaAdv(request, room, "trade");
-  const tradeTab = page.getByRole("button", { name: "거래", exact: true });
+  const tradeTab = page.getByTestId("tab-trade");
   await tradeTab.waitFor({ timeout: 20_000 });
   await tradeTab.click();
   await page.waitForTimeout(100);
-  await page.getByRole("button", { name: "매수", exact: true }).first().click();
+  await page.getByRole("button", { name: /매수$/ }).first().click();
   await page.getByPlaceholder("수량").fill("1");
   await page.getByRole("button", { name: "거래 제출" }).click();
   await expect(page.getByText(/1개 매수했습니다/)).toBeVisible({ timeout: 10_000 });
@@ -90,11 +90,11 @@ test("[1] 마피아 탭을 연 직후(100ms) 제출해도 조용히 버려지지
   // 투표
   await mafiaAdv(request, room, "apply");
   await mafiaAdv(request, room, "vote");
-  const voteTab = page.getByRole("button", { name: "투표", exact: true });
+  const voteTab = page.getByTestId("tab-vote");
   await voteTab.waitFor({ timeout: 20_000 });
   await voteTab.click();
   await page.waitForTimeout(100);
-  await page.getByRole("button", { name: "영희", exact: true }).click();
+  await page.getByTestId("vote-target-영희").click();
   await page.getByRole("button", { name: "투표 제출" }).click();
   await expect(page.getByText(/영희에게 1표/)).toBeVisible({ timeout: 10_000 });
 });

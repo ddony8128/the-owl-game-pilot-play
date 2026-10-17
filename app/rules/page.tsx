@@ -1,25 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useGameState } from "@/lib/hooks/useGameState";
-import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
-import { LoadingScreen } from "@/components/LoadingScreen";
+import { RULESHEET_PDF } from "@/components/PhoneNotices";
 
-const RULE_LABELS: Record<string, string> = {
-  intro: "게임 전체 안내",
-  subway: "이상교통 8번출구",
-  mafia: "자본주의 마피아",
-  defense: "디펜스 딜레마",
-};
+// /rules — 두 게임 룰지(PDF)를 항상 보여 준다. 예전의 rules_state 공개 토글은 GM UI 가 없어 영원히
+// "공개된 규칙 없음"으로 남았으므로(gap-analysis 10) 토글 없이 단순화했다(Iteration 5 WS-B 3).
+const RULESHEETS: { key: keyof typeof RULESHEET_PDF; label: string; note: string }[] = [
+  { key: "defense", label: "디펜스 딜레마 룰지", note: "2026-10-16 v8 · 코드와 대조 완료" },
+  { key: "mafia", label: "자본주의 마피아 룰지", note: "2026-10-14 v8 · 코드와 대조 완료" },
+];
 
 export default function RulesPage() {
   const router = useRouter();
-  const { roomCode } = usePlayerAuth();
-  const { rulesMap, isLoading } = useGameState(roomCode);
-
-  if (isLoading) return <LoadingScreen />;
-
-  const visibleRules = Object.entries(rulesMap).filter(([, isOpen]) => isOpen);
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-8 text-zinc-50">
@@ -31,42 +23,29 @@ export default function RulesPage() {
       </header>
 
       <main className="mt-6 flex w-full max-w-md flex-1 flex-col gap-3">
-        {visibleRules.length === 0 && (
-          <p className="mt-4 text-sm text-zinc-400">
-            아직 공개된 규칙이 없습니다.
-          </p>
-        )}
+        {RULESHEETS.map((r) => (
+          <a
+            key={r.key}
+            href={RULESHEET_PDF[r.key]}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid={`rules-${r.key}`}
+            aria-label={`${r.label} PDF 열기(새 탭)`}
+            className="flex min-h-12 w-full flex-col justify-center rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-2 text-left hover:bg-zinc-800"
+          >
+            <span className="text-base font-medium text-zinc-100">{r.label} ↗</span>
+            <span className="text-xs text-zinc-500">{r.note}</span>
+          </a>
+        ))}
 
-        {visibleRules.map(([key]) => {
-          const label = RULE_LABELS[key] ?? key;
-
-          const handleClick = () => {
-            const pdfMap: Record<string, string> = {
-              intro: "/rulebook/avsmvlkdmv_intro.pdf",
-              subway: "/rulebook/13fsm4wg_subway.pdf",
-              mafia: "/rulebook/rulesheet-2026-10-14_mafia.pdf", // 2026-10-16 룰지 v8(코드와 대조 완료)로 교체 — 옛 6/24 이미지 PDF 삭제
-              defense: "/rulebook/rulesheet-2026-10-16_defense.pdf", // 2026-10-16 룰지 v8로 교체 — 옛 7/20 이미지 PDF 삭제
-            };
-
-            const url = pdfMap[key];
-            if (url) {
-              window.open(url, "_blank");
-            }
-          };
-
-          return (
-            <button
-              key={key}
-              className="h-12 w-full rounded-full border border-zinc-700 bg-zinc-900 px-4 text-left text-base font-medium text-zinc-100 hover:bg-zinc-800"
-              onClick={handleClick}
-            >
-              {label}
-            </button>
-          );
-        })}
+        <p className="text-xs text-zinc-500">
+          PDF 가 새 탭에서 열립니다. 게임 화면의 규칙 탭 맨 아래에도 같은 링크가 있습니다.
+        </p>
 
         <button
-          className="mt-auto h-12 rounded-full border border-zinc-700 text-base text-zinc-200 hover:bg-zinc-900"
+          type="button"
+          aria-label="메인 화면으로"
+          className="mt-auto min-h-12 rounded-full border border-zinc-700 text-base text-zinc-200 hover:bg-zinc-900"
           onClick={() => router.push("/")}
         >
           메인 화면으로

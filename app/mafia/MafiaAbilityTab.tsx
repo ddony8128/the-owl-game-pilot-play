@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { describeSubmitFailure } from "@/components/PhoneNotices";
+import { newRequestId } from "@/lib/requestId";
 import type { MafiaAbilityPayload } from "@/lib/mafia/abilities";
 import type { MafiaStockState, Player } from "@/lib/types";
 import { JOB_META } from "./MafiaInfoTab";
@@ -18,6 +20,8 @@ type Props = {
     job: string | null;
     payload: Record<string, unknown> | null;
   } | null;
+  roomEnded?: boolean;
+  onSubmitted?: () => Promise<void> | void;
 };
 
 export function MafiaAbilityTab({
@@ -28,6 +32,8 @@ export function MafiaAbilityTab({
   players,
   hasUsedAbilityThisPhase,
   myAbilityActionThisPhase,
+  roomEnded = false,
+  onSubmitted,
 }: Props) {
   const [selectedStockKey, setSelectedStockKey] = useState<string | null>(null);
   const [robberTargets, setRobberTargets] = useState<string[]>([]);
@@ -132,34 +138,41 @@ export function MafiaAbilityTab({
 
     setSubmitting(true);
 
+    const request_id = newRequestId();
+    let status: number | null = null;
     try {
       const res = await fetch("/api/mafia/action", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        signal: AbortSignal.timeout(12000),
         body: JSON.stringify({
           room: roomCode,
           nickname: player.nickname,
           type: "ability",
           payload,
+          request_id,
         }),
       });
+      status = res.status;
       const json = (await res.json().catch(() => null)) as {
         ok?: true;
         error?: string;
+        reason?: string;
       } | null;
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error ?? "능력 사용을 기록하지 못했습니다.");
+        throw new Error(describeSubmitFailure(status, json, "능력 사용을 기록하지 못했습니다."));
       }
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "능력 사용을 기록하지 못했습니다.";
-      setError(message);
+      setError(status === null ? describeSubmitFailure(null, null, message) : message);
       setSubmitting(false);
       return;
     }
 
+    await onSubmitted?.();
     setSubmitting(false);
     setSubmitted(true);
     setInfo("이번 라운드에 능력을 사용했습니다. 한 번만 사용할 수 있습니다.");
@@ -253,6 +266,14 @@ export function MafiaAbilityTab({
     }
   };
 
+  if (roomEnded) {
+    return (
+      <div className="space-y-3 text-sm text-zinc-100">
+        <p className="rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-400">종료된 방입니다. 능력을 사용할 수 없습니다.</p>
+      </div>
+    );
+  }
+
   // 이미 이번 라운드/페이즈에서 능력을 사용했다면 요약 문구만 표시
   if (hasUsedAbilityThisPhase || submitted) {
     const summary = summarizeUsedAbility();
@@ -329,7 +350,7 @@ export function MafiaAbilityTab({
                 <button
                   key={p.id}
                   type="button"
-                  className={`h-10 rounded-lg border text-sm font-semibold ${
+                  className={`user-text min-h-11 rounded-lg border px-2 text-sm font-semibold ${
                     selected
                       ? "border-red-400 bg-red-500 text-zinc-950"
                       : "border-zinc-700 bg-zinc-900 text-zinc-100"
@@ -376,7 +397,7 @@ export function MafiaAbilityTab({
                 <button
                   key={p.id}
                   type="button"
-                  className={`h-10 rounded-lg border text-sm font-semibold ${
+                  className={`user-text min-h-11 rounded-lg border px-2 text-sm font-semibold ${
                     selected
                       ? "border-emerald-400 bg-emerald-500 text-zinc-950"
                       : "border-zinc-700 bg-zinc-900 text-zinc-100"
@@ -418,7 +439,7 @@ export function MafiaAbilityTab({
                 <button
                   key={p.id}
                   type="button"
-                  className={`h-10 rounded-lg border text-sm font-semibold ${
+                  className={`user-text min-h-11 rounded-lg border px-2 text-sm font-semibold ${
                     selected
                       ? "border-amber-400 bg-amber-400 text-zinc-950"
                       : "border-zinc-700 bg-zinc-900 text-zinc-100"
@@ -501,7 +522,7 @@ export function MafiaAbilityTab({
                 <button
                   key={p.id}
                   type="button"
-                  className={`h-10 rounded-lg border text-sm font-semibold ${
+                  className={`user-text min-h-11 rounded-lg border px-2 text-sm font-semibold ${
                     selected
                       ? "border-amber-400 bg-amber-400 text-zinc-950"
                       : "border-zinc-700 bg-zinc-900 text-zinc-100"
@@ -529,6 +550,8 @@ export function MafiaAbilityTab({
         className="h-12 w-full rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
         onClick={handleSubmit}
         disabled={submitting || !normalizedJob || submitted}
+        aria-label="능력 사용 제출"
+        data-testid="ability-submit"
       >
         {submitted
           ? "이미 능력을 사용했습니다"

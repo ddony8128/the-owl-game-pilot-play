@@ -1,3 +1,5 @@
+import { RulesheetLink } from "@/components/PhoneNotices";
+
 export function DefenseRulesTab() {
   return (
     <div className="space-y-4 text-base leading-relaxed text-zinc-300">
@@ -122,6 +124,10 @@ export function DefenseRulesTab() {
           <p className="text-zinc-100">
             각 플레이어는 아래 행동 중 하나를 선택합니다.
           </p>
+          <p className="text-sm text-amber-200" data-testid="rules-change-note">
+            확정한 뒤에도 GM이 라운드를 넘기기 전까지는 행동 탭의 [다시 고르기]로 바꿀 수 있습니다(마지막
+            선택만 반영). 타이머가 0이 되어도 라운드를 넘기기 전까지는 제출·변경이 됩니다.
+          </p>
           <ul className="list-disc pl-4">
             <li>
               <span className="font-semibold">전투</span>
@@ -209,7 +215,7 @@ export function DefenseRulesTab() {
           </ul>
         </div>
       </div>
-      <br />
+      <RulesheetLink game="defense" />
     </div>
   );
 }

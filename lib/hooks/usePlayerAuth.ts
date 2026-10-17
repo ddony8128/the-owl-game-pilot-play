@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Player, RoomGame } from "@/lib/types";
+import { normalizeNickname } from "@/lib/nickname";
 
 const NICKNAME_KEY = "owlgame:nickname";
 const ROOM_KEY = "owlgame:room";
@@ -88,7 +89,8 @@ export function usePlayerAuth() {
 
   const enterRoom = useCallback((room: string, nick: string) => {
     const r = room.trim().toUpperCase();
-    const n = nick.trim();
+    // 서버와 같은 규칙(NFC·제로폭 제거·공백 정리)으로 저장해, 저장된 닉네임과 서버 닉네임이 항상 같게 한다.
+    const n = normalizeNickname(nick);
     if (typeof window !== "undefined") {
       localStorage.setItem(ROOM_KEY, r);
       localStorage.setItem(NICKNAME_KEY, n);
