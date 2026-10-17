@@ -66,7 +66,7 @@ export function DefenseRulesTab() {
           <span className="text-zinc-500 transition group-open:rotate-180">⌄</span>
         </summary>
         <div className="space-y-2 border-t border-zinc-800 px-4 py-3 text-xs leading-relaxed text-zinc-400">
-          <p><b className="text-zinc-200">대기열</b> · 7~9명은 4칸, 10~12명은 5칸을 사용합니다. 몬스터 수는 참가 인원에 맞춰 조정됩니다.</p>
+          <p><b className="text-zinc-200">대기열</b> · 6~9명은 4칸, 10~12명은 5칸을 사용합니다. 몬스터 수는 참가 인원에 맞춰 조정됩니다.</p>
           <p><b className="text-zinc-200">중간 공개</b> · 본 게임 4라운드와 8라운드 종료 후 점수를 공개합니다.</p>
           <p><b className="text-zinc-200">순위</b> · 포인트가 높은 순서이며, 동점이면 누적 피해가 높은 플레이어가 앞섭니다. 그래도 같으면 공동 순위입니다.</p>
           <p><b className="text-zinc-200">종료</b> · 모든 몬스터가 제거되거나 본 게임 12라운드가 끝나면 종료합니다.</p>

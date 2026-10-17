@@ -25,19 +25,11 @@ type Summary = {
   stocks: { stock_key: string; price: number }[];
   voteResult: {
     round: number;
-    totalVotes: number;
-    tied: boolean;
     selectedTarget: {
       player_id: string;
       nickname: string | null;
-      votes: number;
       is_mafia: boolean;
     } | null;
-    ranking: {
-      player_id: string;
-      nickname: string | null;
-      votes: number;
-    }[];
   } | null;
   rounds: { round: number; players: PlayerAsset[] }[];
   final: PlayerAsset[];
@@ -379,7 +371,7 @@ export function MafiaBoardClient() {
         </header>
 
         {data?.currentPhase === "end" && data.voteResult ? (
-          <main className="grid min-h-0 flex-1 gap-5 py-4 lg:grid-cols-[1.05fr_1fr]">
+          <main className="flex min-h-0 flex-1 justify-center py-4">
             <section className="flex min-h-0 flex-col items-center justify-center rounded-3xl border border-amber-400/30 bg-gradient-to-br from-amber-400/10 via-zinc-900 to-zinc-950 p-6 text-center">
               <p className="text-sm font-black tracking-[0.25em] text-amber-300">
                 {data.voteResult.round}라운드 경제사범 지목
@@ -389,9 +381,7 @@ export function MafiaBoardClient() {
                   <p className="mt-4 text-[clamp(2.6rem,7vw,6rem)] font-black leading-none text-white">
                     {data.voteResult.selectedTarget.nickname ?? "이름 없음"}
                   </p>
-                  <p className="mt-3 text-2xl font-bold text-amber-300">
-                    {data.voteResult.selectedTarget.votes}표로 지목
-                  </p>
+                  <p className="mt-3 text-2xl font-bold text-amber-300">경제사범으로 지목</p>
                   <div
                     className={`mt-6 rounded-2xl px-7 py-4 text-[clamp(1.4rem,3vw,2.4rem)] font-black ${
                       data.voteResult.selectedTarget.is_mafia
@@ -409,47 +399,9 @@ export function MafiaBoardClient() {
                   <p className="mt-5 text-[clamp(2.3rem,6vw,5rem)] font-black text-zinc-100">
                     지목 없음
                   </p>
-                  <p className="mt-4 text-xl font-bold text-zinc-400">
-                    {data.voteResult.tied
-                      ? "동률로 경제사범이 정해지지 않았습니다"
-                      : "유효한 투표가 없습니다"}
-                  </p>
+                  <p className="mt-4 text-xl font-bold text-zinc-400">경제사범이 정해지지 않았습니다</p>
                 </>
               )}
-              <p className="mt-6 text-sm font-bold text-zinc-500">
-                총 {data.voteResult.totalVotes}표
-              </p>
-            </section>
-
-            <section className="flex min-h-0 flex-col rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-7">
-              <h2 className="shrink-0 text-xl font-black text-zinc-200">득표 현황</h2>
-              <div className="mt-4 grid min-h-0 flex-1 content-center gap-3 overflow-hidden">
-                {data.voteResult.ranking.map((row, index) => {
-                  const maxVotes = data.voteResult?.ranking[0]?.votes ?? 1;
-                  return (
-                    <div key={row.player_id} className="grid grid-cols-[2rem_1fr_auto] items-center gap-3">
-                      <span className="text-center text-lg font-black text-zinc-500">{index + 1}</span>
-                      <div className="min-w-0">
-                        <div className="mb-1 flex justify-between gap-3 text-base font-bold">
-                          <span className="truncate text-zinc-100">{row.nickname ?? "이름 없음"}</span>
-                        </div>
-                        <div className="h-3 overflow-hidden rounded-full bg-zinc-800">
-                          <div
-                            className="h-full rounded-full bg-amber-400"
-                            style={{ width: `${Math.max(8, (row.votes / maxVotes) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                      <span className="w-14 text-right font-mono text-2xl font-black text-amber-300">
-                        {row.votes}표
-                      </span>
-                    </div>
-                  );
-                })}
-                {data.voteResult.ranking.length === 0 ? (
-                  <p className="text-center text-xl text-zinc-500">집계된 투표가 없습니다.</p>
-                ) : null}
-              </div>
             </section>
           </main>
         ) : data?.currentPhase === "auction" ? (
@@ -549,13 +501,13 @@ export function MafiaBoardClient() {
 
       {finalView === "vote" ? (
         <main className="relative min-h-0 flex-1 py-4">
-          <div className="grid h-full min-h-0 gap-5 pb-14 lg:grid-cols-[1.05fr_1fr]">
+          <div className="flex h-full min-h-0 justify-center pb-14">
             <section className="flex min-h-0 flex-col items-center justify-center rounded-3xl border border-amber-400/30 bg-gradient-to-br from-amber-400/10 via-zinc-900 to-zinc-950 p-6 text-center">
               <p className="text-sm font-black tracking-[0.25em] text-amber-300">FINAL VOTE</p>
               {data.voteResult?.selectedTarget ? (
                 <>
                   <p className="mt-4 text-[clamp(2.6rem,7vw,6rem)] font-black leading-none text-white">{data.voteResult.selectedTarget.nickname ?? "이름 없음"}</p>
-                  <p className="mt-3 text-2xl font-bold text-amber-300">{data.voteResult.selectedTarget.votes}표로 지목</p>
+                  <p className="mt-3 text-2xl font-bold text-amber-300">경제사범으로 지목</p>
                   <div className={`mt-6 rounded-2xl px-7 py-4 text-[clamp(1.4rem,3vw,2.4rem)] font-black ${data.voteResult.selectedTarget.is_mafia ? "bg-red-500/20 text-red-300" : "bg-sky-500/20 text-sky-300"}`}>
                     {data.voteResult.selectedTarget.is_mafia ? "마피아였습니다" : "마피아가 아니었습니다"}
                   </div>
@@ -563,28 +515,9 @@ export function MafiaBoardClient() {
               ) : (
                 <>
                   <p className="mt-5 text-[clamp(2.3rem,6vw,5rem)] font-black text-zinc-100">지목 없음</p>
-                  <p className="mt-4 text-xl font-bold text-zinc-400">{data.voteResult?.tied ? "동률로 경제사범이 정해지지 않았습니다" : "유효한 투표가 없습니다"}</p>
+                  <p className="mt-4 text-xl font-bold text-zinc-400">경제사범이 정해지지 않았습니다</p>
                 </>
               )}
-              <p className="mt-6 text-sm font-bold text-zinc-500">총 {data.voteResult?.totalVotes ?? 0}표</p>
-            </section>
-            <section className="flex min-h-0 flex-col rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-7">
-              <h2 className="shrink-0 text-xl font-black text-zinc-200">득표 현황</h2>
-              <div className="mt-4 grid min-h-0 flex-1 content-center gap-3 overflow-hidden">
-                {(data.voteResult?.ranking ?? []).map((row, index) => {
-                  const maxVotes = data.voteResult?.ranking[0]?.votes ?? 1;
-                  return (
-                    <div key={row.player_id} className="grid grid-cols-[2rem_1fr_auto] items-center gap-3">
-                      <span className="text-center text-lg font-black text-zinc-500">{index + 1}</span>
-                      <div className="min-w-0">
-                        <p className="mb-1 truncate text-base font-bold text-zinc-100">{row.nickname ?? "이름 없음"}</p>
-                        <div className="h-3 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.max(8, (row.votes / maxVotes) * 100)}%` }} /></div>
-                      </div>
-                      <span className="w-14 text-right font-mono text-2xl font-black text-amber-300">{row.votes}표</span>
-                    </div>
-                  );
-                })}
-              </div>
             </section>
           </div>
           <button type="button" onClick={() => setFinalView("ranking")} className="absolute bottom-0 right-0 rounded-xl bg-amber-400 px-6 py-3 text-base font-black text-zinc-950 shadow-lg shadow-amber-950/40 hover:bg-amber-300">

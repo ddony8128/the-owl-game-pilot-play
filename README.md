@@ -500,3 +500,9 @@ npm run lint
 - GM 방 관리: http://localhost:3000/dashboard/x9a2k7
 - 마피아 전광판: http://localhost:3000/mafia-board
 - 디펜스 전광판: http://localhost:3000/defense-board
+
+배포 사이트 주소:
+- 플레이어 화면: https://owlgame-sage.vercel.app
+- GM 방 관리: https://owlgame-sage.vercel.app/dashboard/x9a2k7
+- 마피아 전광판: https://owlgame-sage.vercel.app/mafia-board
+- 디펜스 전광판: https://owlgame-sage.vercel.app/defense-board

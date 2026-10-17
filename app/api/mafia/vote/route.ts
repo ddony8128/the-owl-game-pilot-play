@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   const nickname = body.nickname.trim();
   const vote_count = body.vote_count;
 
-  if (!nickname || vote_count <= 0) {
+  if (!nickname || !Number.isInteger(vote_count) || vote_count <= 0) {
     return NextResponse.json(
       { error: "invalid nickname or vote_count" } as VoteResponse,
       { status: 400 }
@@ -98,6 +98,13 @@ export async function POST(request: Request) {
 
   const player = playerRow as Player;
   const roundNumber = phaseState.round_number;
+
+  if (body.target_id === player.id) {
+    return NextResponse.json(
+      { error: "자기 자신에게는 투표할 수 없습니다." } as VoteResponse,
+      { status: 400 }
+    );
+  }
 
   // 투표 대상이 같은 방의 실제 플레이어인지 검증 (위조된 target_id로 집계 무효화 방지)
   const { data: targetRow, error: targetError } = await supabase

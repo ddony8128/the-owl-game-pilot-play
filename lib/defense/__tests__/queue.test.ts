@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { computeQueueSize } from "@/lib/defense/queue";
 
-// 기획: 대기열 칸 수 = 7~9명 4칸 / 10~12명 5칸.
+// 기획: 대기열 칸 수 = 6~9명 4칸 / 10~12명 5칸.
 describe("computeQueueSize (인원별 대기열 칸 수)", () => {
-  it("7~9명은 4칸", () => {
+  it("6~9명은 4칸", () => {
+    expect(computeQueueSize(6)).toBe(4);
     expect(computeQueueSize(7)).toBe(4);
     expect(computeQueueSize(8)).toBe(4);
     expect(computeQueueSize(9)).toBe(4);

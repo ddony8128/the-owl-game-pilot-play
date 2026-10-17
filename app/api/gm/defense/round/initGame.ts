@@ -155,7 +155,7 @@ export async function handleDefenseInitRound(
 
   const newlyChosenTypes = new Set<number>();
 
-  // 대기열 칸 수는 참가 인원에 따라 유동적으로 정해진다(7~9명 4칸 / 10~12명 5칸).
+  // 대기열 칸 수는 참가 인원에 따라 유동적으로 정해진다(6~9명 4칸 / 10~12명 5칸).
   const queueSize = computeQueueSize(players.length);
 
   for (let slot = 0; slot < queueSize; slot += 1) {

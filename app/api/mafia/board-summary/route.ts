@@ -31,19 +31,11 @@ type PlayerAsset = {
 
 type VoteResult = {
   round: number;
-  totalVotes: number;
-  tied: boolean;
   selectedTarget: {
     player_id: string;
     nickname: string | null;
-    votes: number;
     is_mafia: boolean;
   } | null;
-  ranking: {
-    player_id: string;
-    nickname: string | null;
-    votes: number;
-  }[];
 };
 
 async function getVoteResult(
@@ -96,17 +88,17 @@ async function getVoteResult(
   })).sort((a, b) => b.votes - a.votes || (a.nickname ?? "").localeCompare(b.nickname ?? ""));
   const maxVotes = ranking[0]?.votes ?? 0;
   const top = ranking.filter((row) => row.votes === maxVotes);
-  const tied = top.length > 1;
   const winner = top.length === 1 ? top[0] : null;
 
   return {
     round,
-    totalVotes: ranking.reduce((sum, row) => sum + row.votes, 0),
-    tied,
     selectedTarget: winner
-      ? { ...winner, is_mafia: mafiaByPlayer.get(winner.player_id) ?? false }
+      ? {
+          player_id: winner.player_id,
+          nickname: winner.nickname,
+          is_mafia: mafiaByPlayer.get(winner.player_id) ?? false,
+        }
       : null,
-    ranking,
   };
 }
 

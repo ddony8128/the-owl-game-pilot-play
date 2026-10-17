@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 
 // 대기열 칸 수가 참가 인원에 따라 유동적으로 정해지는지 검증.
-//  - 7~9명  → 4칸
+//  - 6~9명  → 4칸
 //  - 10~12명 → 5칸
 // board-state(round=1)의 몬스터 수 = 그 라운드 대기열에 채워진 몬스터 수.
 
