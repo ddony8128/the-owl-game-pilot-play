@@ -14,11 +14,32 @@ export async function handleTradeToApply(
   current: MafiaPhaseState,
   room: string
 ) {
-  // 현재 주가 조회
-  const { data: stockRows, error: stockError } = await supabase
-    .from("mafia_stock_state")
-    .select("stock_key, price, updated_at")
-    .eq("room_code", room);
+  // 계산에 필요한 네 묶음은 서로 의존하지 않으므로 동시에 조회한다.
+  const [
+    { data: stockRows, error: stockError },
+    { data: actionRows, error: actionsError },
+    { data: playerStateRows, error: playerStateError },
+    { data: playerRows, error: playersError },
+  ] = await Promise.all([
+    supabase
+      .from("mafia_stock_state")
+      .select("stock_key, price, updated_at")
+      .eq("room_code", room),
+    supabase
+      .from("mafia_actions")
+      .select("player_id, round_number, phase, action_type, payload, created_at")
+      .eq("room_code", room)
+      .eq("round_number", current.round_number)
+      .eq("phase", current.phase),
+    supabase
+      .from("mafia_player_state")
+      .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("room_code", room),
+    supabase
+      .from("players")
+      .select("id, nickname, created_at")
+      .eq("room_code", room),
+  ]);
 
   if (stockError || !stockRows) {
     throw new Error(
@@ -31,14 +52,6 @@ export async function handleTradeToApply(
     stockMap.set(row.stock_key, row);
   }
 
-  // trade 단계 액션 조회 (buy/sell/ability)
-  const { data: actionRows, error: actionsError } = await supabase
-    .from("mafia_actions")
-    .select("player_id, round_number, phase, action_type, payload, created_at")
-    .eq("room_code", room)
-    .eq("round_number", current.round_number)
-    .eq("phase", current.phase);
-
   if (actionsError) {
     throw new Error(
       actionsError.message ?? "trade 액션을 불러오지 못했습니다."
@@ -46,12 +59,6 @@ export async function handleTradeToApply(
   }
 
   const actions = (actionRows || []) as MafiaAction[];
-
-  // 플레이어 상태 조회 (cash, job, stocks, is_mafia)
-  const { data: playerStateRows, error: playerStateError } = await supabase
-    .from("mafia_player_state")
-    .select("player_id, cash, is_mafia, job, stocks, updated_at")
-    .eq("room_code", room);
 
   if (playerStateError) {
     throw new Error(
@@ -64,12 +71,6 @@ export async function handleTradeToApply(
   for (const p of playerStates) {
     playerStateById.set(p.player_id, p);
   }
-
-  // 플레이어 기본 정보 (닉네임 매핑용)
-  const { data: playerRows, error: playersError } = await supabase
-    .from("players")
-    .select("id, nickname, created_at")
-    .eq("room_code", room);
 
   if (playersError || !playerRows) {
     throw new Error(playersError?.message ?? "players 조회에 실패했습니다.");
@@ -289,6 +290,20 @@ export async function handleTradeToApply(
   }
 
   if (updatedStocks.length > 0) {
+    // 주가 히스토리 기록 (라운드별 before/after)
+    const historyRows = updatedStocks.map((s) => {
+      const before = stockMap.get(s.stock_key)?.price ?? null;
+      const after = s.price ?? null;
+      return {
+        room_code: room,
+        stock_key: s.stock_key,
+        round_number: current.round_number,
+        price_before: before,
+        price_after: after,
+        meta: {},
+      };
+    });
+
     const { error: updateStocksError } = await supabase
       .from("mafia_stock_state")
       .upsert(
@@ -305,20 +320,6 @@ export async function handleTradeToApply(
         updateStocksError.message ?? "주가를 업데이트하지 못했습니다."
       );
     }
-
-    // 주가 히스토리 기록 (라운드별 before/after)
-    const historyRows = updatedStocks.map((s) => {
-      const before = stockMap.get(s.stock_key)?.price ?? null;
-      const after = s.price ?? null;
-      return {
-        room_code: room,
-        stock_key: s.stock_key,
-        round_number: current.round_number,
-        price_before: before,
-        price_after: after,
-        meta: {},
-      };
-    });
 
     const { error: historyError } = await supabase
       .from("mafia_stock_history")
@@ -797,27 +798,22 @@ export async function handleTradeToApply(
   }
 
   if (updatedPlayers.length > 0) {
-    const { error: updatePlayersError } = await supabase
+    const { error } = await supabase
       .from("mafia_player_state")
       .upsert(updatedPlayers, { onConflict: "player_id" });
-
-    if (updatePlayersError) {
+    if (error) {
       throw new Error(
-        updatePlayersError.message ??
-          "플레이어 자산 상태를 업데이트하지 못했습니다."
+        error.message ?? "플레이어 자산 상태를 업데이트하지 못했습니다."
       );
     }
   }
 
   if (abilityResults.length > 0) {
-    const { error: abilityError } = await supabase
+    const { error } = await supabase
       .from("mafia_ability_results")
       .insert(abilityResults.map((r) => ({ ...r, room_code: room })));
-
-    if (abilityError) {
-      throw new Error(
-        abilityError.message ?? "능력 결과를 기록하지 못했습니다."
-      );
+    if (error) {
+      throw new Error(error.message ?? "능력 결과를 기록하지 못했습니다.");
     }
   }
 }

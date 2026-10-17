@@ -52,15 +52,28 @@ export async function handleVoteToEnd(
   > => {
     const results: Omit<MafiaAbilityResult, "id" | "created_at" | "room_code">[] = [];
 
-    // 모든 주식 가격 조회
-    const { data: stockRows, error: stockError } = await supabase
-      .from("mafia_stock_state")
-      .select("stock_key, price")
-      .eq("room_code", room);
+    const [
+      { data: stockRows, error: stockError },
+      { data: allRows, error: allError },
+    ] = await Promise.all([
+      supabase
+        .from("mafia_stock_state")
+        .select("stock_key, price")
+        .eq("room_code", room),
+      supabase
+        .from("mafia_player_state")
+        .select("player_id, cash, is_mafia, job, stocks, updated_at")
+        .eq("room_code", room),
+    ]);
 
     if (stockError) {
       throw new Error(
         stockError.message ?? "주식 가격 조회에 실패했습니다."
+      );
+    }
+    if (allError) {
+      throw new Error(
+        allError.message ?? "마피아 보상을 위한 플레이어 조회에 실패했습니다."
       );
     }
 
@@ -78,20 +91,8 @@ export async function handleVoteToEnd(
 
     if (topStocks.length === 0) return results;
 
-    // 마피아 플레이어 조회
-    const { data: mafiaRows, error: mafiaError } = await supabase
-      .from("mafia_player_state")
-      .select("player_id, cash, is_mafia, job, stocks, updated_at")
-      .eq("room_code", room)
-      .eq("is_mafia", true);
-
-    if (mafiaError) {
-      throw new Error(
-        mafiaError.message ?? "마피아 플레이어 조회에 실패했습니다."
-      );
-    }
-
-    const mafiaPlayers = (mafiaRows ?? []) as MafiaPlayerState[];
+    const allPlayers = (allRows ?? []) as MafiaPlayerState[];
+    const mafiaPlayers = allPlayers.filter((player) => player.is_mafia);
     if (mafiaPlayers.length === 0) return results;
 
     // 각 마피아에게 주식 지급
@@ -148,19 +149,7 @@ export async function handleVoteToEnd(
     }
 
     // 전체 공개 메시지
-    const { data: allRows, error: allError } = await supabase
-      .from("mafia_player_state")
-      .select("player_id, job")
-      .eq("room_code", room);
-
-    if (allError) {
-      throw new Error(
-        allError.message ??
-          "마피아 주식 보상 안내를 위한 플레이어 조회에 실패했습니다."
-      );
-    }
-
-    for (const row of (allRows ?? []) as MafiaPlayerState[]) {
+    for (const row of allPlayers) {
       if (!row.player_id) continue;
       results.push({
         player_id: row.player_id,
@@ -263,13 +252,31 @@ export async function handleVoteToEnd(
 
   const econTargetId = topTargets[0]!;
 
-  // 경제사범 플레이어 찾기 (target_id = players.id)
-  const { data: econPlayerRow, error: econPlayerError } = await supabase
-    .from("players")
-    .select("id, nickname, created_at")
-    .eq("room_code", room)
-    .eq("id", econTargetId)
-    .maybeSingle();
+  // 경제사범 정보와 국채 가격은 서로 독립적이므로 동시에 조회한다.
+  const [
+    { data: econPlayerRow, error: econPlayerError },
+    { data: econStateRow, error: econStateError },
+    { data: bondRow, error: bondError },
+  ] = await Promise.all([
+    supabase
+      .from("players")
+      .select("id, nickname, created_at")
+      .eq("room_code", room)
+      .eq("id", econTargetId)
+      .maybeSingle(),
+    supabase
+      .from("mafia_player_state")
+      .select("player_id, cash, is_mafia, job, stocks, updated_at")
+      .eq("room_code", room)
+      .eq("player_id", econTargetId)
+      .maybeSingle(),
+    supabase
+      .from("mafia_stock_state")
+      .select("stock_key, price")
+      .eq("room_code", room)
+      .eq("stock_key", "국채")
+      .maybeSingle(),
+  ]);
 
   if (econPlayerError) {
     throw new Error(econPlayerError.message ?? "경제사범 플레이어 조회 실패");
@@ -279,14 +286,6 @@ export async function handleVoteToEnd(
   }
 
   const econPlayer = econPlayerRow as Player;
-
-  // 경제사범의 직업/마피아 여부 조회
-  const { data: econStateRow, error: econStateError } = await supabase
-    .from("mafia_player_state")
-    .select("player_id, cash, is_mafia, job, stocks, updated_at")
-    .eq("room_code", room)
-    .eq("player_id", econPlayer.id)
-    .maybeSingle();
 
   if (econStateError) {
     throw new Error(
@@ -302,14 +301,6 @@ export async function handleVoteToEnd(
   const isMafia = econState.is_mafia;
 
   const abilityResults: Omit<MafiaAbilityResult, "id" | "created_at" | "room_code">[] = [];
-
-  // 현재 국채 가격 조회
-  const { data: bondRow, error: bondError } = await supabase
-    .from("mafia_stock_state")
-    .select("stock_key, price")
-    .eq("room_code", room)
-    .eq("stock_key", "국채")
-    .maybeSingle();
 
   if (bondError) {
     throw new Error(bondError.message ?? "국채 가격을 조회하지 못했습니다.");

@@ -251,6 +251,26 @@ test("[훈련] card1 희생해 card4→5 강화, 그 5로 HP5 단독 처치(3점
   expect(s.score, "강화값 단독 처치 3점").toBe(3);
 });
 
+test("[훈련] card1을 비활성화하면서 같은 card1을 1→2로 강화", async ({ request }) => {
+  const room = await newRoom(request);
+  await addPlayers(request, room, 1);
+  await config(request, room, only(2));
+  await advance(request, room, 1);
+
+  const train = await act(request, room, "q1", {
+    action_type: "training",
+    training_from_slot: 1,
+    training_to_slot: 1,
+  });
+  expect(train.ok(), "같은 카드 훈련").toBeTruthy();
+
+  const s = await stateOf(request, room, "q1");
+  expect(card(s, 1).cardValue, "card1 값 1→2").toBe(2);
+  expect(card(s, 1).isActive, "강화된 card1은 비활성 상태 유지").toBe(false);
+  expect(card(s, 2).cardValue, "기존 card2도 그대로 존재").toBe(2);
+  expect(card(s, 2).isActive, "기존 card2는 활성 상태 유지").toBe(true);
+});
+
 // ── 10. 도망 페널티: 12명 전원 최댓값 카드 1장만 비활성 ────
 test("[도망] 방치로 몬스터 도망 시 12명 전원 최댓값(4) 카드만 비활성", async ({
   request,

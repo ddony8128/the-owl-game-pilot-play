@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
@@ -63,24 +63,13 @@ type DefenseLogEntry = {
 
 type DefenseState = {
   round: number | null;
+  resultPending: boolean;
   monsters: DefenseMonsterClient[];
   cards: DefenseCardClient[];
   score: number;
   action: DefenseActionClient;
   dex: DefenseDexEntry[];
   logs: DefenseLogEntry[];
-};
-
-type DefenseTimerApi = {
-  timerStart: boolean;
-  timerStartAt: string | null;
-  pauseAt: string | null;
-  totalSeconds: number;
-};
-
-type TimerState = {
-  remainingSeconds: number;
-  isRunning: boolean;
 };
 
 export default function DefenseClient() {
@@ -94,10 +83,8 @@ export default function DefenseClient() {
 function DefenseInner() {
   const { player, roomCode, nickname } = usePlayerAuth();
   const [defenseState, setDefenseState] = useState<DefenseState | null>(null);
-  const [timerState, setTimerState] = useState<TimerState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
-  const timerMetaRef = useRef<DefenseTimerApi | null>(null);
 
   const loadState = useCallback(async () => {
     if (!roomCode || !nickname) return;
@@ -125,144 +112,27 @@ function DefenseInner() {
     }
   }, [roomCode, nickname]);
 
-  // 플레이어 전용 상태 폴링
+  // 플레이어 상태는 최초 입장 때 한 번만 조회한다.
+  // 이후에는 행동 완료 또는 사용자의 명시적 새로고침으로만 갱신한다.
   useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      if (cancelled) return;
-      await loadState();
-    };
-
-    void load();
-    const id = setInterval(() => {
-      void load();
-    }, 5000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    void loadState();
   }, [loadState]);
 
-  // 브라우저가 다시 활성화될 때 최신 상태를 한 번 더 가져온다 (모바일 복귀/탭 재진입 대비)
-  useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void loadState();
-      }
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [loadState]);
-
-  const computeRemaining = useCallback(
-    (api: DefenseTimerApi | null, nowMs: number): TimerState => {
-      if (!api) {
-        return { remainingSeconds: 0, isRunning: false };
-      }
-
-      const total = api.totalSeconds || 0;
-      if (total <= 0) {
-        return { remainingSeconds: 0, isRunning: false };
-      }
-
-      if (!api.timerStart && !api.pauseAt) {
-        return { remainingSeconds: total, isRunning: false };
-      }
-
-      if (api.timerStart && api.timerStartAt) {
-        const startMs = new Date(api.timerStartAt).getTime();
-        if (Number.isNaN(startMs)) {
-          return { remainingSeconds: total, isRunning: false };
-        }
-        const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
-        const remaining = Math.max(0, total - elapsed);
-        return { remainingSeconds: remaining, isRunning: remaining > 0 };
-      }
-
-      if (!api.timerStart && api.timerStartAt && api.pauseAt) {
-        const startMs = new Date(api.timerStartAt).getTime();
-        const pauseMs = new Date(api.pauseAt).getTime();
-        if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
-          return { remainingSeconds: total, isRunning: false };
-        }
-        const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
-        const remaining = Math.max(0, total - elapsed);
-        return { remainingSeconds: remaining, isRunning: false };
-      }
-
-      return { remainingSeconds: total, isRunning: false };
-    },
-    []
-  );
-
-  // 타이머 폴링 + 1초 틱 (마피아/서브웨이와 동일한 패턴)
   useEffect(() => {
     if (!roomCode) return;
-    let cancelled = false;
-
-    const loadTimer = async () => {
-      try {
-        const res = await fetch(
-          `/api/gm/timers/defense?room=${encodeURIComponent(roomCode)}`
-        );
-        const json = (await res
-          .json()
-          .catch(() => null)) as DefenseTimerApi | null;
-        if (!res.ok || !json || cancelled) return;
-
-        const api = json;
-        const prevMeta = timerMetaRef.current;
-
-        // 타이머 메타데이터(timerStart, timerStartAt, pauseAt, totalSeconds)가
-        // 바뀌었을 때에만 서버 기준으로 남은 시간을 재계산한다.
-        if (
-          prevMeta &&
-          prevMeta.timerStart === api.timerStart &&
-          prevMeta.timerStartAt === api.timerStartAt &&
-          prevMeta.pauseAt === api.pauseAt &&
-          prevMeta.totalSeconds === api.totalSeconds
-        ) {
-          // 아무 변화가 없으면 로컬 1초 틱만 사용 (타이머 튐 방지)
-          return;
-        }
-
-        const now = Date.now();
-        const nextState = computeRemaining(api, now);
-        timerMetaRef.current = api;
-        setTimerState(nextState);
-      } catch {
-        // 타이머 오류는 게임 진행을 막지 않음
-      }
+    const events = new EventSource(
+      `/api/defense/phase-events?room=${encodeURIComponent(roomCode)}`
+    );
+    events.onmessage = () => void loadState();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadState();
     };
-
-    void loadTimer();
-    const pollId = setInterval(() => {
-      void loadTimer();
-    }, 2000);
-
-    const tickId = setInterval(() => {
-      setTimerState((prev) => {
-        if (!prev) return prev;
-        if (!prev.isRunning || prev.remainingSeconds <= 0) return prev;
-        const next = prev.remainingSeconds - 1;
-        if (next <= 0) {
-          return { ...prev, remainingSeconds: 0 };
-        }
-        return { ...prev, remainingSeconds: next };
-      });
-    }, 1000);
-
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      cancelled = true;
-      clearInterval(pollId);
-      clearInterval(tickId);
+      events.close();
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [computeRemaining, roomCode]);
+  }, [loadState, roomCode]);
 
   const roundNumber = defenseState?.round ?? null;
   const getRoundLabel = (r: number | null) => {
@@ -279,22 +149,18 @@ function DefenseInner() {
     return `알 수 없음 (DB round ${r})`;
   };
 
-  const totalSeconds = timerState?.remainingSeconds ?? null;
-  const minutes =
-    totalSeconds != null ? Math.floor(totalSeconds / 60) % 60 : null;
-  const seconds = totalSeconds != null ? totalSeconds % 60 : null;
-
   const roundLabel = getRoundLabel(roundNumber);
   const isInitialLoading = !defenseState;
   const hideInfoAndAction =
+    defenseState?.resultPending === true ||
     roundNumber === 0 || roundNumber === 3 || roundNumber === 16;
 
   const tabsDef = useMemo(() => {
     const base: { key: TabKey; label: string }[] = [
       { key: "info", label: "정보" },
-      { key: "rules", label: "규칙" },
       { key: "dex", label: "몬스터 도감" },
       { key: "logs", label: "로그" },
+      { key: "rules", label: "규칙" },
     ];
 
     if (!hideInfoAndAction) {
@@ -321,25 +187,29 @@ function DefenseInner() {
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
-      <DefenseHeader
-        minutes={minutes}
-        seconds={seconds}
-        roundLabel={roundLabel}
-      />
+      <DefenseHeader roundLabel={roundLabel} />
 
       <p className="mt-2 text-base text-red-300">
         이 화면은 다른 플레이어에게 보여주면 안 됩니다.
       </p>
 
+      <p className="mt-2 text-xs text-zinc-600">
+        관리자가 다음 라운드로 넘기면 자동으로 갱신됩니다.
+      </p>
+
+      {defenseState?.resultPending ? (
+        <p className="mt-4 rounded-xl border border-sky-500/30 bg-sky-950/40 px-4 py-3 text-center text-sm font-bold text-sky-200">
+          전투 결과 확인 중입니다. 전광판을 확인해주세요.
+        </p>
+      ) : null}
+
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <TabLayout tabs={tabsDef} activeKey={activeTab} onChange={setActiveTab}>
           {activeTab === "info" && (
             <DefenseInfoTab
-              monsters={defenseState?.monsters ?? []}
               cards={defenseState?.cards ?? []}
               score={defenseState?.score ?? 0}
               isLoading={isInitialLoading}
-              showQueue={!hideInfoAndAction}
             />
           )}
           {activeTab === "action" && defenseState && !hideInfoAndAction && (

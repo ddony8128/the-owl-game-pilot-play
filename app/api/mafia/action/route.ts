@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
-import type { MafiaPhaseState, Player } from "@/lib/types";
+import type { MafiaPhaseState, MafiaStocksHolding, Player } from "@/lib/types";
 
 type ActionBody = {
   room?: string;
@@ -10,7 +10,15 @@ type ActionBody = {
   payload?: unknown;
 };
 
-type ActionResponse = { ok: true } | { error: string };
+type ActionResponse =
+  | {
+      ok: true;
+      playerAssets?: {
+        cash: number;
+        stocks: MafiaStocksHolding;
+      };
+    }
+  | { error: string };
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
@@ -89,6 +97,9 @@ export async function POST(request: Request) {
 
   const player = playerRow as Player;
   const phase = phaseState.phase;
+  let updatedPlayerAssets:
+    | { cash: number; stocks: MafiaStocksHolding }
+    | undefined;
 
   // 페이즈별로 허용되는 액션 제한
   const isAllowedAction = (() => {
@@ -385,6 +396,8 @@ export async function POST(request: Request) {
       );
     }
 
+    updatedPlayerAssets = { cash: nextCash, stocks };
+
     // payload는 이후 주가 변동/강도 계산 등을 위해 그대로 기록
     body.payload = {
       stock_key: stockKey,
@@ -407,5 +420,8 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true } as ActionResponse, { status: 200 });
+  return NextResponse.json(
+    { ok: true, playerAssets: updatedPlayerAssets } as ActionResponse,
+    { status: 200 }
+  );
 }

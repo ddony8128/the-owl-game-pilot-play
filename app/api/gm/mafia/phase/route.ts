@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
 import type { MafiaPhaseState } from "@/lib/types";
+import { publishMafiaPhase } from "@/lib/mafiaPhaseEvents";
+import { handlePrepareToAuction } from "../advance-phase/prepareToAuction";
 
 type Body = {
   room?: string;
@@ -65,9 +67,21 @@ export async function POST(request: Request) {
     );
   }
 
+  if (current.round_number >= 5 || nextRound !== current.round_number + 1) {
+    return NextResponse.json(
+      {
+        error:
+          current.round_number >= 5
+            ? "마지막 라운드가 종료되어 다음 라운드로 이동할 수 없습니다."
+            : `다음 라운드(${current.round_number + 1}라운드)로만 이동할 수 있습니다.`,
+      } as ResponseBody,
+      { status: 400 }
+    );
+  }
+
   const { data: updatedPhase, error: updateError } = await supabase
     .from("mafia_phase_state")
-    .update({ round_number: nextRound, phase: "prepare" })
+    .update({ round_number: nextRound, phase: "auction" })
     .eq("room_code", room)
     .select("room_code, round_number, phase, updated_at")
     .maybeSingle();
@@ -102,6 +116,50 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+
+  // 준비 화면은 생략하지만, 튜토리얼/1라운드의 초기 자산 세팅은 그대로 수행한다.
+  try {
+    await handlePrepareToAuction(
+      supabase,
+      { ...(updatedPhase as MafiaPhaseState), phase: "prepare" },
+      room
+    );
+  } catch (e: unknown) {
+    await supabase
+      .from("mafia_phase_state")
+      .update({ round_number: current.round_number, phase: "end" })
+      .eq("room_code", room)
+      .eq("round_number", nextRound)
+      .eq("phase", "auction");
+    return NextResponse.json(
+      {
+        error:
+          e instanceof Error
+            ? e.message
+            : "새 라운드 초기 자산을 준비하지 못했습니다.",
+      } as ResponseBody,
+      { status: 500 }
+    );
+  }
+
+  const { error: timerResetError } = await supabase
+    .from("game_state")
+    .update({ timer_start: false, timer_start_at: null, pause_at: null })
+    .eq("room_code", room);
+
+  if (timerResetError) {
+    return NextResponse.json(
+      { error: `라운드는 변경됐지만 타이머 초기화에 실패했습니다: ${timerResetError.message}` } as ResponseBody,
+      { status: 500 }
+    );
+  }
+
+  publishMafiaPhase({
+    room,
+    round: updatedPhase.round_number,
+    phase: updatedPhase.phase,
+    updatedAt: updatedPhase.updated_at ?? null,
+  });
 
   return NextResponse.json(
     { ok: true, phase: updatedPhase as MafiaPhaseState } as ResponseBody,

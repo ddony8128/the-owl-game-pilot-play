@@ -29,6 +29,87 @@ type PlayerAsset = {
   total_assets: number;
 };
 
+type VoteResult = {
+  round: number;
+  totalVotes: number;
+  tied: boolean;
+  selectedTarget: {
+    player_id: string;
+    nickname: string | null;
+    votes: number;
+    is_mafia: boolean;
+  } | null;
+  ranking: {
+    player_id: string;
+    nickname: string | null;
+    votes: number;
+  }[];
+};
+
+async function getVoteResult(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  room: string,
+  round: number
+): Promise<VoteResult> {
+  const [{ data: voteRows }, { data: playerRows }, { data: stateRows }] =
+    await Promise.all([
+      supabase
+        .from("mafia_votes")
+        .select("target_id, vote_count")
+        .eq("room_code", room)
+        .eq("round_number", round),
+      supabase.from("players").select("id, nickname").eq("room_code", room),
+      supabase
+        .from("mafia_player_state")
+        .select("player_id, is_mafia")
+        .eq("room_code", room),
+    ]);
+
+  const votesByPlayer = new Map<string, number>();
+  for (const row of (voteRows ?? []) as {
+    target_id: string | null;
+    vote_count: number | null;
+  }[]) {
+    if (!row.target_id || !row.vote_count || row.vote_count <= 0) continue;
+    votesByPlayer.set(
+      row.target_id,
+      (votesByPlayer.get(row.target_id) ?? 0) + row.vote_count
+    );
+  }
+
+  const names = new Map(
+    ((playerRows ?? []) as { id: string; nickname: string | null }[]).map((p) => [
+      p.id,
+      p.nickname,
+    ])
+  );
+  const mafiaByPlayer = new Map(
+    ((stateRows ?? []) as { player_id: string; is_mafia: boolean }[]).map((p) => [
+      p.player_id,
+      !!p.is_mafia,
+    ])
+  );
+  const ranking = Array.from(votesByPlayer, ([player_id, votes]) => ({
+    player_id,
+    nickname: names.get(player_id) ?? null,
+    votes,
+  })).sort((a, b) => b.votes - a.votes || (a.nickname ?? "").localeCompare(b.nickname ?? ""));
+  const maxVotes = ranking[0]?.votes ?? 0;
+  const top = ranking.filter((row) => row.votes === maxVotes);
+  const tied = top.length > 1;
+  const winner = top.length === 1 ? top[0] : null;
+
+  return {
+    round,
+    totalVotes: ranking.reduce((sum, row) => sum + row.votes, 0),
+    tied,
+    selectedTarget: winner
+      ? { ...winner, is_mafia: mafiaByPlayer.get(winner.player_id) ?? false }
+      : null,
+    ranking,
+  };
+}
+
 function isMafiaJob(job: string | null): boolean {
   return (
     job === "up_manipulator" ||
@@ -62,49 +143,65 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "room 필요" }, { status: 400 });
   }
 
-  // 페이즈/라운드 → 종료 판정
-  const { data: phaseRow } = await supabase
-    .from("mafia_phase_state")
-    .select("round_number, phase")
-    .eq("room_code", room)
-    .maybeSingle();
+  // 진행 중 전광판에도 주가를 표시하므로 페이즈와 현재 주가를 함께 조회한다.
+  const [{ data: phaseRow }, { data: liveStocks }, { data: roomRow }] = await Promise.all([
+    supabase
+      .from("mafia_phase_state")
+      .select("round_number, phase")
+      .eq("room_code", room)
+      .maybeSingle(),
+    supabase
+      .from("mafia_stock_state")
+      .select("stock_key, price")
+      .eq("room_code", room),
+    supabase
+      .from("rooms")
+      .select("status")
+      .eq("code", room)
+      .maybeSingle(),
+  ]);
   const currentRound =
     typeof phaseRow?.round_number === "number" ? phaseRow.round_number : 0;
   const currentPhase = (phaseRow?.phase as string | null) ?? null;
+  const roomEnded = roomRow?.status === "ended";
   const finished =
-    currentRound >= FINAL_MAIN_ROUND && currentPhase === "end";
+    roomEnded || (currentRound >= FINAL_MAIN_ROUND && currentPhase === "end");
 
-  // 플레이어 이름
-  const { data: playerRows } = await supabase
-    .from("players")
-    .select("id, nickname")
-    .eq("room_code", room);
-  const nameById = new Map<string, string | null>();
-  for (const p of (playerRows || []) as { id: string; nickname: string | null }[]) {
-    nameById.set(p.id, p.nickname ?? null);
-  }
+  const voteResult =
+    currentPhase === "end"
+      ? await getVoteResult(supabase, room, currentRound)
+      : null;
 
   // 게임 종료 전에는 빈 결과만 반환(공개 금지)
   if (!finished) {
     return NextResponse.json({
       finished: false,
+      roomEnded,
       currentRound,
+      currentPhase,
+      stocks: liveStocks ?? [],
+      voteResult,
       rounds: [],
       final: [],
     });
   }
 
-  // 라이브 상태(최종 순위) + 현재 주가
-  const [{ data: liveStates }, { data: liveStocks }] = await Promise.all([
+  // 종료된 뒤에만 필요한 이름·라이브 상태·주가를 병렬 조회한다.
+  const [{ data: playerRows }, { data: liveStates }] = await Promise.all([
+    supabase
+      .from("players")
+      .select("id, nickname")
+      .eq("room_code", room),
     supabase
       .from("mafia_player_state")
       .select("player_id, job, is_mafia, cash, stocks")
       .eq("room_code", room),
-    supabase
-      .from("mafia_stock_state")
-      .select("stock_key, price")
-      .eq("room_code", room),
   ]);
+
+  const nameById = new Map<string, string | null>();
+  for (const p of (playerRows || []) as { id: string; nickname: string | null }[]) {
+    nameById.set(p.id, p.nickname ?? null);
+  }
 
   const finalPrice = new Map<string, number>();
   for (const s of (liveStocks || []) as { stock_key: string; price: number }[]) {
@@ -224,5 +321,14 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ finished: true, currentRound, rounds, final });
+  return NextResponse.json({
+    finished: true,
+    roomEnded,
+    currentRound,
+    currentPhase,
+    stocks: liveStocks ?? [],
+    voteResult,
+    rounds,
+    final,
+  });
 }

@@ -13,6 +13,10 @@ type Props = {
   playerCash: number | null;
   holdings: MafiaStocksHolding | null;
   myTradesThisRound: Record<string, { bought: boolean; sold: boolean }> | null;
+  onAssetsChange: (assets: {
+    cash: number;
+    stocks: MafiaStocksHolding;
+  }) => void;
 };
 
 type TradeStep = "pickStock" | "enterAmount";
@@ -39,6 +43,7 @@ export function MafiaTradeTab({
   playerCash,
   holdings,
   myTradesThisRound,
+  onAssetsChange,
 }: Props) {
   const [step, setStep] = useState<TradeStep>("pickStock");
   const [type, setType] = useState<"buy" | "sell">("buy");
@@ -84,10 +89,17 @@ export function MafiaTradeTab({
       });
       const json = (await res.json().catch(() => null)) as {
         ok?: true;
+        playerAssets?: {
+          cash: number;
+          stocks: MafiaStocksHolding;
+        };
         error?: string;
       } | null;
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error ?? "거래를 기록하지 못했습니다.");
+      }
+      if (json.playerAssets) {
+        onAssetsChange(json.playerAssets);
       }
     } catch (e: unknown) {
       const message =
@@ -102,7 +114,7 @@ export function MafiaTradeTab({
       stocks.find((s) => s.stock_key === stockKey)?.stock_key ?? stockKey;
     const verb = type === "buy" ? "매수" : "매도";
     setInfo(
-      `${label}을(를) ${amount}개 ${verb}했습니다. 정보 탭에서 확인해보세요.`
+      `${label}을(를) ${amount}개 ${verb}했습니다. 보유 자산에 바로 반영되었습니다.`
     );
     setValue("");
     setStep("pickStock");

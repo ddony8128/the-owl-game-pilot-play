@@ -15,19 +15,6 @@ import {
 import { computeQueueSize } from "@/lib/defense/queue";
 import { randomUUID } from "crypto";
 
-function getRoundLabelForLog(round: number): string {
-  if (round === 0) return "준비";
-  if (round === 1) return "튜토리얼 1라운드";
-  if (round === 2) return "튜토리얼 2라운드";
-  if (round === 3) return "튜토리얼 결과";
-  if (round >= 4 && round <= 15) {
-    const gameRound = round - 3; // 4~15 -> 1~12라운드
-    return `${gameRound}라운드`;
-  }
-  if (round === 16) return "게임 종료";
-  return `알 수 없음 (DB round ${round})`;
-}
-
 export async function handleDefenseAdvanceRound(
   supabase: ReturnType<typeof createServerSupabaseClient>,
   current: DefensePhaseState,
@@ -93,8 +80,22 @@ export async function handleDefenseAdvanceRound(
     monstersById.set(m.id, m);
   });
 
-  const playerById = new Map<string, Player>();
-  players.forEach((p) => playerById.set(p.id, p));
+  const pendingLogs: {
+    room_code: string;
+    player_id: string;
+    round: number;
+    log: string;
+  }[] = [];
+  const changedScorePlayerIds = new Set<string>();
+  const monsterUpdates: {
+    id: string;
+    values: {
+      status?: string;
+      current_hp?: number;
+      remaining_time?: number;
+      removed_round?: number;
+    };
+  }[] = [];
 
   // 2. 액션 처리: 휴식/훈련/전투
   // 2-1. 휴식
@@ -141,15 +142,14 @@ export async function handleDefenseAdvanceRound(
 
     if (defeated) {
       // 몬스터 제거 및 점수 분배
-      await supabase
-        .from("defense_monster_instance")
-        .update({
+      monsterUpdates.push({
+        id: monsterId,
+        values: {
           status: "defeated",
           current_hp: 0,
           removed_round: current.round,
-        })
-        .eq("room_code", room)
-        .eq("id", monsterId);
+        },
+      });
 
       const points = def?.points ?? 0;
       const n = entries.length;
@@ -161,16 +161,8 @@ export async function handleDefenseAdvanceRound(
           const next = prev + perPlayer;
           scoreMap.set(e.player_id, next);
 
-          await supabase.from("defense_score").upsert(
-            {
-              room_code: room,
-              player_id: e.player_id,
-              points: next,
-            } as DefenseScore,
-            { onConflict: "player_id" }
-          );
-
-          await supabase.from("defense_player_log").insert({
+          changedScorePlayerIds.add(e.player_id);
+          pendingLogs.push({
             room_code: room,
             player_id: e.player_id,
             round: current.round,
@@ -181,7 +173,7 @@ export async function handleDefenseAdvanceRound(
         }
       } else {
         for (const e of entries) {
-          await supabase.from("defense_player_log").insert({
+          pendingLogs.push({
             room_code: room,
             player_id: e.player_id,
             round: current.round,
@@ -195,7 +187,7 @@ export async function handleDefenseAdvanceRound(
       // 참여하지 않은 플레이어에게도 몬스터 처치 결과 로그 제공 (개인 전투 로그와 명확히 구분되도록 '전투:' 접두사는 붙이지 않음)
       for (const p of players) {
         if (participantIds.has(p.id)) continue;
-        await supabase.from("defense_player_log").insert({
+        pendingLogs.push({
           room_code: room,
           player_id: p.id,
           round: current.round,
@@ -203,15 +195,11 @@ export async function handleDefenseAdvanceRound(
         });
       }
     } else {
-      await supabase
-        .from("defense_monster_instance")
-        .update({ current_hp: afterHp })
-        .eq("room_code", room)
-        .eq("id", monsterId);
+      monsterUpdates.push({ id: monsterId, values: { current_hp: afterHp } });
 
       // 전투에 참여한 플레이어들: 지금처럼 상세 피해 로그 유지
       for (const e of entries) {
-        await supabase.from("defense_player_log").insert({
+        pendingLogs.push({
           room_code: room,
           player_id: e.player_id,
           round: current.round,
@@ -224,7 +212,7 @@ export async function handleDefenseAdvanceRound(
       // 참여하지 않은 플레이어에게도 해당 몬스터의 피해 결과 로그 제공 (개인 전투 로그와 구분되도록 '전투:' 접두사 없이)
       for (const p of players) {
         if (participantIds.has(p.id)) continue;
-        await supabase.from("defense_player_log").insert({
+        pendingLogs.push({
           room_code: room,
           player_id: p.id,
           round: current.round,
@@ -232,6 +220,30 @@ export async function handleDefenseAdvanceRound(
         });
       }
     }
+  }
+
+  const monsterUpdateResults = await Promise.all(
+    monsterUpdates.map((update) =>
+      supabase
+        .from("defense_monster_instance")
+        .update(update.values)
+        .eq("room_code", room)
+        .eq("id", update.id)
+    )
+  );
+  const monsterUpdateError = monsterUpdateResults.find((result) => result.error)?.error;
+  if (monsterUpdateError) throw new Error(monsterUpdateError.message);
+
+  if (changedScorePlayerIds.size > 0) {
+    const scoreRows = [...changedScorePlayerIds].map((playerId) => ({
+      room_code: room,
+      player_id: playerId,
+      points: scoreMap.get(playerId) ?? 0,
+    }));
+    const { error } = await supabase
+      .from("defense_score")
+      .upsert(scoreRows, { onConflict: "player_id" });
+    if (error) throw new Error(error.message);
   }
 
   // 3. 몬스터 잔여 시간 감소 및 만료 처리
@@ -251,28 +263,36 @@ export async function handleDefenseAdvanceRound(
     []) as DefenseMonsterInstance[];
 
   const expiredMonsters: DefenseMonsterInstance[] = [];
+  const timeUpdates: { id: string; values: Record<string, number | string> }[] = [];
 
   for (const m of activeAfterCombat) {
     const newTime = m.remaining_time - 1;
     if (newTime <= 0) {
       expiredMonsters.push(m);
-      await supabase
-        .from("defense_monster_instance")
-        .update({
+      timeUpdates.push({
+        id: m.id,
+        values: {
           remaining_time: 0,
           status: "expired",
           removed_round: current.round,
-        })
-        .eq("room_code", room)
-        .eq("id", m.id);
+        },
+      });
     } else {
-      await supabase
-        .from("defense_monster_instance")
-        .update({ remaining_time: newTime })
-        .eq("room_code", room)
-        .eq("id", m.id);
+      timeUpdates.push({ id: m.id, values: { remaining_time: newTime } });
     }
   }
+
+  const timeUpdateResults = await Promise.all(
+    timeUpdates.map((update) =>
+      supabase
+        .from("defense_monster_instance")
+        .update(update.values)
+        .eq("room_code", room)
+        .eq("id", update.id)
+    )
+  );
+  const timeUpdateError = timeUpdateResults.find((result) => result.error)?.error;
+  if (timeUpdateError) throw new Error(timeUpdateError.message);
 
   // 만료된 몬스터가 하나라도 있다면, 모든 플레이어의 가장 큰 활성 카드 하나만 비활성화
   if (expiredMonsters.length > 0) {
@@ -280,34 +300,15 @@ export async function handleDefenseAdvanceRound(
     const firstExpired = expiredMonsters[0];
     const def = DEFENSE_MONSTERS_BY_ID[firstExpired.monster_id] ?? null;
 
+    const cardsToDisable: DefenseCardState[] = [];
     for (const p of players) {
-      const playerCardsRes = await supabase
-        .from("defense_card_state")
-        .select("player_id, card_slot, card_value, is_active")
-        .eq("room_code", room)
-        .eq("player_id", p.id)
-        .eq("is_active", true)
-        .order("card_value", { ascending: false })
-        .order("card_slot", { ascending: false })
-        .limit(1);
-
-      if (playerCardsRes.error) {
-        throw new Error(playerCardsRes.error.message);
-      }
-
-      const biggest = (playerCardsRes.data || []) as DefenseCardState[];
-      if (biggest.length === 0) continue;
-
-      const card = biggest[0];
+      const card = (cardsByPlayer.get(p.id) ?? [])
+        .filter((candidate) => candidate.is_active)
+        .sort((a, b) => b.card_value - a.card_value || b.card_slot - a.card_slot)[0];
+      if (!card) continue;
+      cardsToDisable.push(card);
       const value = card.card_value;
-      await supabase
-        .from("defense_card_state")
-        .update({ is_active: false })
-        .eq("room_code", room)
-        .eq("player_id", card.player_id)
-        .eq("card_slot", card.card_slot);
-
-      await supabase.from("defense_player_log").insert({
+      pendingLogs.push({
         room_code: room,
         player_id: card.player_id,
         round: current.round,
@@ -316,14 +317,42 @@ export async function handleDefenseAdvanceRound(
         }의 시간이 만료되어, 가장 큰 활성 카드(값 ${value})가 비활성화되었습니다.`,
       });
     }
+
+    const cardUpdateResults = await Promise.all(
+      cardsToDisable.map((card) =>
+        supabase
+          .from("defense_card_state")
+          .update({ is_active: false })
+          .eq("room_code", room)
+          .eq("player_id", card.player_id)
+          .eq("card_slot", card.card_slot)
+      )
+    );
+    const cardUpdateError = cardUpdateResults.find((result) => result.error)?.error;
+    if (cardUpdateError) throw new Error(cardUpdateError.message);
+  }
+
+  if (pendingLogs.length > 0) {
+    const { error } = await supabase.from("defense_player_log").insert(pendingLogs);
+    if (error) throw new Error(error.message);
   }
 
   // 4. 대기열 빈 슬롯에 새 몬스터 소환 (count를 고려)
-  const countsRes = await supabase
-    .from("defense_monster_count")
-    .select("id, count, base_count")
-    .eq("room_code", room);
+  const [countsRes, activeNowRes] = await Promise.all([
+    supabase
+      .from("defense_monster_count")
+      .select("id, count, base_count")
+      .eq("room_code", room),
+    supabase
+      .from("defense_monster_instance")
+      .select(
+        "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
+      )
+      .eq("room_code", room)
+      .eq("status", "active"),
+  ]);
   if (countsRes.error) throw new Error(countsRes.error.message);
+  if (activeNowRes.error) throw new Error(activeNowRes.error.message);
   const counts = (countsRes.data || []) as (DefenseMonsterCount & {
     base_count: number | null;
   })[];
@@ -334,14 +363,6 @@ export async function handleDefenseAdvanceRound(
     if (typeof c.base_count === "number") baseMap.set(c.id, c.base_count);
   });
 
-  const activeNowRes = await supabase
-    .from("defense_monster_instance")
-    .select(
-      "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
-    )
-    .eq("room_code", room)
-    .eq("status", "active");
-  if (activeNowRes.error) throw new Error(activeNowRes.error.message);
   const activeNow = (activeNowRes.data || []) as DefenseMonsterInstance[];
 
   const activeBySlot = new Map<number, DefenseMonsterInstance>();
@@ -431,12 +452,11 @@ export async function handleDefenseAdvanceRound(
   }
 
   // 5. 점수/몬스터 스냅샷 저장 (현재 라운드 기준)
-  const finalScoresRes = await supabase
-    .from("defense_score")
-    .select("player_id, points")
-    .eq("room_code", room);
-  if (finalScoresRes.error) throw new Error(finalScoresRes.error.message);
-  const finalScores = (finalScoresRes.data || []) as DefenseScore[];
+  const finalScores = [...scoreMap.entries()].map(([player_id, points]) => ({
+    room_code: room,
+    player_id,
+    points,
+  })) as DefenseScore[];
 
   if (finalScores.length > 0) {
     await supabase.from("defense_score_snapshot").insert(
@@ -450,20 +470,13 @@ export async function handleDefenseAdvanceRound(
   }
 
   // 5-2. 다음 라운드 시작 시점의 몬스터 스냅샷 저장 (nextRound 기준)
-  const nextMonstersRes = await supabase
-    .from("defense_monster_instance")
-    .select(
-      "id, monster_id, current_hp, remaining_time, slot_index, status, spawned_round, removed_round"
-    )
-    .eq("room_code", room)
-    .eq("status", "active");
-
-  if (nextMonstersRes.error) {
-    throw new Error(nextMonstersRes.error.message);
-  }
-
-  const nextMonsters =
-    (nextMonstersRes.data || []) as DefenseMonsterInstance[];
+  const nextMonsters: DefenseMonsterInstance[] = [
+    ...activeNow,
+    ...newInstances.map((instance) => ({
+      ...instance,
+      removed_round: null,
+    } as DefenseMonsterInstance)),
+  ];
 
   if (nextMonsters.length > 0) {
     await supabase.from("defense_monster_snapshot").insert(

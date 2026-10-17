@@ -6,20 +6,28 @@ import {
   normalizeRoomCode,
   type RoomGame,
 } from "@/lib/rooms";
+import { publishMafiaPhase } from "@/lib/mafiaPhaseEvents";
 
-const VALID_GAMES: RoomGame[] = ["mafia", "defense", "subway"];
+const VALID_GAMES: RoomGame[] = ["mafia", "defense"];
 
-// GET /api/gm/rooms?code=A3F82 → 단일 방 (코드를 아는 경우에만 조회 가능)
-// 전역 목록 조회는 제공하지 않는다 — 방 관리자는 코드를 직접 가진 방만 다룰 수 있다.
+// GET /api/gm/rooms?code=A3F82 → 단일 방
+// GET /api/gm/rooms → 최근 생성한 마피아/디펜스 방 목록
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
 
   if (!code) {
-    return NextResponse.json(
-      { error: "code 필요 (방 코드를 입력해야 조회할 수 있습니다)" },
-      { status: 400 },
-    );
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("code, game, status, ended_normally, created_at")
+      .in("game", VALID_GAMES)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ rooms: data ?? [] });
   }
 
   const room = await getRoom(code);
@@ -35,7 +43,7 @@ export async function POST(request: Request) {
   const game = (body?.game ?? "").trim() as RoomGame;
   if (!VALID_GAMES.includes(game)) {
     return NextResponse.json(
-      { error: "game 은 mafia | defense | subway 중 하나여야 합니다." },
+      { error: "game 은 mafia | defense 중 하나여야 합니다." },
       { status: 400 },
     );
   }
@@ -77,6 +85,129 @@ export async function PATCH(request: Request) {
       .from("rooms")
       .update({ board_video: null, board_video_seek_sec: null })
       .eq("code", code);
+
+    // 열려 있는 마피아 개인 화면이 종료 상태를 즉시 다시 읽도록 알린다.
+    const { data: mafiaPhase } = await supabase
+      .from("mafia_phase_state")
+      .select("round_number, phase, updated_at")
+      .eq("room_code", code)
+      .maybeSingle();
+    if (mafiaPhase) {
+      publishMafiaPhase({
+        room: code,
+        round: mafiaPhase.round_number ?? 0,
+        phase: mafiaPhase.phase ?? "end",
+        updatedAt: mafiaPhase.updated_at ?? null,
+      });
+    }
   }
   return NextResponse.json({ ok: true });
+}
+
+const ROOM_CHILD_TABLES = [
+  "defense_monster_snapshot",
+  "defense_action",
+  "defense_card_state",
+  "defense_score",
+  "defense_score_snapshot",
+  "defense_player_log",
+  "defense_monster_instance",
+  "mafia_actions",
+  "mafia_player_snapshots",
+  "mafia_votes",
+  "mafia_public_logs",
+  "mafia_ability_results",
+  "mafia_stock_history",
+  "mafia_player_state",
+  "subway_player_events",
+  "subway_reports",
+  "subway_player_state",
+  "player_votes",
+  "players",
+  "gm_memos",
+  "rules_state",
+  "game_state",
+  "defense_monster_count",
+  "defense_phase_state",
+  "mafia_stock_state",
+  "mafia_phase_state",
+] as const;
+
+const OPTIONAL_ARCHIVE_TABLES = ["subway_play_records"] as const;
+
+function isMissingTableError(error: { code?: string; message?: string }) {
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    message.includes("does not exist") ||
+    message.includes("schema cache")
+  );
+}
+
+// DELETE /api/gm/rooms { codes: string[] }
+// 종료된 테스트 방만 연결 데이터와 함께 영구 삭제한다.
+export async function DELETE(request: Request) {
+  const body = await request.json().catch(() => null);
+  const codes = Array.from(
+    new Set(
+      (Array.isArray(body?.codes) ? body.codes : [])
+        .map((code: unknown) => normalizeRoomCode(String(code ?? "")))
+        .filter(Boolean)
+    )
+  ).slice(0, 50);
+
+  if (codes.length === 0) {
+    return NextResponse.json({ error: "삭제할 방을 선택하세요." }, { status: 400 });
+  }
+
+  const supabase = createServerSupabaseClient();
+  const rooms = await supabase
+    .from("rooms")
+    .select("code, status")
+    .in("code", codes);
+  if (rooms.error) {
+    return NextResponse.json({ error: rooms.error.message }, { status: 500 });
+  }
+
+  const found = rooms.data ?? [];
+  if (found.length !== codes.length) {
+    return NextResponse.json(
+      { error: "존재하지 않는 방이 포함되어 있습니다." },
+      { status: 404 }
+    );
+  }
+  if (found.some((room) => room.status !== "ended")) {
+    return NextResponse.json(
+      { error: "종료된 방만 영구 삭제할 수 있습니다." },
+      { status: 409 }
+    );
+  }
+
+  for (const table of ROOM_CHILD_TABLES) {
+    const { error } = await supabase.from(table).delete().in("room_code", codes);
+    if (error) {
+      return NextResponse.json(
+        { error: `${table} 정리 실패: ${error.message}` },
+        { status: 500 }
+      );
+    }
+  }
+
+  for (const table of OPTIONAL_ARCHIVE_TABLES) {
+    const { error } = await supabase.from(table).delete().in("room_code", codes);
+    if (error && !isMissingTableError(error)) {
+      return NextResponse.json(
+        { error: `${table} 정리 실패: ${error.message}` },
+        { status: 500 }
+      );
+    }
+  }
+
+  const deleted = await supabase.from("rooms").delete().in("code", codes);
+  if (deleted.error) {
+    return NextResponse.json({ error: deleted.error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, deleted: codes.length });
 }

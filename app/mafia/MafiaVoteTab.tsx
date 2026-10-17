@@ -16,6 +16,12 @@ type Props = {
     vote_count: number;
     total_spent: number;
   }[];
+  onVoteSubmitted: (result: {
+    target: string;
+    vote_count: number;
+    total_spent: number;
+    cash: number;
+  }) => void;
 };
 
 export function MafiaVoteTab({
@@ -25,6 +31,7 @@ export function MafiaVoteTab({
   playerCash,
   players,
   myVoteSummary,
+  onVoteSubmitted,
 }: Props) {
   // 선택된 대상은 players.id (uuid)를 들고 있고,
   // 화면에는 nickname을 표시한다.
@@ -73,10 +80,21 @@ export function MafiaVoteTab({
       });
       const json = (await res.json().catch(() => null)) as {
         ok?: true;
+        cash?: number;
+        total_spent?: number;
         error?: string;
       } | null;
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error ?? "투표를 기록하지 못했습니다.");
+      }
+      const target = otherPlayers.find((item) => item.id === selectedTarget);
+      if (typeof json.cash === "number") {
+        onVoteSubmitted({
+          target: target?.nickname ?? "선택된 플레이어",
+          vote_count: voteCount,
+          total_spent: json.total_spent ?? totalCost,
+          cash: json.cash,
+        });
       }
     } catch (e: unknown) {
       const message =

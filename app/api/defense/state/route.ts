@@ -19,12 +19,16 @@ import {
 type DefenseGlobalStateResponse =
   | {
       round: number | null;
+      resultPending: boolean;
+      scorePending: boolean;
     }
   | { error: string };
 
 type DefensePlayerStateResponse =
   | {
       round: number | null;
+      resultPending: boolean;
+      scorePending: boolean;
       monsters: {
         instanceId: string;
         monsterId: number;
@@ -91,7 +95,7 @@ export async function GET(request: Request) {
   if (!nickname) {
     const { data, error } = await supabase
       .from("defense_phase_state")
-      .select("room_code, round, updated_at")
+      .select("room_code, round, updated_at, board_view, board_round")
       .eq("room_code", room)
       .maybeSingle();
 
@@ -107,6 +111,11 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         round: typeof phase?.round === "number" ? phase.round : null,
+        resultPending:
+          (data?.board_view === "result" || data?.board_view === "score") &&
+          data?.board_round === data?.round,
+        scorePending:
+          data?.board_view === "score" && data?.board_round === data?.round,
       } as DefenseGlobalStateResponse,
       { status: 200 }
     );
@@ -147,7 +156,7 @@ export async function GET(request: Request) {
   ] = await Promise.all([
     supabase
       .from("defense_phase_state")
-      .select("room_code, round, updated_at")
+      .select("room_code, round, updated_at, board_view, board_round")
       .eq("room_code", room)
       .maybeSingle(),
     supabase
@@ -243,6 +252,17 @@ export async function GET(request: Request) {
   const phase = (phaseRes.data || null) as DefensePhaseState | null;
   const round =
     typeof phase?.round === "number" && phase.round >= 0 ? phase.round : null;
+  const phaseWithBoard = phaseRes.data as
+    | { board_view?: string; board_round?: number }
+    | null;
+  const resultPending =
+    round != null &&
+    (phaseWithBoard?.board_view === "result" || phaseWithBoard?.board_view === "score") &&
+    phaseWithBoard.board_round === round;
+  const scorePending =
+    round != null &&
+    phaseWithBoard?.board_view === "score" &&
+    phaseWithBoard.board_round === round;
 
   const instances = (instancesRes.data || []) as DefenseMonsterInstance[];
   const counts = (countsRes.data || []) as DefenseMonsterCount[];
@@ -315,6 +335,8 @@ export async function GET(request: Request) {
   return NextResponse.json(
     {
       round,
+      resultPending,
+      scorePending,
       monsters: monstersForClient,
       cards: cardsForClient,
       score: scoreRow?.points ?? 0,

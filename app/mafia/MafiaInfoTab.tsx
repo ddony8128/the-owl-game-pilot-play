@@ -69,6 +69,7 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
 
   const cash = mafiaPlayer?.cash ?? 0;
   const totalAsset = cash + totalStockValue;
+  const displayedStockRows = stockRows.filter((row) => row.amount > 0);
   const jobId = mafiaPlayer?.job ?? null;
   const jobMeta =
     jobId && JOB_META[jobId]
@@ -77,89 +78,98 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
       ? { label: jobId, icon: null }
       : null;
 
+  const formatCoin = (value: number) => `${value.toLocaleString("ko-KR")} 코인`;
+
   return (
-    <div className="flex flex-col gap-4 text-sm text-zinc-100">
-      <section className="space-y-2">
-        <div className="rounded-xl bg-zinc-900 p-3">
-          <div className="flex items-center justify-between text-base">
-            <span className="text-zinc-300">보유 현금</span>
-            <span className="font-semibold text-amber-300">{cash} 코인</span>
-          </div>
-          <div className="mt-3 flex items-center justify-between text-sm text-zinc-400">
-            <span>총 자산 ( 현금 + 주식 평가액 )</span>
-            <span className="font-semibold text-emerald-300">
-              {totalAsset} 코인
-            </span>
-          </div>
-          <div className="mt-3 h-px w-full bg-zinc-800" />
-          <div className="mt-3 flex items-center gap-3">
-            {jobMeta?.icon && (
-              <div className="relative h-30 w-30 shrink-0 overflow-hidden rounded-full bg-zinc-800">
-                <Image
-                  src={jobMeta.icon}
-                  alt={jobMeta.label}
-                  fill
-                  className="object-cover"
-                />
-              </div>
-            )}
-            <div className="flex flex-col text-xs">
-              <span className="text-base text-zinc-300">내 직업</span>
-              <span className="mt-1 text-sm font-semibold text-zinc-100">
-                {jobMeta?.label ?? "없음"}
-              </span>
+    <div className="flex flex-col gap-5 text-sm text-zinc-100">
+      <section className="overflow-hidden rounded-2xl border border-amber-400/25 bg-gradient-to-br from-zinc-900 to-amber-950/20 p-4 shadow-lg shadow-black/20">
+        <p className="text-[11px] font-black tracking-[0.2em] text-amber-400">MY ROLE</p>
+        <div className="mt-3 flex items-center gap-4">
+          {jobMeta?.icon ? (
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-800 shadow-md">
+              <Image src={jobMeta.icon} alt={jobMeta.label} fill className="object-cover" />
             </div>
+          ) : (
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-zinc-800 text-2xl text-zinc-600">?</div>
+          )}
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-zinc-500">현재 내 직업</p>
+            <p className="mt-1 truncate text-2xl font-black text-white">
+              {jobMeta?.label ?? "배정 전"}
+            </p>
+            <p className="mt-1 text-xs text-red-300">다른 플레이어에게 공개하지 마세요.</p>
           </div>
         </div>
       </section>
 
       <section className="space-y-2">
-        <div className="divide-y divide-zinc-800 rounded-xl bg-zinc-900">
-          {stockRows.length === 0 && (
-            <p className="px-3 py-4 text-sm text-zinc-400">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="font-bold text-zinc-200">내 자산</h2>
+          <span className="text-xs text-zinc-600">현재 주가 기준</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+            <p className="text-xs text-zinc-500">보유 현금</p>
+            <p className="mt-1 text-lg font-black tabular-nums text-amber-300">{formatCoin(cash)}</p>
+          </div>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+            <p className="text-xs text-zinc-500">주식 평가액</p>
+            <p className="mt-1 text-lg font-black tabular-nums text-emerald-300">{formatCoin(totalStockValue)}</p>
+          </div>
+          <div className="col-span-2 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3">
+            <div>
+              <p className="text-xs font-semibold text-emerald-400">총 자산</p>
+              <p className="text-[11px] text-zinc-600">현금 + 주식 평가액</p>
+            </div>
+            <p className="text-2xl font-black tabular-nums text-white">{formatCoin(totalAsset)}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="font-bold text-zinc-200">보유 주식</h2>
+          <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-500">{displayedStockRows.length}종목</span>
+        </div>
+        <div className="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+          {displayedStockRows.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-zinc-500">
               보유한 주식이 없습니다.
             </p>
           )}
-          {stockRows.map((row) => (
+          {displayedStockRows.map((row) => (
             <div
               key={row.key}
-              className="flex items-center justify-between px-3 py-2 text-xs"
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3"
             >
-              <div className="flex flex-col">
-                <span className="text-sm text-zinc-100">{row.key}</span>
-                <span className="text-sm text-zinc-400">
-                  수량 {row.amount}개 · 현재가 {row.price} 코인
-                </span>
+              <div className="min-w-0">
+                <p className="truncate font-bold text-zinc-100">{row.key}</p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {row.amount}주 × {row.price.toLocaleString("ko-KR")} 코인
+                </p>
               </div>
-              <span className="text-sm font-semibold text-emerald-300">
-                {row.value} 코인
-              </span>
+              <span className="font-bold tabular-nums text-emerald-300">{formatCoin(row.value)}</span>
             </div>
           ))}
-          {stockRows.length > 0 && (
-            <div className="flex items-center justify-between px-3 py-2 text-xs">
-              <span className="text-sm text-zinc-400">주식 평가액 합계</span>
-              <span className="text-sm font-semibold text-emerald-300">
-                {totalStockValue} 코인
-              </span>
-            </div>
-          )}
         </div>
       </section>
 
       <section className="space-y-2">
-        <p className="text-sm text-zinc-400">추가 전달 사항입니다.</p>
+        <div className="flex items-center justify-between px-1">
+          <h2 className="font-bold text-zinc-200">전달 사항</h2>
+          {logs.length > 0 ? <span className="text-xs text-zinc-600">{logs.length}개</span> : null}
+        </div>
         <div className="space-y-2">
           {logs.map((log) => (
             <div
               key={log.id}
-              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-100 whitespace-pre-wrap"
+              className="whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm leading-relaxed text-zinc-200"
             >
               {log.content}
             </div>
           ))}
           {logs.length === 0 && (
-            <p className="text-sm text-zinc-400">아직 전달 사항이 없습니다.</p>
+            <p className="rounded-xl border border-dashed border-zinc-800 px-4 py-5 text-center text-sm text-zinc-600">아직 전달 사항이 없습니다.</p>
           )}
         </div>
       </section>

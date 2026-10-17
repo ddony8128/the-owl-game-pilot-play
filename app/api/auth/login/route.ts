@@ -28,6 +28,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (roomRow.game !== "mafia" && roomRow.game !== "defense") {
+    return NextResponse.json(
+      { error: "현재 운영하지 않는 게임 방입니다.", reason: "unsupported_game" },
+      { status: 410 },
+    );
+  }
+
   const { data, error } = await supabase
     .from("players")
     .select("id, room_code, nickname, created_at")

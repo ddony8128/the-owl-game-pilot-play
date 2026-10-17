@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 5;
 
+// subway는 기존 데이터 호환용이다. 새 방 생성은 GM API에서 차단한다.
 export type RoomGame = "mafia" | "defense" | "subway";
 
 export type Room = {

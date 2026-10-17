@@ -100,7 +100,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "room 필요" }, { status: 400 });
   }
   try {
-    const { phaseKey, base, gameRow } = await getPhaseAndTimer(room);
+    const { phaseKey, base, gameRow, remainingSeconds, isRunning } =
+      await getPhaseAndTimer(room);
 
     return NextResponse.json({
       phase: phaseKey,
@@ -108,6 +109,8 @@ export async function GET(request: Request) {
       timerStartAt: gameRow?.timer_start_at,
       pauseAt: gameRow?.pause_at,
       totalSeconds: base ?? 0,
+      remainingSeconds,
+      isRunning,
       serverNow: new Date().toISOString(),
     });
   } catch (e: unknown) {
@@ -139,7 +142,6 @@ export async function POST(request: Request) {
   try {
     const {
       supabase,
-      phaseState,
       phaseKey,
       base,
       remainingSeconds: currentRemaining,
@@ -167,6 +169,8 @@ export async function POST(request: Request) {
         timerStartAt: null,
         pauseAt: null,
         totalSeconds: 0,
+        remainingSeconds: 0,
+        isRunning: false,
         serverNow: new Date().toISOString(),
       });
     }
@@ -239,12 +243,16 @@ export async function POST(request: Request) {
       }
     }
 
+    // update 이전 gameRow가 아니라 DB에 실제 저장된 최종 상태를 반환한다.
+    const refreshed = await getPhaseAndTimer(room);
     return NextResponse.json({
-      phase: phaseState.phase,
-      timerStart: !!gameRow?.timer_start || isRunning,
-      timerStartAt: gameRow?.timer_start_at ?? null,
-      pauseAt: gameRow?.pause_at ?? null,
-      totalSeconds: base,
+      phase: refreshed.phaseKey,
+      timerStart: !!refreshed.gameRow?.timer_start,
+      timerStartAt: refreshed.gameRow?.timer_start_at ?? null,
+      pauseAt: refreshed.gameRow?.pause_at ?? null,
+      totalSeconds: refreshed.base ?? 0,
+      remainingSeconds: refreshed.remainingSeconds,
+      isRunning: refreshed.isRunning,
       serverNow: new Date().toISOString(),
     });
   } catch (e: unknown) {

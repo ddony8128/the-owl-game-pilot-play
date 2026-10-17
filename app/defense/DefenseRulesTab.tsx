@@ -1,215 +1,79 @@
+const ROUND_STEPS = [
+  ["01", "행동 선택 · 5분", "전투, 휴식, 훈련 중 하나를 선택합니다. 제출한 행동은 이번 라운드에 바꿀 수 없습니다."],
+  ["02", "전투 처리", "같은 몬스터에 제출된 카드 숫자를 합산해 피해를 주고, 체력이 0이 되면 처치합니다."],
+  ["03", "결과 확인", "처치, 남은 체력, 도망 결과를 전광판에서 함께 확인합니다."],
+  ["04", "다음 라운드", "빈 대기열을 새 몬스터로 채운 뒤 다음 라운드를 시작합니다."],
+] as const;
+
+const ACTIONS = [
+  ["⚔", "전투", "몬스터 하나와 활성 숫자 카드 한 장을 선택합니다. 사용한 카드는 비활성화됩니다."],
+  ["✦", "휴식", "비활성 카드 중 최대 3장을 골라 다시 활성화합니다."],
+  ["↑", "훈련", "카드 한 장을 비활성화하고, 원하는 카드 한 장의 숫자를 영구적으로 1 올립니다."],
+] as const;
+
 export function DefenseRulesTab() {
   return (
-    <div className="space-y-4 text-base leading-relaxed text-zinc-300">
-      <p>디펜스 딜레마 규칙 요약이다부엉!</p>
-      <br />
+    <div className="space-y-4 text-sm text-zinc-200">
+      <section className="rounded-2xl border border-amber-400/25 bg-gradient-to-br from-zinc-900 to-amber-950/20 p-4">
+        <p className="text-[11px] font-black tracking-[0.18em] text-amber-400">QUICK GUIDE</p>
+        <h2 className="mt-1 text-xl font-black text-white">라운드 진행 순서</h2>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-500">본 게임은 최대 12라운드입니다. 몬스터 현황과 전투 결과는 전광판에서 확인합니다.</p>
+        <div className="mt-4 space-y-2">
+          {ROUND_STEPS.map(([number, title, text]) => (
+            <div key={number} className="grid grid-cols-[2.25rem_1fr] gap-3 rounded-xl bg-black/20 p-3">
+              <span className="font-mono text-lg font-black text-amber-400">{number}</span>
+              <div>
+                <p className="font-black text-zinc-100">{title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-400">{text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      {/* 0. 인원에 따라 달라지는 것 */}
-      <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-        <p className="font-semibold text-amber-300">
-          참가 인원에 따라 달라지는 규칙
-        </p>
-        <p className="text-sm text-zinc-300">
-          아래 <span className="font-semibold">두 가지만</span> 인원에 따라
-          바뀌고, 나머지 규칙(카드·전투·점수 분배·도망 페널티 등)은 인원과
-          무관하게 동일합니다.
-        </p>
-        <ul className="list-disc pl-4 text-sm">
-          <li>
-            <span className="font-semibold">대기열 칸 수</span> — 7~9명{" "}
-            <span className="font-semibold text-amber-300">4칸</span> / 10~12명{" "}
-            <span className="font-semibold text-amber-300">5칸</span>. (현재 방의
-            칸 수는 <span className="font-semibold">정보</span> 탭 대기열에서 바로
-            보입니다.)
-          </li>
-          <li>
-            <span className="font-semibold">몬스터 총 수</span> — 대략{" "}
-            <span className="font-semibold text-amber-300">인원 × 3</span>마리
-            (인원이 많을수록 몬스터도 많아집니다).
-          </li>
-        </ul>
-        <p className="text-sm text-zinc-400">
-          인원이 많을수록 한 마리를 나눠 갖는 사람이 늘어 <span className="font-semibold">1인당 점수는 작아질 수</span> 있으니, 어디에 카드를 낼지가 더 중요해집니다.
-        </p>
-      </div>
-      <br />
+      <section className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="font-black text-white">행동 규칙</h2>
+          <span className="text-[11px] text-zinc-600">눌러서 펼치기</span>
+        </div>
+        {ACTIONS.map(([icon, title, description]) => (
+          <details key={title} className="group overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+            <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-xl">{icon}</span>
+              <span className="flex-1 font-black text-zinc-100">{title}</span>
+              <span className="text-zinc-600 transition group-open:rotate-180">⌄</span>
+            </summary>
+            <p className="border-t border-zinc-800 px-4 py-3 text-xs leading-relaxed text-zinc-400">{description}</p>
+          </details>
+        ))}
+      </section>
 
-      {/* 1. 기본 정보 */}
-      <div className="space-y-2">
-        <p className="font-semibold text-zinc-100">게임 종료 및 순위 결정</p>
-        <ul className="list-disc pl-4">
-          <li>
-            <span className="font-semibold">게임 종료</span>
-            <ul className="ml-4 list-disc">
-              <li>대기열의 모든 몬스터가 쓰러지거나 도망가면 게임 종료</li>
-              <li>또는 12라운드 종료 시 게임 종료</li>
-            </ul>
-          </li>
-          <li>
-            <span className="font-semibold">순위 결정</span>
-            <ul className="ml-4 list-disc">
-              <li>포인트를 많이 얻은 순대로 순위 결정</li>
-              <li>
-                동점이면 더 많은 데미지( 전투에 사용한 숫자 카드의 합 )를 입힌
-                플레이어가 우선
-              </li>
-              <li>그래도 동점이면 공동 순위 처리</li>
-            </ul>
-          </li>
-        </ul>
-      </div>
-      <br />
-      {/* 2. 구성물 */}
-      <div className="space-y-2">
-        <p className="font-semibold text-zinc-100">게임 구성</p>
-        <ul className="list-disc pl-4">
-          <li>
-            <span className="font-semibold">숫자 카드</span>
-            <ul className="ml-4 list-disc">
-              <li>
-                각 플레이어는 활성 상태의 1 / 2 / 3 / 4 카드를 각각 1장씩 가지고
-                시작합니다.
-              </li>
-              <li>
-                숫자 카드는 사용하면 비활성화되고, 휴식을 통해 다시 활성화할 수
-                있습니다. 또한 훈련을 통해 숫자를 키울 수 있습니다.
-              </li>
-            </ul>
-          </li>
-          <li>
-            <span className="font-semibold">몬스터</span>
-            <ul className="ml-4 list-disc">
-              <li>
-                총 6종류. 마릿수는 참가 인원에 따라 조정됩니다(기준 24마리).
-              </li>
-              <li>각 몬스터에 대한 정보는 몬스터 도감 탭에 있습니다.</li>
-            </ul>
-          </li>
-          <li>
-            <span className="font-semibold">대기열</span>
-            <ul className="ml-4 list-disc">
-              <li>
-                몬스터 대기열은 참가 인원에 따라 4~5칸입니다(7~9명 4칸 / 10~12명
-                5칸). 현재 방의 칸 수는 플레이 화면에서 확인하세요.
-              </li>
-              <li>
-                빈 칸이 생기면 다음 라운드 시작 시 새 몬스터가 공개됩니다.
-              </li>
-            </ul>
-          </li>
-        </ul>
-      </div>
-      <br />
-      {/* 3. 게임 준비 */}
-      <div className="space-y-2">
-        <p className="font-semibold text-zinc-100">게임 준비</p>
-        <ul className="list-decimal pl-5">
-          <li>
-            각 플레이어는 숫자 카드 1 / 2 / 3 / 4를 모두 활성화한 상태로
-            시작합니다.
-          </li>
-          <li>몬스터 대기열을 무작위 몬스터로 채웁니다.</li>
-          <li>1라운드를 시작합니다.</li>
-        </ul>
-      </div>
-      <br />
-      {/* 4. 라운드 진행 */}
-      <div className="space-y-2">
-        <p className="font-semibold text-zinc-100">라운드 진행</p>
-        <br />
-        <div className="space-y-1">
-          <p className="font-semibold text-zinc-100">① 행동 (5분간 진행)</p>
-          <p className="text-zinc-100">
-            각 플레이어는 아래 행동 중 하나를 선택합니다.
-          </p>
-          <ul className="list-disc pl-4">
-            <li>
-              <span className="font-semibold">전투</span>
-              <ul className="ml-4 list-disc">
-                <li>대기열에 있는 몬스터 1마리를 선택합니다.</li>
-                <li>자신의 활성화된 숫자 카드 1장을 선택해 제출합니다.</li>
-              </ul>
-            </li>
-            <li>
-              <span className="font-semibold">휴식</span>
-              <ul className="ml-4 list-disc">
-                <li>
-                  자신의 비활성화된 숫자 카드 중 최대 3장을 골라 활성화합니다.
-                </li>
-              </ul>
-            </li>
-            <li>
-              <span className="font-semibold">훈련</span>
-              <ul className="ml-4 list-disc">
-                <li>
-                  자신의 활성화된 숫자 카드 중 1장을 선택해 비활성화합니다.
-                </li>
-                <li>
-                  자신의 아무 숫자 카드 1장을 선택해 그 카드의 숫자를 영구적으로
-                  +1 합니다.
-                </li>
-              </ul>
-            </li>
-          </ul>
+      <details className="group overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900" open>
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 font-black text-white">
+          <span>전투와 몬스터</span>
+          <span className="text-zinc-500 transition group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="space-y-2 border-t border-zinc-800 px-4 py-3 text-xs leading-relaxed text-zinc-400">
+          <p><b className="text-rose-300">처치</b> · 제출 숫자의 합이 남은 HP 이상이면 처치되며, 포인트를 참여자 수로 나눠 받습니다. 나머지는 버립니다.</p>
+          <p><b className="text-amber-300">생존</b> · 부족한 피해만큼 HP가 감소하고 대기열에 남습니다.</p>
+          <p><b className="text-sky-300">도망</b> · 남은 시간이 0이면 제거되고, 모든 플레이어의 가장 큰 활성 카드 한 장이 비활성화됩니다.</p>
         </div>
-        <br />
-        <div className="space-y-1">
-          <p className="font-semibold text-zinc-100">② 전투 처리</p>
-          <ul className="list-disc pl-4">
-            <li>
-              <span className="font-semibold">몬스터 처치 성공</span>
-              <ul className="ml-4 list-disc">
-                <li>
-                  해당 몬스터에 제출된 숫자의 합 ≥ 몬스터 체력이라면 처치됩니다.
-                </li>
-                <li>몬스터는 대기열에서 제거됩니다.</li>
-                <li>
-                  전투에 참여한 모든 플레이어는 몬스터 포인트를 균등 분배합니다.
-                </li>
-                <li>나누고 남은 포인트는 버려집니다.</li>
-                <li>
-                  예시 : 4점을 3명이서 나누면 1점씩 얻고 1점은 버려집니다.
-                </li>
-              </ul>
-            </li>
-            <li>
-              <span className="font-semibold">몬스터 처치 실패</span>
-              <ul className="ml-4 list-disc">
-                <li>제출된 숫자의 합만큼 몬스터 체력이 감소합니다.</li>
-                <li>몬스터는 대기열에 그대로 남습니다.</li>
-              </ul>
-            </li>
-            <li>
-              <span className="font-semibold">카드</span>
-              <ul className="ml-4 list-disc">
-                <li>전투에 사용된 숫자 카드는 비활성 상태가 됩니다.</li>
-                <li>
-                  누가 어떤 행동을 했는지, 어느 카드를 어느 몬스터에
-                  제출했는지는 공개되지 않습니다.
-                </li>
-              </ul>
-            </li>
-          </ul>
+      </details>
+
+      <details className="group overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 font-black text-white">
+          <span>인원·점수·승리 조건</span>
+          <span className="text-zinc-500 transition group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="space-y-2 border-t border-zinc-800 px-4 py-3 text-xs leading-relaxed text-zinc-400">
+          <p><b className="text-zinc-200">대기열</b> · 7~9명은 4칸, 10~12명은 5칸을 사용합니다. 몬스터 수는 참가 인원에 맞춰 조정됩니다.</p>
+          <p><b className="text-zinc-200">중간 공개</b> · 본 게임 4라운드와 8라운드 종료 후 점수를 공개합니다.</p>
+          <p><b className="text-zinc-200">순위</b> · 포인트가 높은 순서이며, 동점이면 누적 피해가 높은 플레이어가 앞섭니다. 그래도 같으면 공동 순위입니다.</p>
+          <p><b className="text-zinc-200">종료</b> · 모든 몬스터가 제거되거나 본 게임 12라운드가 끝나면 종료합니다.</p>
         </div>
-        <br />
-        <div className="space-y-1">
-          <p className="font-semibold text-zinc-100">③ 라운드 종료</p>
-          <ul className="list-decimal pl-5">
-            <li>모든 몬스터의 잔여 시간을 1 줄입니다.</li>
-            <li>잔여 시간이 0이 된 몬스터는 도망쳐서 대기열에서 제거됩니다.</li>
-            <li>
-              도망치는 몬스터가 있다면 모든 플레이어의 가장 큰 활성 카드 1장을
-              비활성화합니다.
-            </li>
-            <li>
-              대기열의 빈 칸을 남아있는 몬스터 중 최대한 겹치지 않도록 무작위로
-              채웁니다.
-            </li>
-            <li>4라운드, 8라운드 종료 후 각 플레이어의 점수를 공개합니다.</li>
-          </ul>
-        </div>
-      </div>
-      <br />
+      </details>
+
+      <p className="px-1 pb-2 text-xs leading-relaxed text-zinc-600">몬스터별 HP·시간·점수는 ‘몬스터 도감’에서 확인할 수 있습니다.</p>
     </div>
   );
 }

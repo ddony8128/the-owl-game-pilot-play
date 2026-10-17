@@ -11,8 +11,7 @@ import {
   type RuleVideoId,
 } from "@/lib/ruleVideos";
 import { BOARD_VIDEO_MIGRATION } from "@/lib/boardVideo";
-
-const POLL_MS = 3000;
+import { broadcastBoardChange } from "@/lib/boardBroadcast";
 
 type Remote = {
   video: RuleVideoId | null;
@@ -55,8 +54,6 @@ export function RuleVideoPanel({ room, video }: { room: string; video: RuleVideo
 
   useEffect(() => {
     void load();
-    const id = window.setInterval(() => void load(), POLL_MS);
-    return () => window.clearInterval(id);
   }, [load]);
 
   const send = async (next: RuleVideoId | null, seekSec?: number) => {
@@ -68,9 +65,21 @@ export function RuleVideoPanel({ room, video }: { room: string; video: RuleVideo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: room, video: next, seekSec }),
       });
-      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      const json = (await res.json().catch(() => null)) as
+        | { error?: string; video?: unknown; seekSec?: unknown }
+        | null;
       if (!res.ok) setMsg(json?.error ?? "요청이 실패했습니다.");
-      await load();
+      if (res.ok) {
+        // PATCH 응답이 최신 값을 포함하므로 관리자 화면에서 같은 값을 다시 조회하지 않는다.
+        // 전광판만 변경 신호를 받고 자신의 상태를 한 번 조회한다.
+        setRemote((previous) => ({
+          video: isRuleVideoId(json?.video) ? json.video : null,
+          seekSec: typeof json?.seekSec === "number" ? json.seekSec : null,
+          columnMissing: previous?.columnMissing ?? false,
+          status: previous?.status ?? "active",
+        }));
+        broadcastBoardChange({ room, kind: "video" });
+      }
     } finally {
       setBusy(false);
     }

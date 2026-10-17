@@ -58,13 +58,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "room 필요" }, { status: 400 });
   }
   try {
-    const { gameRow } = await getGameStateTimer(room);
+    const { gameRow, remainingSeconds, isRunning } =
+      await getGameStateTimer(room);
 
     return NextResponse.json({
       timerStart: !!gameRow?.timer_start,
       timerStartAt: gameRow?.timer_start_at,
       pauseAt: gameRow?.pause_at,
       totalSeconds: TOTAL_SECONDS,
+      remainingSeconds,
+      isRunning,
       serverNow: new Date().toISOString(),
     });
   } catch (e: unknown) {
@@ -127,7 +130,20 @@ export async function POST(request: Request) {
         isRunning = false;
       }
     } else if (action === "start") {
-      if (!gameRow?.timer_start) {
+      // 시간이 모두 지난 상태에서 다시 시작하면 새 5분 타이머로 시작한다.
+      if (currentRemaining <= 0) {
+        const startIso = new Date(now).toISOString();
+        await supabase
+          .from("game_state")
+          .update({
+            timer_start: true,
+            timer_start_at: startIso,
+            pause_at: null,
+          })
+          .eq("room_code", room);
+        remainingSeconds = TOTAL_SECONDS;
+        isRunning = true;
+      } else if (!gameRow?.timer_start) {
         if (!gameRow?.pause_at) {
           const startIso = new Date(now).toISOString();
           await supabase
@@ -171,6 +187,8 @@ export async function POST(request: Request) {
       timerStartAt: gameRow?.timer_start_at ?? null,
       pauseAt: gameRow?.pause_at ?? null,
       totalSeconds: TOTAL_SECONDS,
+      remainingSeconds,
+      isRunning,
       serverNow: new Date().toISOString(),
     });
   } catch (e: unknown) {

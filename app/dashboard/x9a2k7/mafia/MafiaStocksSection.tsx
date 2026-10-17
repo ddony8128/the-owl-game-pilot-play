@@ -22,16 +22,19 @@ const getStockLogoSrc = (key: string): string | null => {
 
 export function MafiaStocksSection({ stocks }: Props) {
   return (
-    <section className="space-y-2 text-sm">
-      <h2 className="text-base font-semibold">주가</h2>
-      <div className="flex flex-wrap gap-2 text-sm">
+    <section className="space-y-3 text-sm">
+      <div className="flex items-end justify-between">
+        <div><p className="text-xs font-bold tracking-[0.18em] text-emerald-400">MARKET</p><h2 className="mt-1 text-lg font-black text-white">현재 주가</h2></div>
+        <p className="text-xs text-zinc-500">현황 새로고침 시 갱신</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stocks.map((s) => (
           <div
             key={s.stock_key}
-            className="flex items-center gap-2 rounded-full bg-zinc-900 px-3 py-1 text-zinc-200"
+            className="flex min-h-20 items-center gap-3 rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-zinc-200"
           >
             {getStockLogoSrc(s.stock_key) && (
-              <div className="relative h-6 w-6 overflow-hidden rounded-md bg-zinc-800">
+              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-zinc-800">
                 <Image
                   src={getStockLogoSrc(s.stock_key)!}
                   alt={s.stock_key}
@@ -40,8 +43,8 @@ export function MafiaStocksSection({ stocks }: Props) {
                 />
               </div>
             )}
-            <span>{s.stock_key}</span>
-            <span className="ml-1 text-emerald-300">{s.price}</span>
+            <span className="min-w-0 flex-1 font-bold text-white">{s.stock_key}</span>
+            <span className="text-2xl font-black tabular-nums text-emerald-300">{s.price}</span>
           </div>
         ))}
         {stocks.length === 0 && (

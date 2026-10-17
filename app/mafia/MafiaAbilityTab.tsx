@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import type { MafiaAbilityPayload } from "@/lib/mafia/abilities";
 import type { MafiaStockState, Player } from "@/lib/types";
@@ -18,6 +18,10 @@ type Props = {
     job: string | null;
     payload: Record<string, unknown> | null;
   } | null;
+  onAbilitySubmitted: (action: {
+    job: string;
+    payload: Record<string, unknown>;
+  }) => void;
 };
 
 export function MafiaAbilityTab({
@@ -28,6 +32,7 @@ export function MafiaAbilityTab({
   players,
   hasUsedAbilityThisPhase,
   myAbilityActionThisPhase,
+  onAbilitySubmitted,
 }: Props) {
   const [selectedStockKey, setSelectedStockKey] = useState<string | null>(null);
   const [robberTargets, setRobberTargets] = useState<string[]>([]);
@@ -39,6 +44,11 @@ export function MafiaAbilityTab({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const submitLockRef = useRef(false);
+  const [submittedAction, setSubmittedAction] = useState<{
+    job: string;
+    payload: Record<string, unknown>;
+  } | null>(null);
 
   const normalizedJob = job ?? null;
 
@@ -113,7 +123,14 @@ export function MafiaAbilityTab({
 
   const handleSubmit = async () => {
     if (!player?.nickname || !roomCode || !normalizedJob) return;
-    if (submitted) return;
+    if (
+      submitLockRef.current ||
+      submitted ||
+      hasUsedAbilityThisPhase ||
+      myAbilityActionThisPhase
+    ) {
+      return;
+    }
 
     setError(null);
     setInfo(null);
@@ -130,6 +147,13 @@ export function MafiaAbilityTab({
       return;
     }
 
+    const action = {
+      job: normalizedJob,
+      payload: payload as unknown as Record<string, unknown>,
+    };
+    submitLockRef.current = true;
+    setSubmitted(true);
+    setSubmittedAction(action);
     setSubmitting(true);
 
     try {
@@ -155,13 +179,16 @@ export function MafiaAbilityTab({
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "능력 사용을 기록하지 못했습니다.";
+      submitLockRef.current = false;
+      setSubmitted(false);
+      setSubmittedAction(null);
       setError(message);
       setSubmitting(false);
       return;
     }
 
     setSubmitting(false);
-    setSubmitted(true);
+    onAbilitySubmitted(action);
     setInfo("이번 라운드에 능력을 사용했습니다. 한 번만 사용할 수 있습니다.");
   };
 
@@ -177,7 +204,7 @@ export function MafiaAbilityTab({
   }
 
   const summarizeUsedAbility = (): string => {
-    const action = myAbilityActionThisPhase;
+    const action = submittedAction ?? myAbilityActionThisPhase;
     if (!action || !action.job) {
       return "이번 라운드에 이미 능력을 사용했습니다. 능력은 각 라운드마다 한 번만 사용할 수 있습니다.";
     }
@@ -263,7 +290,7 @@ export function MafiaAbilityTab({
           {summary}
         </p>
         <p className="text-sm text-zinc-400">
-          능력의 결과는 다음 단계(주가 변동)에서 적용됩니다.
+          능력 결과는 거래 단계가 끝날 때 적용됩니다.
         </p>
       </div>
     );

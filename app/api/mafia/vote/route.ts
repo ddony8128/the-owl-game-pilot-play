@@ -10,7 +10,9 @@ type VoteBody = {
   vote_count?: number;
 };
 
-type VoteResponse = { ok: true } | { error: string };
+type VoteResponse =
+  | { ok: true; cash: number; total_spent: number }
+  | { error: string };
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
@@ -158,29 +160,34 @@ export async function POST(request: Request) {
     );
   }
 
-  if (voterStateRow) {
-    const voterState = voterStateRow as MafiaPlayerState;
-    const nextCash = voterState.cash - totalCost;
+  if (!voterStateRow) {
+    return NextResponse.json(
+      { error: "플레이어 자산 상태가 초기화되지 않았습니다." } as VoteResponse,
+      { status: 500 }
+    );
+  }
 
-    if (nextCash < 0) {
-      return NextResponse.json(
-        { error: "현금이 부족합니다." } as VoteResponse,
-        { status: 400 }
-      );
-    }
+  const voterState = voterStateRow as MafiaPlayerState;
+  const nextCash = voterState.cash - totalCost;
 
-    const { error: updateCashError } = await supabase
-      .from("mafia_player_state")
-      .update({ cash: nextCash })
-      .eq("room_code", room)
-      .eq("player_id", player.id);
+  if (nextCash < 0) {
+    return NextResponse.json(
+      { error: "현금이 부족합니다." } as VoteResponse,
+      { status: 400 }
+    );
+  }
 
-    if (updateCashError) {
-      return NextResponse.json(
-        { error: updateCashError.message } as VoteResponse,
-        { status: 500 }
-      );
-    }
+  const { error: updateCashError } = await supabase
+    .from("mafia_player_state")
+    .update({ cash: nextCash })
+    .eq("room_code", room)
+    .eq("player_id", player.id);
+
+  if (updateCashError) {
+    return NextResponse.json(
+      { error: updateCashError.message } as VoteResponse,
+      { status: 500 }
+    );
   }
 
   const { error: insertError } = await supabase.from("mafia_votes").insert({
@@ -198,5 +205,8 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true } as VoteResponse, { status: 200 });
+  return NextResponse.json(
+    { ok: true, cash: nextCash, total_spent: totalCost } as VoteResponse,
+    { status: 200 }
+  );
 }

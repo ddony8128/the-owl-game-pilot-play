@@ -11,6 +11,7 @@ import { handlePrepareToAuction } from "./prepareToAuction";
 import { handleAuctionToTrade } from "./auctionToTrade";
 import { handleTradeToApply } from "./tradeToApply";
 import { handleVoteToEnd } from "./voteToEnd";
+import { publishMafiaPhase } from "@/lib/mafiaPhaseEvents";
 
 type AdvanceBody = {
   room?: string;
@@ -66,7 +67,8 @@ export async function POST(request: Request) {
   const allowedNextByPhase: Partial<Record<MafiaPhase, MafiaPhase>> = {
     prepare: "auction",
     auction: "trade",
-    trade: "apply",
+    trade: "vote",
+    // 배포 전 apply 단계에 머물던 기존 방 복구용 호환 경로
     apply: "vote",
     vote: "end",
   };
@@ -136,7 +138,7 @@ export async function POST(request: Request) {
       await handlePrepareToAuction(supabase, current, room);
     } else if (current.phase === "auction" && to === "trade") {
       await handleAuctionToTrade(supabase, current, room);
-    } else if (current.phase === "trade" && to === "apply") {
+    } else if (current.phase === "trade" && to === "vote") {
       await handleTradeToApply(supabase, current, room);
     } else if (current.phase === "vote" && to === "end") {
       await handleVoteToEnd(supabase, current, room);
@@ -157,26 +159,25 @@ export async function POST(request: Request) {
     });
   }
 
-  // 특정 페이즈 전환 시 타이머를 해당 페이즈 기본값으로 리셋한다.
-  // - prepare -> auction (직업 경매 시작)
-  // - auction -> trade (주식 거래 시작)
-  // - apply -> vote (투표 시작)
-  if (to === "auction" || to === "trade" || to === "vote") {
-    try {
-      const origin = new URL(request.url).origin;
-      await fetch(`${origin}/api/gm/timers/mafia`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          room,
-          action: "reset",
-          phase: to,
-        }),
-      });
-    } catch {
-      // 타이머 리셋 실패는 페이즈 전환 자체를 막지 않는다.
-    }
+  // 모든 페이즈 전환에서 이전 단계의 시간 정보를 지운다.
+  // 다음 단계가 경매/거래/투표라면 화면에는 그 단계의 기본 시간이 정지 상태로 표시된다.
+  const { error: timerResetError } = await supabase
+    .from("game_state")
+    .update({ timer_start: false, timer_start_at: null, pause_at: null })
+    .eq("room_code", room);
+  if (timerResetError) {
+    return NextResponse.json(
+      { error: `단계는 변경됐지만 타이머 초기화에 실패했습니다: ${timerResetError.message}` } as AdvanceResponse,
+      { status: 500 }
+    );
   }
+
+  publishMafiaPhase({
+    room,
+    round: updatedPhase.round_number,
+    phase: updatedPhase.phase,
+    updatedAt: updatedPhase.updated_at ?? null,
+  });
 
   return NextResponse.json(
     { ok: true, phase: updatedPhase as MafiaPhaseState } as AdvanceResponse,

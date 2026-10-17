@@ -9,33 +9,30 @@ type Props = {
 
 export function DefenseScoreSection({ players, onChangeScore }: Props) {
   const sorted = [...players].sort((a, b) =>
-    a.nickname.localeCompare(b.nickname)
+    (b.defensePoints ?? 0) - (a.defensePoints ?? 0) || a.nickname.localeCompare(b.nickname)
   );
 
   return (
-    <section className="space-y-2 text-base">
-      <h2 className="text-lg font-semibold">점수 관리</h2>
-      <p className="text-sm text-zinc-400">
-        각 플레이어의 점수를 관리하는 영역입니다. + / - 버튼을 눌러
-        defense_score 테이블의 포인트를 조정할 수 있습니다.
-      </p>
-      <div className="space-y-1 rounded-lg bg-zinc-900 p-2">
+    <section className="space-y-3 text-base">
+      <div className="flex items-end justify-between"><div><p className="text-xs font-bold tracking-[0.16em] text-amber-400">SCORE</p><h2 className="mt-1 text-lg font-black text-white">현재 점수 순위</h2></div><p className="text-xs text-zinc-500">− / + 버튼으로 보정</p></div>
+      <div className="overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950">
+        <div className="grid grid-cols-[64px_minmax(140px,1fr)_100px_130px] items-center gap-3 border-b border-zinc-700 bg-zinc-900 px-4 py-3 text-xs font-bold text-zinc-400">
+          <span className="text-center">순위</span><span>플레이어</span><span className="text-right">점수</span><span className="text-center">점수 보정</span>
+        </div>
         {sorted.length === 0 && (
-          <p className="text-zinc-400">등록된 플레이어가 없습니다.</p>
+          <p className="p-4 text-zinc-400">등록된 플레이어가 없습니다.</p>
         )}
-        {sorted.map((p) => (
+        {sorted.map((p, index) => (
           <div
             key={p.id}
-            className="flex items-center justify-between rounded bg-zinc-950 px-2 py-1"
+            className="grid grid-cols-[64px_minmax(140px,1fr)_100px_130px] items-center gap-3 border-b border-zinc-800 px-4 py-3 last:border-b-0 hover:bg-zinc-900/70"
           >
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">
-                {p.nickname || "(이름 없음)"}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
+            <span className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${index < 3 ? "bg-amber-400 text-zinc-950" : "bg-zinc-800 text-zinc-300"}`}>{index + 1}</span>
+            <span className="truncate font-bold text-white">{p.nickname || "(이름 없음)"}</span>
+            <span className="text-right text-lg font-black tabular-nums text-amber-300">{p.defensePoints ?? 0}점</span>
+            <div className="flex items-center justify-center gap-2">
               <button
-                className="h-7 w-7 rounded-full bg-zinc-800 text-sm font-bold text-zinc-100 hover:bg-zinc-700"
+                className="h-9 w-9 rounded-lg bg-zinc-800 text-lg font-bold text-zinc-100 hover:bg-zinc-700"
                 type="button"
                 onClick={() => {
                   void onChangeScore(p.id, -1);
@@ -43,11 +40,8 @@ export function DefenseScoreSection({ players, onChangeScore }: Props) {
               >
                 -
               </button>
-              <span className="w-12 text-center text-sm font-semibold text-amber-300">
-                {(p.defensePoints ?? 0).toString()}점
-              </span>
               <button
-                className="h-7 w-7 rounded-full bg-amber-400 text-sm font-bold text-zinc-950 hover:bg-amber-300"
+                className="h-9 w-9 rounded-lg bg-amber-400 text-lg font-bold text-zinc-950 hover:bg-amber-300"
                 type="button"
                 onClick={() => {
                   void onChangeScore(p.id, 1);

@@ -493,3 +493,10 @@ npm run lint
   - 각 게임별 정교한 UI/애니메이션 및 디자인 리소스 교체
 
 구현 세부를 변경하고 싶거나, 추가 게임/페이즈를 붙이고 싶다면 상기 구조를 기준으로 페이지/훅/대시보드 섹션을 확장하면 됩니다.
+
+
+브라우저 접속 주소:
+- 플레이어 화면: http://localhost:3000
+- GM 방 관리: http://localhost:3000/dashboard/x9a2k7
+- 마피아 전광판: http://localhost:3000/mafia-board
+- 디펜스 전광판: http://localhost:3000/defense-board

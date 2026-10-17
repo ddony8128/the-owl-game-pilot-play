@@ -103,3 +103,17 @@ test("[타이머] 5분 카운트다운 start·pause·reset 전이", async ({ req
   expect(s.timerStart, "리셋 후 정지").toBe(false);
   expect(s.timerStartAt, "리셋 후 시작시각 제거").toBeFalsy();
 });
+
+test("[타이머] 다음 라운드로 넘어가면 5분 정지 상태로 초기화", async ({ request }) => {
+  const room = await newRoom(request);
+  const timerUrl = "/api/gm/timers/defense";
+
+  await request.post(timerUrl, { data: { room, action: "start" } });
+  await request.post("/api/gm/defense/round", { data: { room, round: 1 } });
+
+  const timer = await (await request.get(`${timerUrl}?room=${room}`)).json();
+  expect(timer.timerStart, "라운드 전환 후 정지").toBe(false);
+  expect(timer.timerStartAt, "시작 시각 제거").toBeFalsy();
+  expect(timer.pauseAt, "일시정지 시각 제거").toBeFalsy();
+  expect(timer.remainingSeconds, "새 라운드 5분").toBe(300);
+});

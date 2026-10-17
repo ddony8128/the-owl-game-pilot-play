@@ -195,6 +195,9 @@ CREATE TABLE mafia_public_logs (
 CREATE TABLE defense_phase_state (
   room_code TEXT NOT NULL REFERENCES rooms(code),
   round BIGINT,
+  board_view TEXT NOT NULL DEFAULT 'ready',
+  board_round BIGINT NOT NULL DEFAULT 0,
+  board_updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (room_code)
 );

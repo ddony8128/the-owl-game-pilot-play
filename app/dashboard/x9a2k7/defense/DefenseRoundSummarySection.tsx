@@ -62,9 +62,10 @@ export function DefenseRoundSummarySection({
   const [data, setData] = useState<RoundState>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedMonsterIds, setExpandedMonsterIds] = useState<Set<string>>(
+    () => new Set()
+  );
 
-  // 진행 중 제출이 보이도록 대시보드 상태 폴링(4초)과 같은 주기로 조용히 다시 불러온다.
-  // silent 갱신은 로딩 표시·에러 초기화를 하지 않고, 라운드를 바꾼 뒤 늦게 온 응답은 버린다.
   const selectedRoundRef = useRef<number | null>(null);
   selectedRoundRef.current = selectedRound;
 
@@ -110,13 +111,6 @@ export function DefenseRoundSummarySection({
       if (!silent) setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (selectedRound == null) return;
-    const id = setInterval(() => void load(selectedRound, true), 4000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRound, room]);
 
   useEffect(() => {
     void load(selectedRound);
@@ -188,139 +182,177 @@ export function DefenseRoundSummarySection({
         <div className="space-y-4 text-base">
           {/* 플레이어별 행동 요약 */}
           <div className="space-y-2">
-            <h3 className="text-base font-semibold text-zinc-300">
-              플레이어별 행동 / 점수
-            </h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-base font-semibold text-zinc-300">
+                플레이어 행동
+              </h3>
+              <span className="text-xs text-zinc-500">
+                제출 {data.players.filter((player) => player.action).length}/
+                {data.players.length}
+              </span>
+            </div>
             {data.players.length === 0 ? (
               <p className="text-sm text-zinc-500">
                 해당 라운드의 플레이어 정보가 없습니다.
               </p>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                {data.players.map((p) => (
-                  <div
-                    key={p.player_id}
-                    className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-sm"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-base font-semibold">
+              <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/70 text-sm">
+                <div className="hidden grid-cols-[minmax(7rem,1fr)_5rem_minmax(12rem,2fr)_4rem] gap-3 border-b border-zinc-800 bg-zinc-950/50 px-3 py-2 text-xs font-medium text-zinc-500 md:grid">
+                  <span>플레이어</span>
+                  <span>행동</span>
+                  <span>내용</span>
+                  <span className="text-right">점수</span>
+                </div>
+                <div className="divide-y divide-zinc-800">
+                  {data.players.map((p) => {
+                    const actionLabel = !p.action
+                      ? "미제출"
+                      : p.action.type === "rest"
+                        ? "휴식"
+                        : p.action.type === "training"
+                          ? "훈련"
+                          : p.action.type === "combat"
+                            ? "전투"
+                            : p.action.type;
+                    const actionDetail = !p.action
+                      ? "행동 기록 없음"
+                      : p.action.type === "rest"
+                        ? p.action.restValues?.length
+                          ? `카드 ${p.action.restValues.join(", ")} 활성화`
+                          : "비활성 카드 활성화"
+                        : p.action.type === "training"
+                          ? `카드 ${p.action.trainingFromValue ?? "?"} 비활성 · ${p.action.trainingToBeforeValue ?? "?"}→${p.action.trainingToAfterValue ?? "?"} 강화`
+                          : p.action.type === "combat"
+                            ? `${p.action.targetMonsterName ?? "대상 없음"} · 카드 ${p.action.usedCardValue ?? "?"}`
+                            : "세부 정보 없음";
+
+                    return (
+                      <div
+                        key={p.player_id}
+                        className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-3 py-2.5 md:grid-cols-[minmax(7rem,1fr)_5rem_minmax(12rem,2fr)_4rem]"
+                      >
+                        <span className="min-w-0 truncate font-semibold text-zinc-100">
                           {p.nickname ?? "(이름 없음)"}
-                        </p>
+                        </span>
+                        <span className="text-right font-semibold text-amber-300 md:order-last">
+                          {p.score ?? 0}점
+                        </span>
+                        <span
+                          className={`w-fit rounded-full px-2 py-0.5 text-xs font-medium ${
+                            !p.action
+                              ? "bg-zinc-800 text-zinc-500"
+                              : p.action.type === "combat"
+                                ? "bg-red-950/70 text-red-300"
+                                : p.action.type === "training"
+                                  ? "bg-sky-950/70 text-sky-300"
+                                  : "bg-emerald-950/70 text-emerald-300"
+                          }`}
+                        >
+                          {actionLabel}
+                        </span>
+                        <span
+                          className="min-w-0 truncate text-zinc-400"
+                          title={actionDetail}
+                        >
+                          {actionDetail}
+                        </span>
                       </div>
-                      <div className="text-right text-sm">
-                        <p>
-                          점수:{" "}
-                          <span className="font-semibold">
-                            {p.score ?? 0}점
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="mb-1 text-sm text-zinc-400">선택한 행동</p>
-                      {!p.action ? (
-                        <p className="text-sm text-zinc-500">
-                          이 라운드에는 행동 기록이 없습니다.
-                        </p>
-                      ) : p.action.type === "rest" ? (
-                        <p className="text-sm">
-                          {p.action.restValues && p.action.restValues.length > 0
-                            ? `휴식 – 값 ${p.action.restValues.join(
-                                ", "
-                              )} 카드를 다시 활성화했습니다.`
-                            : "휴식 – 비활성화된 숫자 카드 중 일부를 다시 활성화했습니다."}
-                        </p>
-                      ) : p.action.type === "training" ? (
-                        <p className="text-sm">
-                          훈련 – 숫자{" "}
-                          {p.action.trainingFromValue != null
-                            ? p.action.trainingFromValue
-                            : "?"}
-                          {"  "}카드를 비활성화해 숫자{" "}
-                          {p.action.trainingToBeforeValue != null
-                            ? p.action.trainingToBeforeValue
-                            : "?"}
-                          {"  "}
-                          카드를{" "}
-                          {p.action.trainingToAfterValue != null
-                            ? p.action.trainingToAfterValue
-                            : "?"}
-                          로 강화.
-                        </p>
-                      ) : p.action.type === "combat" ? (
-                        <p className="text-sm">
-                          전투 –{" "}
-                          {p.action.targetMonsterName ??
-                            "알 수 없는 몬스터"}
-                          에게 숫자{" "}
-                          {p.action.usedCardValue != null
-                            ? p.action.usedCardValue
-                            : "?"}
-                          카드를 사용.
-                        </p>
-                      ) : (
-                        <p className="text-sm">
-                          {p.action.type} – 세부 정보 없음.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
           {/* 몬스터 요약 */}
           <div className="space-y-2">
-            <h3 className="text-base font-semibold text-zinc-300">
-              몬스터 / 공격자 요약
-            </h3>
+            <h3 className="text-base font-semibold text-zinc-300">몬스터 현황</h3>
             {data.monsters.length === 0 ? (
               <p className="text-sm text-zinc-500">
                 해당 라운드 스냅샷 시점에 남아 있는 몬스터가 없습니다.
               </p>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                {data.monsters.map((m) => (
-                  <div
-                    key={m.instance_id}
-                    className="space-y-1 rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-sm"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">
-                        {m.name} (슬롯 {m.slot_index + 1})
-                      </span>
-                      <span className="text-zinc-300">
-                        HP {m.current_hp} · 잔여 {m.remaining_time} 라운드 ·{" "}
-                        <span className="font-semibold text-amber-300">
-                          +{m.points}점
-                        </span>
-                      </span>
-                    </div>
-                    <p className="text-sm text-zinc-400">{m.description}</p>
-                    <div className="mt-1 space-y-1">
-                      <p className="text-sm text-zinc-400">공격자 목록</p>
-                      {m.attackers.length === 0 ? (
-                        <p className="text-sm text-zinc-500">
-                          이 몬스터를 공격한 플레이어가 없습니다.
-                        </p>
-                      ) : (
-                        <ul className="space-y-0.5 text-sm">
-                          {m.attackers.map((a, idx) => (
-                            <li key={`${a.player_id}-${idx}`}>
-                              {a.nickname ?? "(이름 없음)"} – 숫자{" "}
-                              {a.usedCardValue != null
-                                ? a.usedCardValue
-                                : "?"}
-                              카드 사용
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/70 text-sm">
+                <div className="hidden grid-cols-[minmax(10rem,2fr)_5rem_7rem_5rem_7rem] gap-3 border-b border-zinc-800 bg-zinc-950/50 px-3 py-2 text-xs font-medium text-zinc-500 md:grid">
+                  <span>몬스터</span>
+                  <span>HP</span>
+                  <span>남은 라운드</span>
+                  <span>점수</span>
+                  <span className="text-right">공격자</span>
+                </div>
+                <div className="divide-y divide-zinc-800">
+                  {data.monsters.map((m) => {
+                    const expanded = expandedMonsterIds.has(m.instance_id);
+
+                    return (
+                      <div key={m.instance_id}>
+                        <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-3 py-2.5 md:grid-cols-[minmax(10rem,2fr)_5rem_7rem_5rem_7rem]">
+                          <span className="min-w-0 truncate font-semibold text-zinc-100">
+                            {m.name}
+                            <span className="ml-1.5 text-xs font-normal text-zinc-500">
+                              슬롯 {m.slot_index + 1}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            onClick={() =>
+                              setExpandedMonsterIds((current) => {
+                                const next = new Set(current);
+                                if (next.has(m.instance_id)) {
+                                  next.delete(m.instance_id);
+                                } else {
+                                  next.add(m.instance_id);
+                                }
+                                return next;
+                              })
+                            }
+                            className="rounded-md bg-zinc-800 px-2.5 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-700 md:order-last md:text-right"
+                          >
+                            공격자 {m.attackers.length}명 {expanded ? "접기" : "보기"}
+                          </button>
+                          <span className="col-span-2 text-xs text-zinc-400 md:hidden">
+                            HP {m.current_hp} · 잔여 {m.remaining_time}R ·{" "}
+                            <span className="font-semibold text-amber-300">
+                              +{m.points}점
+                            </span>
+                          </span>
+                          <span className="hidden text-zinc-300 md:inline">
+                            {m.current_hp}
+                          </span>
+                          <span className="hidden text-zinc-300 md:inline">
+                            {m.remaining_time}R
+                          </span>
+                          <span className="hidden font-semibold text-amber-300 md:inline">
+                            +{m.points}점
+                          </span>
+                        </div>
+
+                        {expanded && (
+                          <div className="border-t border-zinc-800/80 bg-zinc-950/40 px-3 py-2">
+                            {m.attackers.length === 0 ? (
+                              <p className="text-xs text-zinc-500">
+                                공격한 플레이어가 없습니다.
+                              </p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                {m.attackers.map((a, idx) => (
+                                  <span
+                                    key={`${a.player_id}-${idx}`}
+                                    className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300"
+                                  >
+                                    {a.nickname ?? "(이름 없음)"} · 카드{" "}
+                                    {a.usedCardValue ?? "?"}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

@@ -48,3 +48,6 @@ playwright-report/
 e2e/_*.spec.ts
 docs/gm-guide/_*.png
 start.log
+
+# local agent settings
+.claude/settings.local.json

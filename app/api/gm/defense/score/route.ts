@@ -120,6 +120,26 @@ export async function POST(request: Request) {
     );
   }
 
+  // 이미 끝난 라운드의 점수 공개 직전에 GM이 보정한 경우,
+  // 가장 최근 점수 스냅샷에도 같은 보정을 반영한다.
+  const latestSnapshot = await supabase
+    .from("defense_score_snapshot")
+    .select("round, points")
+    .eq("room_code", room)
+    .eq("player_id", body.playerId)
+    .order("round", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!latestSnapshot.error && latestSnapshot.data) {
+    await supabase
+      .from("defense_score_snapshot")
+      .update({ points: (latestSnapshot.data.points ?? 0) + delta })
+      .eq("room_code", room)
+      .eq("player_id", body.playerId)
+      .eq("round", latestSnapshot.data.round);
+  }
+
   return NextResponse.json(
     { ok: true, points: nextPoints } as PostResponse,
     { status: 200 }

@@ -10,26 +10,29 @@ export async function handleAuctionToTrade(
   current: MafiaPhaseState,
   room: string
 ) {
-  // 현재 라운드의 경매 베팅 내역 조회
-  const { data: actionRows, error: actionsError } = await supabase
-    .from("mafia_actions")
-    .select("player_id, round_number, phase, action_type, payload, created_at")
-    .eq("room_code", room)
-    .eq("round_number", current.round_number)
-    .eq("phase", current.phase)
-    .eq("action_type", "bet");
+  // 경매 기록과 플레이어 상태는 서로 독립적이므로 동시에 조회한다.
+  const [
+    { data: actionRows, error: actionsError },
+    { data: playerStateRows, error: playerStateError },
+  ] = await Promise.all([
+    supabase
+      .from("mafia_actions")
+      .select("player_id, round_number, phase, action_type, payload, created_at")
+      .eq("room_code", room)
+      .eq("round_number", current.round_number)
+      .eq("phase", current.phase)
+      .eq("action_type", "bet"),
+    supabase
+      .from("mafia_player_state")
+      .select("player_id, cash, is_mafia, job, updated_at")
+      .eq("room_code", room),
+  ]);
 
   if (actionsError) {
     throw new Error(actionsError.message ?? "경매 기록을 불러오지 못했습니다.");
   }
 
   const actions = (actionRows || []) as MafiaAction[];
-
-  // 플레이어 목록 조회 (모든 참가자 대상)
-  const { data: playerStateRows, error: playerStateError } = await supabase
-    .from("mafia_player_state")
-    .select("player_id, cash, is_mafia, job, updated_at")
-    .eq("room_code", room);
 
   if (playerStateError) {
     throw new Error(
@@ -102,6 +105,15 @@ export async function handleAuctionToTrade(
     jobByPlayer.set(pid, "salaryman");
   }
 
+  const winningAmountByPlayer = new Map<string, number>();
+  for (const bid of winningBids) {
+    winningAmountByPlayer.set(
+      bid.player_id,
+      (winningAmountByPlayer.get(bid.player_id) ?? 0) + bid.amount
+    );
+  }
+
+  const stateByPlayer = new Map(playerStates.map((state) => [state.player_id, state]));
   const updates: Partial<MafiaPlayerState>[] = [];
   for (const pid of playerIds) {
     const job = jobByPlayer.get(pid) ?? null;
@@ -112,12 +124,16 @@ export async function handleAuctionToTrade(
       job === "down_manipulator" ||
       job === "robber";
 
-    updates.push({
+    const winningAmount = winningAmountByPlayer.get(pid) ?? 0;
+    const currentCash = stateByPlayer.get(pid)?.cash ?? 0;
+    const update: Partial<MafiaPlayerState> = {
       player_id: pid,
       room_code: room,
       job,
       is_mafia: isMafia,
-    } as Partial<MafiaPlayerState>);
+      cash: currentCash - winningAmount,
+    };
+    updates.push(update);
   }
 
   if (updates.length > 0) {
@@ -132,41 +148,4 @@ export async function handleAuctionToTrade(
     }
   }
 
-  // 경매 낙찰자의 베팅 금액만큼 현금 차감
-  if (winningBids.length > 0) {
-    const byPlayerAmount = new Map<string, number>();
-    for (const wb of winningBids) {
-      byPlayerAmount.set(
-        wb.player_id,
-        (byPlayerAmount.get(wb.player_id) ?? 0) + wb.amount
-      );
-    }
-
-    const updatedPlayers: Partial<MafiaPlayerState>[] = [];
-    for (const p of playerStates) {
-      const pid = p.player_id;
-      const betAmount = byPlayerAmount.get(pid) ?? 0;
-      if (betAmount <= 0) continue;
-      const baseCash = typeof p.cash === "number" ? p.cash : 0;
-      const nextCash = baseCash - betAmount;
-      updatedPlayers.push({
-        player_id: pid,
-        room_code: room,
-        cash: nextCash,
-      } as Partial<MafiaPlayerState>);
-    }
-
-    if (updatedPlayers.length > 0) {
-      const { error: cashUpdateError } = await supabase
-        .from("mafia_player_state")
-        .upsert(updatedPlayers, { onConflict: "player_id" });
-
-      if (cashUpdateError) {
-        throw new Error(
-          cashUpdateError.message ??
-            "경매 베팅 금액을 현금에서 차감하지 못했습니다."
-        );
-      }
-    }
-  }
 }

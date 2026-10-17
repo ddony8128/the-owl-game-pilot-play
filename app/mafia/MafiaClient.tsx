@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   MafiaAbilityResult,
   MafiaLog,
@@ -18,7 +18,6 @@ import { getMafiaPhaseLabel } from "@/lib/labels/mafia";
 import { MafiaHeader } from "./MafiaHeader";
 import { MafiaInfoTab } from "./MafiaInfoTab";
 import { MafiaRulesTab } from "./MafiaRulesTab";
-import { MafiaStocksTab } from "./MafiaStocksTab";
 import { MafiaAuctionTab } from "./MafiaAuctionTab";
 import { MafiaTradeTab } from "./MafiaTradeTab";
 import { MafiaAbilityTab } from "./MafiaAbilityTab";
@@ -40,14 +39,6 @@ function MafiaInner() {
   const [phase, setPhase] = useState<MafiaPhaseState | null>(null);
   const [logs, setLogs] = useState<MafiaLog[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [stockHistory, setStockHistory] = useState<Record<
-    string,
-    {
-      round_number: number;
-      price_before: number | null;
-      price_after: number | null;
-    }[]
-  > | null>(null);
   const [abilityResults, setAbilityResults] = useState<MafiaAbilityResult[]>(
     []
   );
@@ -73,6 +64,8 @@ function MafiaInner() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
+  const [reloadToken, setReloadToken] = useState(0);
+  const [roomEnded, setRoomEnded] = useState(false);
 
   // 초기 로딩 + 에러 처리는 한 번만 수행
   useEffect(() => {
@@ -87,18 +80,11 @@ function MafiaInner() {
         const json = (await res.json().catch(() => null)) as
           | {
               phase: MafiaPhaseState | null;
+              roomEnded?: boolean;
               stocks: MafiaStockState[];
               playerState: MafiaPlayerState | null;
               players?: Player[];
               logs: MafiaLog[];
-              stockHistory?: Record<
-                string,
-                {
-                  round_number: number;
-                  price_before: number | null;
-                  price_after: number | null;
-                }[]
-              >;
               abilityResults?: MafiaAbilityResult[];
               ticketPrice?: number | null;
               myVoteSummary?: {
@@ -137,9 +123,9 @@ function MafiaInner() {
         setMafiaPlayer(json.playerState ?? null);
         setStocks(json.stocks ?? []);
         setPhase(json.phase ?? null);
+        setRoomEnded(json.roomEnded === true);
         setLogs(json.logs ?? []);
         setPlayers(json.players ?? []);
-        setStockHistory(json.stockHistory ?? null);
         setAbilityResults(json.abilityResults ?? []);
         setTicketPrice(
           typeof json.ticketPrice === "number" ? json.ticketPrice : null
@@ -170,217 +156,28 @@ function MafiaInner() {
     return () => {
       cancelled = true;
     };
-  }, [roomCode, nickname]);
+  }, [roomCode, nickname, reloadToken]);
 
-  // 페이즈/현금/능력결과 등을 주기적으로 갱신하기 위한 폴링
-  useEffect(() => {
-    if (!roomCode || !nickname) return;
-    let cancelled = false;
-
-    const poll = async (room: string, nick: string) => {
-      try {
-        const params = new URLSearchParams({ room, nickname: nick });
-        const res = await fetch(`/api/mafia/state?${params.toString()}`);
-        const json = (await res.json().catch(() => null)) as
-          | {
-              phase: MafiaPhaseState | null;
-              stocks: MafiaStockState[];
-              playerState: MafiaPlayerState | null;
-              players?: Player[];
-              logs: MafiaLog[];
-              stockHistory?: Record<
-                string,
-                {
-                  round_number: number;
-                  price_before: number | null;
-                  price_after: number | null;
-                }[]
-              >;
-              abilityResults?: MafiaAbilityResult[];
-              ticketPrice?: number | null;
-              myVoteSummary?: {
-                target: string;
-                vote_count: number;
-                total_spent: number;
-              }[];
-              myAuctionBet?: {
-                job: string | null;
-                amount: number | null;
-                give_up: boolean;
-              } | null;
-              hasUsedAbilityThisPhase?: boolean;
-              myAbilityActionThisPhase?: {
-                job: string | null;
-                payload: Record<string, unknown> | null;
-              } | null;
-              myTradesThisRound?: Record<
-                string,
-                { bought: boolean; sold: boolean }
-              > | null;
-              error?: undefined;
-            }
-          | { error: string }
-          | null;
-
-        if (!res.ok || !json || "error" in json || cancelled) {
-          return;
-        }
-
-        setMafiaPlayer(json.playerState ?? null);
-        setStocks(json.stocks ?? []);
-        setPhase(json.phase ?? null);
-        setLogs(json.logs ?? []);
-        setPlayers(json.players ?? []);
-        setStockHistory(json.stockHistory ?? null);
-        setAbilityResults(json.abilityResults ?? []);
-        setTicketPrice(
-          typeof json.ticketPrice === "number" ? json.ticketPrice : null
-        );
-        setMyVoteSummary(json.myVoteSummary ?? []);
-        setMyAuctionBet(json.myAuctionBet ?? null);
-        setHasUsedAbilityThisPhase(!!json.hasUsedAbilityThisPhase);
-        setMyAbilityActionThisPhase(json.myAbilityActionThisPhase ?? null);
-        setMyTradesThisRound(json.myTradesThisRound ?? null);
-      } catch {
-        // 폴링 에러는 조용히 무시 (초기 로딩 에러는 위 effect에서 처리)
-      }
-    };
-
-    const intervalId = setInterval(() => {
-      void poll(roomCode, nickname);
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(intervalId);
-    };
-  }, [roomCode, nickname]);
-
-  const [timerState, setTimerState] = useState<{
-    remainingSeconds: number;
-    isRunning: boolean;
-  } | null>(null);
-  const timerMetaRef = useRef<MafiaTimerApi | null>(null);
-
-  type MafiaTimerApi = {
-    phase: string | null;
-    timerStart: boolean;
-    timerStartAt: string | null;
-    pauseAt: string | null;
-    totalSeconds: number;
-  };
-
-  const computeRemaining = useCallback(
-    (
-      api: MafiaTimerApi | null,
-      nowMs: number
-    ): { remainingSeconds: number; isRunning: boolean } => {
-      if (!api || !api.phase) {
-        return { remainingSeconds: 0, isRunning: false };
-      }
-
-      const total = api.totalSeconds || 0;
-      if (total <= 0) {
-        return { remainingSeconds: 0, isRunning: false };
-      }
-
-      if (!api.timerStart && !api.pauseAt) {
-        return { remainingSeconds: total, isRunning: false };
-      }
-
-      if (api.timerStart && api.timerStartAt) {
-        const startMs = new Date(api.timerStartAt).getTime();
-        if (Number.isNaN(startMs)) {
-          return { remainingSeconds: total, isRunning: false };
-        }
-        const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
-        const remaining = Math.max(0, total - elapsed);
-        return { remainingSeconds: remaining, isRunning: remaining > 0 };
-      }
-
-      if (!api.timerStart && api.timerStartAt && api.pauseAt) {
-        const startMs = new Date(api.timerStartAt).getTime();
-        const pauseMs = new Date(api.pauseAt).getTime();
-        if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
-          return { remainingSeconds: total, isRunning: false };
-        }
-        const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
-        const remaining = Math.max(0, total - elapsed);
-        return { remainingSeconds: remaining, isRunning: false };
-      }
-
-      return { remainingSeconds: total, isRunning: false };
-    },
-    []
-  );
-
-  // 서버 타이머 폴링 + 로컬 1초 틱 (GM 카운트다운과 동일 패턴)
   useEffect(() => {
     if (!roomCode) return;
-    let cancelled = false;
-
-    const loadTimer = async () => {
-      try {
-        const res = await fetch(
-          `/api/gm/timers/mafia?room=${encodeURIComponent(roomCode)}`
-        );
-        const json = (await res
-          .json()
-          .catch(() => null)) as MafiaTimerApi | null;
-        if (!res.ok || !json || cancelled) return;
-
-        const api = json;
-        const prevMeta = timerMetaRef.current;
-
-        // 타이머 메타데이터(phase, timerStart, timerStartAt, pauseAt, totalSeconds)가
-        // 바뀌었을 때에만 서버 기준으로 남은 시간을 재계산한다.
-        if (
-          prevMeta &&
-          prevMeta.phase === api.phase &&
-          prevMeta.timerStart === api.timerStart &&
-          prevMeta.timerStartAt === api.timerStartAt &&
-          prevMeta.pauseAt === api.pauseAt &&
-          prevMeta.totalSeconds === api.totalSeconds
-        ) {
-          // 아무 변화가 없으면 로컬 1초 틱만 사용 (타이머 튐 방지)
-          return;
-        }
-
-        const now = Date.now();
-        const nextState = computeRemaining(api, now);
-        timerMetaRef.current = api;
-        setTimerState(nextState);
-      } catch {
-        // 타이머 오류는 게임 진행을 막지 않음
+    const events = new EventSource(
+      `/api/mafia/phase-events?room=${encodeURIComponent(roomCode)}`
+    );
+    events.onmessage = () => setReloadToken((value) => value + 1);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setReloadToken((value) => value + 1);
       }
     };
-
-    void loadTimer();
-    const pollId = setInterval(() => {
-      void loadTimer();
-    }, 2000);
-
-    const tickId = setInterval(() => {
-      setTimerState((prev) => {
-        if (!prev) return prev;
-        if (!prev.isRunning || prev.remainingSeconds <= 0) return prev;
-        const next = prev.remainingSeconds - 1;
-        if (next <= 0) {
-          return { ...prev, remainingSeconds: 0 };
-        }
-        return { ...prev, remainingSeconds: next };
-      });
-    }, 1000);
-
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      cancelled = true;
-      clearInterval(pollId);
-      clearInterval(tickId);
+      events.close();
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [computeRemaining, roomCode]);
+  }, [roomCode]);
 
   const availableTabs = useMemo(() => {
-    const base: TabKey[] = ["info", "rules", "stocks", "result"];
+    const base: TabKey[] = ["info", "rules", "result"];
     const phaseKey = phase?.phase;
     if (phaseKey === "auction") base.push("auction");
     if (phaseKey === "trade") {
@@ -394,13 +191,12 @@ function MafiaInner() {
     () =>
       [
         { key: "info", label: "정보" },
-        { key: "rules", label: "규칙" },
-        { key: "stocks", label: "주가" },
         { key: "auction", label: "경매" },
         { key: "trade", label: "거래" },
         { key: "ability", label: "능력" },
-        { key: "result", label: "능력/투표결과" },
+        { key: "result", label: "능력 결과" },
         { key: "vote", label: "투표" },
+        { key: "rules", label: "규칙" },
       ].filter((t) => availableTabs.includes(t.key)),
     [availableTabs]
   );
@@ -420,10 +216,13 @@ function MafiaInner() {
     );
   }
 
-  const totalSeconds = timerState?.remainingSeconds ?? null;
-  const minutes =
-    totalSeconds != null ? Math.floor(totalSeconds / 60) % 60 : null;
-  const seconds = totalSeconds != null ? totalSeconds % 60 : null;
+  if (roomEnded) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-zinc-950 px-6 text-center text-zinc-50">
+        <p className="text-2xl font-black">게임이 종료되었습니다.</p>
+      </div>
+    );
+  }
 
   const roundLabel =
     typeof phase?.round_number === "number"
@@ -436,8 +235,6 @@ function MafiaInner() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
       <MafiaHeader
-        minutes={minutes}
-        seconds={seconds}
         roundLabel={roundLabel}
         phaseLabel={phaseLabel}
       />
@@ -445,6 +242,8 @@ function MafiaInner() {
       <p className="mt-2 text-sm text-red-300">
         이 화면은 다른 플레이어에게 보여주면 안 됩니다.
       </p>
+
+      <p className="mt-2 text-xs text-zinc-600">관리자가 다음 단계로 넘기면 자동으로 갱신됩니다.</p>
 
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <TabLayout tabs={tabsDef} activeKey={activeTab} onChange={setActiveTab}>
@@ -456,9 +255,6 @@ function MafiaInner() {
             />
           )}
           {activeTab === "rules" && <MafiaRulesTab />}
-          {activeTab === "stocks" && (
-            <MafiaStocksTab stocks={stocks} stockHistory={stockHistory} />
-          )}
           {activeTab === "auction" && (
             <MafiaAuctionTab
               player={player}
@@ -479,6 +275,13 @@ function MafiaInner() {
                   | null) ?? null
               }
               myTradesThisRound={myTradesThisRound}
+              onAssetsChange={({ cash, stocks: nextStocks }) => {
+                setMafiaPlayer((current) =>
+                  current
+                    ? { ...current, cash, stocks: nextStocks }
+                    : current
+                );
+              }}
             />
           )}
           {activeTab === "ability" && (
@@ -490,6 +293,10 @@ function MafiaInner() {
               players={players}
               hasUsedAbilityThisPhase={hasUsedAbilityThisPhase}
               myAbilityActionThisPhase={myAbilityActionThisPhase}
+              onAbilitySubmitted={(action) => {
+                setHasUsedAbilityThisPhase(true);
+                setMyAbilityActionThisPhase(action);
+              }}
             />
           )}
           {activeTab === "result" && (
@@ -503,6 +310,26 @@ function MafiaInner() {
               playerCash={mafiaPlayer?.cash ?? null}
               players={players}
               myVoteSummary={myVoteSummary}
+              onVoteSubmitted={({ target, vote_count, total_spent, cash }) => {
+                setMafiaPlayer((current) =>
+                  current ? { ...current, cash } : current
+                );
+                setMyVoteSummary((current) => {
+                  const existing = current.find((item) => item.target === target);
+                  if (!existing) {
+                    return [...current, { target, vote_count, total_spent }];
+                  }
+                  return current.map((item) =>
+                    item.target === target
+                      ? {
+                          ...item,
+                          vote_count: item.vote_count + vote_count,
+                          total_spent: item.total_spent + total_spent,
+                        }
+                      : item
+                  );
+                });
+              }}
             />
           )}
         </TabLayout>

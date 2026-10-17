@@ -1,6 +1,8 @@
 // 주요 테이블에서 사용하는 필드 위주로 타입 정의 (최종 DDL 기준)
 
 // 방(room)
+// DB에는 과거 이상교통 방이 남아 있을 수 있다. 신규 운영 게임은
+// mafia/defense만 허용하며 API에서 별도로 제한한다.
 export type RoomGame = "mafia" | "defense" | "subway";
 
 export type Room = {
@@ -214,6 +216,9 @@ export type ApiResult<T> =
 export type DefensePhaseState = {
   room_code: string;
   round: number;
+  board_view?: "ready" | "monsters" | "result" | "score";
+  board_round?: number;
+  board_updated_at?: string;
   updated_at: string;
 };
 

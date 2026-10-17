@@ -1,26 +1,16 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
+import { Suspense } from "react";
+import { DashboardNav } from "./DashboardNav";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-zinc-950 text-zinc-50">
-      <aside className="flex w-40 flex-col gap-2 border-r border-zinc-800 bg-zinc-900 px-3 py-4 text-xs">
-        <h1 className="mb-2 text-sm font-semibold">GM Dashboard</h1>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7"
-        >
-          방 관리
-        </Link>
-        <Link
-          className="text-zinc-200 hover:text-amber-300"
-          href="/dashboard/x9a2k7/bgm"
-        >
-          BGM
-        </Link>
-        {/* 게임 대시보드는 "방 관리"에서 방을 골라 입장합니다(방 코드 필요). */}
+    <div className="min-h-screen bg-zinc-950 text-zinc-50 xl:flex">
+      <aside className="sticky top-0 z-40 flex h-16 items-center gap-2 overflow-x-auto border-b border-zinc-800 bg-zinc-900/95 px-4 backdrop-blur xl:h-screen xl:w-52 xl:flex-col xl:items-stretch xl:overflow-visible xl:border-b-0 xl:border-r xl:px-4 xl:py-6">
+        <Suspense fallback={<span className="text-sm font-bold">부엉이게임 GM</span>}>
+          <DashboardNav />
+        </Suspense>
       </aside>
-      <main className="flex flex-1 flex-col px-4 py-4">{children}</main>
+      <main className="flex min-w-0 flex-1 flex-col p-3 sm:p-5 lg:p-6">{children}</main>
     </div>
   );
 }

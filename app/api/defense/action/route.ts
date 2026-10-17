@@ -59,7 +59,7 @@ export async function POST(request: Request) {
   // 현재 라운드 조회
   const { data: phaseRow, error: phaseError } = await supabase
     .from("defense_phase_state")
-    .select("room_code, round, updated_at")
+    .select("room_code, round, updated_at, board_view, board_round")
     .eq("room_code", room)
     .maybeSingle();
 
@@ -78,12 +78,20 @@ export async function POST(request: Request) {
   }
 
   const currentRound = phase.round;
+  const phaseWithBoard = phaseRow as {
+    board_view?: string;
+    board_round?: number;
+  };
+  const resultPending =
+    (phaseWithBoard.board_view === "result" ||
+      phaseWithBoard.board_view === "score") &&
+    phaseWithBoard.board_round === currentRound;
   // 행동 가능 라운드: 튜토리얼(1·2) + 본게임(4~15). 준비(≤0)·튜토리얼 결과(3)·종료(≥16)는 불가.
   const playable =
     currentRound === 1 ||
     currentRound === 2 ||
     (currentRound >= 4 && currentRound <= 15);
-  if (!playable) {
+  if (!playable || resultPending) {
     return NextResponse.json(
       {
         error:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import type { Player } from "@/lib/types";
 import { ErrorMessage } from "@/components/ErrorMessage";
@@ -49,9 +49,11 @@ export function MafiaAuctionTab({
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [submittedBet, setSubmittedBet] = useState<Props["myAuctionBet"]>(null);
+  const submitLockRef = useRef(false);
 
   const handleSubmitBet = async () => {
+    if (submitLockRef.current || myAuctionBet || submittedBet) return;
     if (!player?.nickname || !roomCode) return;
     if (!selectedJobId) return;
 
@@ -60,6 +62,13 @@ export function MafiaAuctionTab({
       setError("양수를 입력해 주세요.");
       return;
     }
+    const optimisticBet = {
+      job: selectedJobId,
+      amount: value,
+      give_up: false,
+    };
+    submitLockRef.current = true;
+    setSubmittedBet(optimisticBet);
     setSubmitting(true);
     setError(null);
 
@@ -86,25 +95,22 @@ export function MafiaAuctionTab({
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "베팅을 기록하지 못했습니다.";
+      submitLockRef.current = false;
+      setSubmittedBet(null);
       setError(message);
       setSubmitting(false);
       return;
     }
 
-    // 서버 반영/폴링이 따라올 시간을 조금 준다 (체감상 깜빡임 완화)
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
     setSubmitting(false);
-    const jobLabel =
-      JOBS.find((j) => j.id === selectedJobId)?.label ?? "선택한 직업";
-    setInfo(`${jobLabel} 직업에 ${value}원을 베팅했습니다.`);
     setAmount("");
-    setSelectedJobId(null);
-    setStep("pickJob");
   };
 
   const handleSubmitGiveUp = async () => {
+    if (submitLockRef.current || myAuctionBet || submittedBet) return;
     if (!player?.nickname || !roomCode) return;
+    submitLockRef.current = true;
+    setSubmittedBet({ job: null, amount: null, give_up: true });
     setSubmitting(true);
     setError(null);
 
@@ -131,41 +137,61 @@ export function MafiaAuctionTab({
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "베팅 포기를 기록하지 못했습니다.";
+      submitLockRef.current = false;
+      setSubmittedBet(null);
       setError(message);
       setSubmitting(false);
       return;
     }
 
-    // 서버 반영/폴링이 따라올 시간을 조금 준다
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
     setSubmitting(false);
-    setInfo("이번 라운드 직업 경매에서 베팅을 포기했습니다.");
-    setSelectedJobId(null);
     setAmount("");
-    setStep("pickJob");
   };
 
   const currentJobLabel =
     (selectedJobId && JOBS.find((j) => j.id === selectedJobId)?.label) ?? "";
 
-  // 이미 서버에 기록된 베팅이 있다면, 해당 요약만 보여주고 재베팅은 막는다.
-  if (myAuctionBet) {
-    const chosenLabel =
-      myAuctionBet.job && JOBS.find((j) => j.id === myAuctionBet.job)?.label;
+  const effectiveBet = submittedBet ?? myAuctionBet;
 
-    const message = myAuctionBet.give_up
+  // 서버 기록 또는 방금 제출한 베팅이 있으면 요약만 보여주고 재베팅을 막는다.
+  if (effectiveBet) {
+    const chosenJob = JOBS.find((j) => j.id === effectiveBet.job);
+    const chosenLabel = chosenJob?.label;
+
+    const message = effectiveBet.give_up
       ? "이번 라운드 직업 경매에서 베팅을 포기했습니다."
-      : `${chosenLabel ?? myAuctionBet.job ?? "선택한 직업"} 직업에 ${
-          myAuctionBet.amount ?? 0
+      : `${chosenLabel ?? effectiveBet.job ?? "선택한 직업"} 직업에 ${
+          effectiveBet.amount ?? 0
         }원을 베팅했습니다.`;
 
     return (
       <div className="space-y-3 text-sm text-zinc-100">
         {error && <ErrorMessage message={error} />}
-        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-base text-emerald-300 whitespace-pre-wrap">
-          {message}
-        </p>
+        <div className="overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 to-zinc-900 p-5 text-center">
+          {chosenJob?.icon ? (
+            <div className="relative mx-auto h-48 w-48 overflow-hidden rounded-full border-4 border-emerald-400/40 bg-zinc-800 shadow-xl shadow-emerald-950/40">
+              <Image
+                src={chosenJob.icon}
+                alt={chosenJob.label}
+                fill
+                className="object-cover"
+              />
+            </div>
+          ) : (
+            <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-red-500/10 text-4xl">
+              ×
+            </div>
+          )}
+          <p className="mt-4 text-xs font-black tracking-[0.2em] text-emerald-400">
+            {effectiveBet.give_up ? "경매 포기 완료" : "입찰 완료"}
+          </p>
+          <p className="mt-2 whitespace-pre-wrap text-lg font-bold text-zinc-100">
+            {message}
+          </p>
+          <p className="mt-2 text-xs text-zinc-500">
+            제출한 입찰은 이번 라운드에서 변경할 수 없습니다.
+          </p>
+        </div>
       </div>
     );
   }
@@ -173,11 +199,6 @@ export function MafiaAuctionTab({
   return (
     <div className="space-y-4 text-sm text-zinc-100">
       {error && <ErrorMessage message={error} />}
-      {info && (
-        <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-          {info}
-        </p>
-      )}
 
       {step === "pickJob" && (
         <div className="space-y-3">
