@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
+import { rankPlayers, type Ranked } from "@/lib/defense/rank";
 import type {
   DefenseScoreSnapshot,
   DefenseAction,
@@ -14,10 +15,12 @@ type BoardScore = {
   damage: number;
 };
 
+// Iteration 5: 순위(rank·tieCount)는 lib/defense/rank.ts 의 rankPlayers 가 매긴다(점수 → 누적 데미지 → 공동 순위).
+// 배열은 등수 오름차순. 닉네임으로 가르지 않는다.
 type BoardScoreResponse =
   | {
       round: number;
-      scores: BoardScore[];
+      scores: Ranked<BoardScore>[];
     }
   | { error: string };
 
@@ -115,19 +118,13 @@ export async function GET(request: Request) {
     damage: damageByPlayer.get(p.id) ?? 0,
   }));
 
-  // 점수 내림차순, 동점이면 누적 데미지 내림차순, 그래도 동점이면 닉네임/ID 순
-  scores.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.damage !== a.damage) return b.damage - a.damage;
-    const na = a.nickname ?? a.playerId;
-    const nb = b.nickname ?? b.playerId;
-    return na.localeCompare(nb);
-  });
+  // 점수 내림차순 → 동점이면 누적 데미지 내림차순 → 그래도 같으면 공동 순위(1,1,3). 닉네임 순 정렬은 쓰지 않는다.
+  const ranked = rankPlayers(scores);
 
   return NextResponse.json(
     {
       round,
-      scores,
+      scores: ranked,
     } as BoardScoreResponse,
     { status: 200 }
   );

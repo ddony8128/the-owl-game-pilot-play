@@ -56,6 +56,10 @@ describe("룰 영상 정의", () => {
     const second = jumpChaptersOf("mafia")[1]!;
     expect(chapterAt("mafia", second.atSec + 1)).toBe(second.label);
     expect(chapterAt("mafia", 0)).toBe(null);
+    // GM 장 버튼은 seekSec 을 내림(validateVideoPatch)해 보낸다 — 소수 시작 초(116.9 → 116)도 그 장으로 본다(Iteration 5)
+    for (const id of ["defense", "mafia"] as const) {
+      for (const c of jumpChaptersOf(id)) expect(chapterAt(id, Math.floor(c.atSec)), `${id} ${c.label}`).toBe(c.label);
+    }
   });
 });
 

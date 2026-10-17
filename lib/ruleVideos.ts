@@ -69,10 +69,12 @@ export function durationOf(id: RuleVideoId): number {
   return chaptersOf(id).find((c) => c.label === "끝")?.atSec ?? 0;
 }
 
-/** sec 위치가 속한 장 이름(첫 장 전이면 null) */
+/** sec 위치가 속한 장 이름(첫 장 전이면 null).
+ *  장 시작 초(atSec)는 소수(예: 116.9)인데 GM 이 장 버튼으로 보낸 seekSec 은 내림(116)이라, 1초 안쪽은 그 장으로 본다
+ *  (0.5초 허용이던 때는 "전투 처리"로 보냈는데 패널이 "몬스터와 대기열"로 표시됐다 — Iteration 5 수정). */
 export function chapterAt(id: RuleVideoId, sec: number): string | null {
   let label: string | null = null;
-  for (const c of jumpChaptersOf(id)) if (sec >= c.atSec - 0.5) label = c.label;
+  for (const c of jumpChaptersOf(id)) if (sec >= Math.floor(c.atSec)) label = c.label;
   return label;
 }
 

@@ -1,12 +1,26 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
+import { rankMafiaPlayers } from "@/lib/mafia/rank";
+import {
+  groupPriceChanges,
+  holdingsValue,
+  isMafiaJob,
+  type MafiaBoardSummary,
+  type PlayerAsset,
+  type StockHistoryRow,
+} from "@/lib/mafia/boardSummary";
+import type { MafiaPhase } from "@/lib/types";
 
-// 마피아 결과 페이지용 요약:
-//  - finished: 본게임 마지막 라운드(5)의 'end' 페이즈에 도달했는지
-//  - rounds: 라운드별 각 플레이어의 직업 + 자산(현금 + 보유주식 평가액)
-//  - final: 라이브 상태 기준 최종 순위
-// 게임 종료 전에는 라운드/직업/마피아를 공개하지 않는다(보드에서 대기 화면 표시).
+// 마피아 보드(빔) 요약 — Iteration 5 WS-C.
+//
+// 공개 정보(항상):
+//  - round / phase / roomStatus / playerCount / 현재 주가(prices) / 라운드별 주가 변동 묶음(changes)
+//    → 주가는 모든 참가자의 폰에 보이는 공개 정보. 보드는 변동을 종목별로 순차 공개한다.
+// 비공개 정보(게임 종료 + GM 공개 토글 뒤에만):
+//  - rounds(라운드별 직업·자산), final(최종 순위·마피아 여부)
+//    → finished(5라운드 end) **이고** rooms.reveal_result = true 일 때만 채운다. 아니면 빈 배열.
+//    응답에 is_mafia / job / cash / total_assets / holdings 키가 공개 전에는 **절대** 들어가지 않는다(E2E가 JSON을 단언).
 
 const PHASE_RANK: Record<string, number> = {
   prepare: 0,
@@ -18,100 +32,87 @@ const PHASE_RANK: Record<string, number> = {
 };
 
 const FINAL_MAIN_ROUND = 5;
-
-type PlayerAsset = {
-  player_id: string;
-  nickname: string | null;
-  job: string | null;
-  is_mafia: boolean;
-  cash: number;
-  holdings_value: number;
-  total_assets: number;
-};
-
-function isMafiaJob(job: string | null): boolean {
-  return (
-    job === "up_manipulator" ||
-    job === "down_manipulator" ||
-    job === "robber"
-  );
-}
-
-function holdingsValue(
-  stocks: unknown,
-  priceByStock: Map<string, number>
-): number {
-  if (!stocks || typeof stocks !== "object") return 0;
-  let v = 0;
-  for (const [key, info] of Object.entries(
-    stocks as Record<string, { amount?: number }>
-  )) {
-    const amount = info && typeof info.amount === "number" ? info.amount : 0;
-    if (amount <= 0) continue;
-    v += amount * (priceByStock.get(key) ?? 0);
-  }
-  return v;
-}
+const INITIAL_PRICE = 5;
 
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
-  const room = normalizeRoomCode(
-    new URL(request.url).searchParams.get("room") ?? ""
-  );
+  const room = normalizeRoomCode(new URL(request.url).searchParams.get("room") ?? "");
   if (!room) {
     return NextResponse.json({ error: "room 필요" }, { status: 400 });
   }
 
-  // 페이즈/라운드 → 종료 판정
-  const { data: phaseRow } = await supabase
-    .from("mafia_phase_state")
-    .select("round_number, phase")
-    .eq("room_code", room)
-    .maybeSingle();
-  const currentRound =
-    typeof phaseRow?.round_number === "number" ? phaseRow.round_number : 0;
-  const currentPhase = (phaseRow?.phase as string | null) ?? null;
-  const finished =
-    currentRound >= FINAL_MAIN_ROUND && currentPhase === "end";
+  const [roomRes, phaseRes, playersRes, stocksRes, historyRes] = await Promise.all([
+    supabase.from("rooms").select("code, status, reveal_result").eq("code", room).maybeSingle(),
+    supabase.from("mafia_phase_state").select("round_number, phase").eq("room_code", room).maybeSingle(),
+    supabase.from("players").select("id, nickname").eq("room_code", room),
+    supabase.from("mafia_stock_state").select("stock_key, price").eq("room_code", room),
+    supabase
+      .from("mafia_stock_history")
+      .select("id, stock_key, round_number, price_before, price_after, meta")
+      .eq("room_code", room)
+      .order("id", { ascending: true }),
+  ]);
 
-  // 플레이어 이름
-  const { data: playerRows } = await supabase
-    .from("players")
-    .select("id, nickname")
-    .eq("room_code", room);
+  if (roomRes.error) {
+    return NextResponse.json({ error: roomRes.error.message }, { status: 500 });
+  }
+  if (!roomRes.data) {
+    return NextResponse.json({ error: "방을 찾을 수 없습니다." }, { status: 404 });
+  }
+  if (phaseRes.error) {
+    return NextResponse.json({ error: phaseRes.error.message }, { status: 500 });
+  }
+
+  const currentRound = typeof phaseRes.data?.round_number === "number" ? phaseRes.data.round_number : 0;
+  const currentPhase = (phaseRes.data?.phase as MafiaPhase | null) ?? null;
+  const finished = currentRound >= FINAL_MAIN_ROUND && currentPhase === "end";
+  const revealResult = roomRes.data.reveal_result === true;
+  const revealed = finished && revealResult;
+
   const nameById = new Map<string, string | null>();
-  for (const p of (playerRows || []) as { id: string; nickname: string | null }[]) {
+  for (const p of (playersRes.data || []) as { id: string; nickname: string | null }[]) {
     nameById.set(p.id, p.nickname ?? null);
   }
 
-  // 게임 종료 전에는 빈 결과만 반환(공개 금지)
-  if (!finished) {
-    return NextResponse.json({
-      finished: false,
-      currentRound,
-      rounds: [],
-      final: [],
-    });
+  const prices = ((stocksRes.data || []) as { stock_key: string; price: number }[])
+    .map((s) => ({ stock_key: s.stock_key, price: s.price }))
+    .sort((a, b) => a.stock_key.localeCompare(b.stock_key, "ko"));
+  const historyRows = (historyRes.data || []) as StockHistoryRow[];
+  const changes = groupPriceChanges(historyRows);
+
+  const base: MafiaBoardSummary = {
+    round: currentRound,
+    phase: currentPhase,
+    roomStatus: (roomRes.data.status as "active" | "ended" | null) ?? null,
+    playerCount: nameById.size,
+    finished,
+    revealResult,
+    revealed,
+    prices,
+    changes,
+    rounds: [],
+    final: [],
+    serverNow: new Date().toISOString(),
+  };
+
+  // 게임 종료 전 또는 GM 공개 전: 공개 정보만 반환
+  if (!revealed) {
+    return NextResponse.json(base);
   }
 
-  // 라이브 상태(최종 순위) + 현재 주가
-  const [{ data: liveStates }, { data: liveStocks }] = await Promise.all([
+  // ── 공개 뒤: 라이브 상태(최종 순위) + 라운드별 스냅샷 ──
+  const [{ data: liveStates }, { data: snapRows }] = await Promise.all([
+    supabase.from("mafia_player_state").select("player_id, job, is_mafia, cash, stocks").eq("room_code", room),
     supabase
-      .from("mafia_player_state")
-      .select("player_id, job, is_mafia, cash, stocks")
-      .eq("room_code", room),
-    supabase
-      .from("mafia_stock_state")
-      .select("stock_key, price")
+      .from("mafia_player_snapshots")
+      .select("player_id, round_number, phase, cash, stocks, job")
       .eq("room_code", room),
   ]);
 
   const finalPrice = new Map<string, number>();
-  for (const s of (liveStocks || []) as { stock_key: string; price: number }[]) {
-    finalPrice.set(s.stock_key, s.price);
-  }
+  for (const s of prices) finalPrice.set(s.stock_key, s.price);
 
-  const final: PlayerAsset[] = (
+  const finalRows: PlayerAsset[] = (
     (liveStates || []) as {
       player_id: string;
       job: string | null;
@@ -119,64 +120,36 @@ export async function GET(request: Request) {
       cash: number;
       stocks: unknown;
     }[]
-  )
-    .map((p) => {
-      const hv = holdingsValue(p.stocks, finalPrice);
-      return {
-        player_id: p.player_id,
-        nickname: nameById.get(p.player_id) ?? null,
-        job: p.job ?? null,
-        is_mafia: !!p.is_mafia,
-        cash: p.cash ?? 0,
-        holdings_value: hv,
-        total_assets: (p.cash ?? 0) + hv,
-      };
-    })
-    .sort((a, b) =>
-      b.total_assets !== a.total_assets
-        ? b.total_assets - a.total_assets
-        : b.cash - a.cash
-    );
+  ).map((p) => {
+    const hv = holdingsValue(p.stocks, finalPrice);
+    return {
+      player_id: p.player_id,
+      nickname: nameById.get(p.player_id) ?? null,
+      job: p.job ?? null,
+      is_mafia: !!p.is_mafia,
+      cash: p.cash ?? 0,
+      holdings_value: hv,
+      total_assets: (p.cash ?? 0) + hv,
+    };
+  });
+  // 총자산 → 현금 → 공동 순위(룰지). 닉네임으로 가르지 않는다.
+  const final = rankMafiaPlayers(finalRows);
 
-  // 라운드별 스냅샷(가장 진행된 페이즈) + 주가 히스토리
-  const [{ data: snapRows }, { data: historyRows }] = await Promise.all([
-    supabase
-      .from("mafia_player_snapshots")
-      .select("player_id, round_number, phase, cash, stocks, job")
-      .eq("room_code", room),
-    supabase
-      .from("mafia_stock_history")
-      .select("stock_key, round_number, price_after, id")
-      .eq("room_code", room)
-      .order("id", { ascending: true }),
-  ]);
-
-  // 라운드별 종료 시점 주가: 5원에서 시작해 라운드 순서대로 price_after를 누적 적용.
+  // 라운드별 종료 시점 주가: 5원에서 시작해 라운드 순서대로 price_after 를 누적 적용.
   const stockKeys = new Set<string>(finalPrice.keys());
-  for (const h of (historyRows || []) as { stock_key: string | null }[]) {
-    if (h.stock_key) stockKeys.add(h.stock_key);
-  }
+  for (const h of historyRows) if (h.stock_key) stockKeys.add(h.stock_key);
   const running = new Map<string, number>();
-  for (const k of stockKeys) running.set(k, 5);
+  for (const k of stockKeys) running.set(k, INITIAL_PRICE);
   const priceAtRound = new Map<number, Map<string, number>>();
-  for (let r = 1; r <= FINAL_MAIN_ROUND; r++) {
-    for (const h of (historyRows || []) as {
-      stock_key: string | null;
-      round_number: number;
-      price_after: number | null;
-    }[]) {
-      if (
-        h.round_number === r &&
-        h.stock_key &&
-        typeof h.price_after === "number"
-      ) {
+  for (let r = 1; r <= FINAL_MAIN_ROUND; r += 1) {
+    for (const h of historyRows) {
+      if (h.round_number === r && h.stock_key && typeof h.price_after === "number") {
         running.set(h.stock_key, h.price_after);
       }
     }
     priceAtRound.set(r, new Map(running));
   }
 
-  // 라운드별 플레이어 스냅샷에서 가장 진행된 페이즈를 선택
   type Snap = {
     player_id: string;
     round_number: number;
@@ -185,22 +158,18 @@ export async function GET(request: Request) {
     stocks: unknown;
     job: string | null;
   };
-  const bestByRoundPlayer = new Map<string, Snap>(); // key: `${round}:${player_id}`
+  const bestByRoundPlayer = new Map<string, Snap>();
   for (const s of (snapRows || []) as Snap[]) {
     if (s.round_number == null || !s.player_id) continue;
     const key = `${s.round_number}:${s.player_id}`;
     const prev = bestByRoundPlayer.get(key);
-    if (
-      !prev ||
-      (PHASE_RANK[s.phase ?? "prepare"] ?? 0) >=
-        (PHASE_RANK[prev.phase ?? "prepare"] ?? 0)
-    ) {
+    if (!prev || (PHASE_RANK[s.phase ?? "prepare"] ?? 0) >= (PHASE_RANK[prev.phase ?? "prepare"] ?? 0)) {
       bestByRoundPlayer.set(key, s);
     }
   }
 
   const rounds: { round: number; players: PlayerAsset[] }[] = [];
-  for (let r = 1; r <= FINAL_MAIN_ROUND; r++) {
+  for (let r = 1; r <= FINAL_MAIN_ROUND; r += 1) {
     const priceMap = priceAtRound.get(r) ?? new Map<string, number>();
     const players: PlayerAsset[] = [];
     for (const pid of nameById.keys()) {
@@ -224,5 +193,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ finished: true, currentRound, rounds, final });
+  return NextResponse.json({ ...base, rounds, final } satisfies MafiaBoardSummary);
 }

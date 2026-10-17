@@ -33,16 +33,11 @@ test("[UI] 12명·5칸: 결과중계 & 플레이어 화면 렌더, 가로 오버
   const room = await setup(request, 12);
   await toMainRound4(request, room);
 
-  // ── 결과중계 보드 (준비 화면에서 [다음]으로 대기열 뷰까지 스텝) ──
+  // ── 결과중계 보드 (Iteration 5: GM 라운드 자동 추종 — 본게임 1라운드 대기열이 클릭 없이 뜬다) ──
   await page.goto(`/defense-board?room=${room}`);
-  await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(1000);
-  let badges = 0;
-  for (let i = 0; i < 14 && badges === 0; i += 1) {
-    await page.getByRole("button", { name: "다음" }).click();
-    await page.waitForTimeout(600);
-    badges = await page.getByText(/\+\d+점/).count();
-  }
+  await expect(page.getByTestId("board-root")).toHaveAttribute("data-kind", "snapshot", { timeout: 15_000 });
+  await expect(page.getByTestId("board-monster-card")).toHaveCount(5, { timeout: 15_000 });
+  const badges = await page.getByText(/\+\d+점/).count();
   await page.screenshot({ path: `${SHOT}/board.png`, fullPage: true });
   // 대기열 5마리 → 보상 배지(+N점)가 5개, 가로 오버플로 없음
   expect(badges, "대기열 카드 5장 렌더").toBe(5);
