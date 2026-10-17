@@ -84,19 +84,22 @@ export async function POST(request: Request) {
 
   // 전환을 먼저 선점한다(compare-and-swap). 같은 전환을 동시에 보낸 두 요청 중 하나만 정산을 실행한다.
   // (예전엔 정산 뒤에 round 를 올려서, 동시 두 건이 전투 정산을 두 번 적용했다 — 반면교사 1-1·1-8)
-  const { data: claimed, error: claimError } = await supabase
+  // 전환 선점은 updated_at 낙관적 잠금으로 한다(라운드 번호는 정산/초기화가 끝난 뒤에 바꾼다).
+  //  라운드를 먼저 바꾸면 폰·보드가 "새 라운드인데 몬스터가 없는" 순간을 보게 된다(프로덕션 E2E 포착).
+  const lockToken = new Date().toISOString();
+  let lockQuery = supabase
     .from("defense_phase_state")
-    .update({ round: nextRound })
+    .update({ updated_at: lockToken })
     .eq("room_code", room)
-    .eq("round", current.round)
-    .select("room_code, round, updated_at")
-    .maybeSingle();
+    .eq("round", current.round);
+  lockQuery = current.updated_at ? lockQuery.eq("updated_at", current.updated_at) : lockQuery.is("updated_at", null);
+  const { data: locked, error: claimError } = await lockQuery.select("room_code, round, updated_at").maybeSingle();
 
   if (claimError) {
     return gmError(500, claimError.message);
   }
-  if (!claimed) {
-    // 그 사이 다른 요청이 라운드를 바꿨다 → 다시 읽어 멱등/409 를 가른다.
+  if (!locked) {
+    // 그 사이 다른 요청이 선점했거나 라운드를 바꿨다 → 다시 읽어 멱등/409 를 가른다.
     const { data: nowRow } = await supabase
       .from("defense_phase_state")
       .select("room_code, round, updated_at")
@@ -106,7 +109,7 @@ export async function POST(request: Request) {
     if (now && now.round >= nextRound) {
       return NextResponse.json({ ok: true, idempotent: true, phase: now } as ResponseBody, { status: 200 });
     }
-    return gmError(409, "다른 창에서 라운드가 바뀌어 적용하지 않았습니다. 화면을 새로 고치세요.", "already_advanced");
+    return gmError(409, "다른 창에서 라운드를 넘기는 중이거나 이미 바뀌었습니다. 화면을 새로 고치세요.", "already_advanced");
   }
 
   try {
@@ -125,17 +128,25 @@ export async function POST(request: Request) {
       await handleDefenseAdvanceRound(supabase, current, nextRound, room);
     }
   } catch (e: unknown) {
-    // 정산 실패 시 라운드를 원복해 재시도할 수 있게 한다(부분 적용은 GM 로그·화면 안내로 확인).
-    await supabase
-      .from("defense_phase_state")
-      .update({ round: current.round })
-      .eq("room_code", room)
-      .eq("round", nextRound);
+    // 정산/초기화 실패: 라운드 번호는 아직 바꾸지 않았으므로 그대로 재시도할 수 있다(부분 적용은 GM 로그·화면 안내로 확인).
     const message =
       e instanceof Error
         ? e.message
         : "디펜스 라운드 전환 처리 중 오류가 발생했습니다.";
     return gmError(500, `라운드 전환 실패(라운드는 ${getDefenseRoundLabel(current.round)}로 유지): ${message}`);
+  }
+
+  // 정산/초기화가 끝난 뒤에 라운드 번호를 바꾼다 — 이 순간부터 폰·보드가 새 라운드를 본다.
+  const { data: claimed, error: advanceError } = await supabase
+    .from("defense_phase_state")
+    .update({ round: nextRound })
+    .eq("room_code", room)
+    .eq("round", current.round)
+    .select("room_code, round, updated_at")
+    .maybeSingle();
+  if (advanceError) return gmError(500, advanceError.message);
+  if (!claimed) {
+    return gmError(409, "라운드 처리 중 다른 창에서 라운드가 바뀌었습니다. 화면을 새로 고치세요.", "already_advanced");
   }
 
   // "다음 라운드부터" 예약된 타이머 시간이 있으면 이 시점에 적용한다(타이머 자체는 GM이 리셋/시작).

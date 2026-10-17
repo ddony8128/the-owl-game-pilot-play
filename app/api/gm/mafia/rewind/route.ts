@@ -13,6 +13,7 @@ import { decideMafiaRewind, isMafiaJob, MAFIA_PHASE_ORDER } from "@/lib/admin/re
 //   trade→auction : 직업 배정·낙찰액 지불 취소 — auction 종료 스냅샷으로 현금/직업 복원(입찰 기록은 유지)
 //   vote→apply    : 투표 삭제(제출 0건 전제라 사실상 없음) + apply 스냅샷 삭제
 //   그 밖(apply·end·prepare)은 409. 되돌린 단계는 GM 로그에 남긴다.
+//  실행은 RPC gm_mafia_rewind_apply(한 트랜잭션, phase 행 잠금) — supabase/migrations/2026-10-17-iter5-rewind-rpc.sql
 
 type RewindResponse =
   | { ok: true; phase: MafiaPhaseState; restored: { players: number; deleted: number } }
@@ -107,93 +108,43 @@ export async function POST(request: Request) {
   const latestByPlayer = new Map<string, (typeof snaps)[number]>();
   for (const s of snaps) latestByPlayer.set(s.player_id, s);
 
-  // 페이즈 포인터를 먼저 되돌린다(CAS) → 이 뒤로 현재 페이즈 제출은 막힌다.
-  const { data: claimed, error: claimError } = await supabase
-    .from("mafia_phase_state")
-    .update({ phase: to })
-    .eq("room_code", room)
-    .eq("phase", current.phase)
-    .eq("round_number", R)
-    .select("room_code, round_number, phase, updated_at")
-    .maybeSingle();
-  if (claimError) return gmError(500, claimError.message);
-  if (!claimed) {
-    return gmError(409, "그 사이 페이즈가 바뀌어 되돌리지 않았습니다. 화면을 새로 고치세요.", "already_advanced");
-  }
-
-  // 되돌리는 사이 들어온 제출(경합) → 원복 후 거부
-  const late = await countSubmissions(supabase, room, R, current.phase).catch(() => 0);
-  if (late > 0) {
-    await supabase.from("mafia_phase_state").update({ phase: current.phase }).eq("room_code", room).eq("phase", to);
-    return gmError(409, `되돌리는 사이 제출이 ${late}건 들어와 취소했습니다.`, "not_rewindable");
-  }
-
-  const fail = async (message: string) => {
-    await supabase.from("mafia_phase_state").update({ phase: current.phase }).eq("room_code", room).eq("phase", to);
-    return gmError(500, `되돌리기 실패(${getMafiaPhaseLabel(current.phase)} 유지): ${message}`);
+  // 한 트랜잭션으로 적용(RPC gm_mafia_rewind_apply): phase 행 잠금 → 포인터·제출 0건 재확인 → 삭제/복원/포인터.
+  const mode = current.phase === "auction" && (R === 0 || R === 1) ? "assets" : current.phase === "trade" ? "job" : "none";
+  const rpcPlan = {
+    mode,
+    restore: [...latestByPlayer.values()].map((s) => ({
+      player_id: s.player_id,
+      cash: s.cash ?? 0,
+      stocks: s.stocks ?? null,
+      job: s.job ?? null,
+      is_mafia: isMafiaJob(s.job),
+    })),
+    delete_snapshot_ids: snaps.map((s) => s.id),
   };
-
-  let restoredPlayers = 0;
-  let deleted = 0;
-
-  if (current.phase === "auction") {
-    // prepare→auction 취소: 입찰(있을 수 없지만) 삭제 + (0·1라운드) 초기 자산 세팅 전 상태 복원
-    const del = await supabase
-      .from("mafia_actions")
-      .delete({ count: "exact" })
-      .eq("room_code", room)
-      .eq("round_number", R)
-      .eq("phase", "auction");
-    if (del.error) return fail(del.error.message);
-    deleted += del.count ?? 0;
-    if (R === 0 || R === 1) {
-      for (const s of latestByPlayer.values()) {
-        const { error } = await supabase
-          .from("mafia_player_state")
-          .update({ cash: s.cash ?? 0, stocks: s.stocks ?? null })
-          .eq("room_code", room)
-          .eq("player_id", s.player_id);
-        if (error) return fail(error.message);
-        restoredPlayers += 1;
-      }
-    }
-  } else if (current.phase === "trade") {
-    // auction→trade 취소: 직업·마피아 여부·낙찰액 지불을 auction 종료 시점으로
-    const del = await supabase
-      .from("mafia_actions")
-      .delete({ count: "exact" })
-      .eq("room_code", room)
-      .eq("round_number", R)
-      .eq("phase", "trade");
-    if (del.error) return fail(del.error.message);
-    deleted += del.count ?? 0;
-    for (const s of latestByPlayer.values()) {
-      const { error } = await supabase
-        .from("mafia_player_state")
-        .update({ cash: s.cash ?? 0, job: s.job ?? null, is_mafia: isMafiaJob(s.job) })
-        .eq("room_code", room)
-        .eq("player_id", s.player_id);
-      if (error) return fail(error.message);
-      restoredPlayers += 1;
-    }
-  } else if (current.phase === "vote") {
-    const del = await supabase
-      .from("mafia_votes")
-      .delete({ count: "exact" })
-      .eq("room_code", room)
-      .eq("round_number", R);
-    if (del.error) return fail(del.error.message);
-    deleted += del.count ?? 0;
+  const { data: rpcData, error: rpcError } = await supabase.rpc("gm_mafia_rewind_apply", {
+    p_room: room,
+    p_round: R,
+    p_from: current.phase,
+    p_to: to,
+    p_plan: rpcPlan,
+  });
+  if (rpcError) return gmError(500, `되돌리기 실패(${getMafiaPhaseLabel(current.phase)} 유지): ${rpcError.message}`);
+  const result = (rpcData ?? null) as
+    | { ok: true; restored: number; deleted: number }
+    | { ok: false; status?: number; reason?: string; error?: string }
+    | null;
+  if (!result || !result.ok) {
+    const status = result?.status === 409 ? 409 : 500;
+    return gmError(status, result?.error ?? "되돌리기 실패", (result?.reason ?? undefined) as Parameters<typeof gmError>[2]);
   }
-
-  // 되돌린 전환의 스냅샷을 지워 다시 전환할 때 중복되지 않게 한다.
-  if (snaps.length > 0) {
-    const { error } = await supabase
-      .from("mafia_player_snapshots")
-      .delete()
-      .in("id", snaps.map((s) => s.id));
-    if (error) return fail(error.message);
-  }
+  const restoredPlayers = result.restored;
+  const deleted = result.deleted;
+  const { data: afterRow } = await supabase
+    .from("mafia_phase_state")
+    .select("room_code, round_number, phase, updated_at")
+    .eq("room_code", room)
+    .maybeSingle();
+  const claimed = (afterRow ?? { room_code: room, round_number: R, phase: to, updated_at: new Date().toISOString() }) as MafiaPhaseState;
 
   // 타이머: 되돌아간 페이즈 기준으로 리셋(실패해도 되돌리기는 유지)
   try {
