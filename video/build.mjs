@@ -67,6 +67,15 @@ for (const [dir, src] of Object.entries(ASSET_SOURCES)) {
   }
   console.log(`assets ${dir}: ${files.length}개 복사`);
 }
+// 0-b. 배경 그림(Iteration 4) — video/assets/bg/*.png → public/bg/ (gen-bg.mjs로 생성한 커밋 파일)
+{
+  const from = join(ROOT, 'assets', 'bg');
+  const to = join(PUB, 'bg');
+  mkdirSync(to, { recursive: true });
+  const files = existsSync(from) ? readdirSync(from).filter((f) => f.endsWith('.png')) : [];
+  for (const f of files) writeFileSync(join(to, f), readFileSync(join(from, f)));
+  console.log(`assets bg: ${files.length}개 복사`);
+}
 
 // 1. 대본 로드 — esbuild로 타입만 걷어내 실행한다.
 const { SCRIPTS } = await importScenes();

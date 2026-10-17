@@ -90,7 +90,6 @@ const DEFENSE: Scene[] = [
   {
     id: "S4",
     variant: 'actions',
-    images: ["shots/defense-action.png"],
     screen: [
       "전투 / 휴식 / 훈련",
       "4 → 비활성 + 4 → 5",
@@ -233,7 +232,6 @@ const MAFIA: Scene[] = [
   {
     id: "S3",
     variant: 'flow',
-    images: ["shots/mafia-auction.png", "shots/mafia-trade.png", "shots/mafia-stocks.png", "shots/mafia-vote.png"],
     chapter: "라운드 흐름",
     screen: [
       "준비 → 직업 경매 → 주식 거래 → 주가 변동 → 투표 → 라운드 종료",
@@ -245,7 +243,7 @@ const MAFIA: Scene[] = [
   {
     id: "S4",
     variant: 'auction',
-    images: ["job/up_manip.png", "job/down_manip.png", "job/robber.png", "job/police.png", "job/investor.png", "job/financial.png", "job/ceo.png", "job/mayor.png", "job/salaryman.png", "shots/mafia-auction.png"],
+    images: ["job/up_manip.png", "job/down_manip.png", "job/robber.png", "job/police.png", "job/investor.png", "job/financial.png", "job/ceo.png", "job/mayor.png", "job/salaryman.png"],
     chapter: "직업 경매",
     screen: [
       "가장 높은 금액 1명 낙찰 → 베팅액 지불",
@@ -320,7 +318,7 @@ const MAFIA: Scene[] = [
   {
     id: "S9",
     variant: 'vote',
-    images: ["job/mayor.png", "shots/mafia-vote.png"],
+    images: ["job/mayor.png"],
     chapter: "투표와 경제사범",
     screen: [
       "표 1장 = 시장이 정한 가격(기본 1원)",
@@ -359,7 +357,6 @@ const MAFIA: Scene[] = [
   {
     id: "S12",
     variant: 'ending',
-    images: ["shots/mafia-board.png"],
     chapter: "종료와 순위",
     screen: [
       "5라운드 종료 → 총자산 순위",

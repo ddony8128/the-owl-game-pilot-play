@@ -74,7 +74,6 @@ for (const id of ['defense', 'mafia']) {
 const M = (n, v = '') => `monster/monster_${n}${v}.png`;
 const REQUIRED_IMAGES = {
   defense: {
-    S4: ['shots/defense-action.png'],
     S5: [1, 2, 3, 4, 5, 6].map((n) => M(n)),
     S6: [M(1), M(2), M(3), M(4)],
     S7: [M(3), M(3, '_dead')],
@@ -83,10 +82,8 @@ const REQUIRED_IMAGES = {
     S10: [M(5), M(5, '_expired')],
   },
   mafia: {
-    S3: ['shots/mafia-auction.png', 'shots/mafia-trade.png', 'shots/mafia-vote.png'],
     S4: ['up_manip', 'down_manip', 'robber', 'police', 'investor', 'financial', 'ceo', 'mayor', 'salaryman']
-      .map((j) => `job/${j}.png`)
-      .concat('shots/mafia-auction.png'),
+      .map((j) => `job/${j}.png`),
     S5: ['job/up_manip.png', 'job/down_manip.png', 'job/robber.png'],
     S6: ['police', 'investor', 'financial', 'ceo', 'mayor', 'salaryman'].map((j) => `job/${j}.png`),
     S7: ['edu', 'electricity', 'owl_flag', 'vehicle'].map((c) => `company/${c}.png`),
@@ -123,7 +120,8 @@ for (const id of ['defense', 'mafia']) {
   }
 }
 const diagSrc = readFileSync(join(VIDEO, 'src', 'Diagrams.tsx'), 'utf8');
-const literalPaths = [...new Set(diagSrc.match(/(?:job|company|shots)\/[\w-]+\.png/g) ?? [])];
+const literalPaths = [...new Set(diagSrc.match(/(?:job|company)\/[\w-]+\.png/g) ?? [])];
+if (/shots\//.test(diagSrc) || /shots\//.test(readFileSync(join(VIDEO, 'src', 'scenes.ts'), 'utf8'))) fail('휴대폰 캡처(shots/)는 영상에 쓰지 않는다 (Iteration 4, 또니 2026-10-17)');
 for (const rel of literalPaths) {
   const f = sourceOf(rel);
   if (!f || !existsSync(f)) {
