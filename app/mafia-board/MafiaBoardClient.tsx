@@ -75,6 +75,16 @@ function MafiaBoard({ room }: { room: string }) {
   const nextGroup = unseen.find((c) => data && c.round === data.round) ?? null;
   if (active === null && nextGroup) setActive(nextGroup.key);
   const pending = active ? (data?.changes.find((c) => c.key === active) ?? null) : null;
+  // 공개 중인 묶음의 라운드가 이미 지났으면(GM 이 그 사이 라운드를 넘김) 끝까지 틀지 않고 본 것으로 처리한다 —
+  // 헤더는 새 라운드를 가리키는데 옛 라운드 변동이 떠 있는 상태를 막는다(프로덕션 E2E 에서 포착).
+  if (pending && data && pending.round !== data.round) {
+    setSeen((prev) => {
+      const next = new Set(prev ?? []);
+      next.add(pending.key);
+      return next;
+    });
+    setActive(null);
+  }
   const finishReveal = (key: string) => {
     setSeen((prev) => {
       const next = new Set(prev ?? []);
