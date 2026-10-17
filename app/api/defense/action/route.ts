@@ -144,6 +144,38 @@ export async function POST(request: Request) {
     }
   };
 
+  // 새 행동의 부수효과를 정확히 되돌리는 함수(동시 제출 경쟁에서 "내 효과만" 거둔다 — 스냅샷 전체 복원은 남의 효과를 덮을 수 있다).
+  const undoEffects = async () => {
+    if (validated.type === "combat") {
+      await supabase
+        .from("defense_card_state")
+        .update({ is_active: true })
+        .eq("room_code", room)
+        .eq("player_id", player.id)
+        .eq("card_slot", validated.usedSlot);
+    } else if (validated.type === "training") {
+      await supabase
+        .from("defense_card_state")
+        .update({ is_active: true })
+        .eq("room_code", room)
+        .eq("player_id", player.id)
+        .eq("card_slot", validated.fromSlot);
+      await supabase
+        .from("defense_card_state")
+        .update({ card_value: validated.toValueBefore })
+        .eq("room_code", room)
+        .eq("player_id", player.id)
+        .eq("card_slot", validated.toSlot);
+    } else {
+      await supabase
+        .from("defense_card_state")
+        .update({ is_active: false })
+        .eq("room_code", room)
+        .eq("player_id", player.id)
+        .in("card_slot", validated.slots);
+    }
+  };
+
   // 기존 행동 교체: 행을 먼저 지워(잠금 역할) 다른 요청이 같은 행을 두 번 되돌리지 못하게 한다.
   let replaced = false;
   if (decision.kind === "replace" && existing) {
@@ -162,17 +194,33 @@ export async function POST(request: Request) {
     });
   }
 
-  // 새 행동의 부수효과 적용(제출 시점 즉시 반영 — 기존 동작 유지)
+  // 행을 먼저 넣는다(유니크 인덱스가 "같은 사람의 동시 제출"을 한 건만 통과시킨다) → 부수효과는 그 뒤에.
   const cardsBefore: CardSnapshot = baseCards;
-  let usedCardValue: number | null = null;
-  let usedCardSlot: number | null = null;
-  let trainingFrom: number | null = null;
-  let trainingTo: number | null = null;
-  let restCardText: string | null = null;
+  const insertBody = {
+    room_code: room,
+    round: currentRound,
+    player_id: player.id,
+    action_type: actionType,
+    target_monster_id: validated.type === "combat" ? validated.targetId : null,
+    used_card_value: validated.type === "combat" ? validated.usedValue : null,
+    used_card_slot: validated.type === "combat" ? validated.usedSlot : null,
+    training_from: validated.type === "training" ? validated.fromValue : null,
+    training_to: validated.type === "training" ? validated.toValueBefore : null,
+    rest_card: validated.type === "rest" ? validated.values.join(",") : null,
+    cards_before: cardsBefore,
+  };
 
+  const inserted = await supabase.from("defense_action").insert(insertBody).select("id").maybeSingle();
+  if (inserted.error) {
+    if (isUniqueViolation(inserted.error)) {
+      return err(409, "이미 제출이 처리되고 있습니다. 화면을 확인해 주세요.", "duplicate");
+    }
+    return err(500, inserted.error.message);
+  }
+  const insertedId = (inserted.data as { id: number }).id;
+
+  // 부수효과 적용(제출 시점 즉시 반영 — 기존 동작 유지)
   if (validated.type === "combat") {
-    usedCardValue = validated.usedValue;
-    usedCardSlot = validated.usedSlot;
     await supabase
       .from("defense_card_state")
       .update({ is_active: false })
@@ -180,8 +228,6 @@ export async function POST(request: Request) {
       .eq("player_id", player.id)
       .eq("card_slot", validated.usedSlot);
   } else if (validated.type === "training") {
-    trainingFrom = validated.fromValue;
-    trainingTo = validated.toValueBefore;
     const after = validated.toValueBefore + 1;
     await supabase
       .from("defense_card_state")
@@ -208,7 +254,6 @@ export async function POST(request: Request) {
       .eq("room_code", room)
       .eq("player_id", player.id)
       .in("card_slot", validated.slots);
-    restCardText = validated.values.join(",");
     await supabase.from("defense_player_log").insert({
       room_code: room,
       player_id: player.id,
@@ -217,28 +262,11 @@ export async function POST(request: Request) {
     });
   }
 
-  const insertBody = {
-    room_code: room,
-    round: currentRound,
-    player_id: player.id,
-    action_type: actionType,
-    target_monster_id: validated.type === "combat" ? validated.targetId : null,
-    used_card_value: usedCardValue,
-    used_card_slot: usedCardSlot,
-    training_from: trainingFrom,
-    training_to: trainingTo,
-    rest_card: restCardText,
-    cards_before: cardsBefore,
-  };
-
-  const inserted = await supabase.from("defense_action").insert(insertBody).select("id").maybeSingle();
-  if (inserted.error) {
-    // 같은 사람이 동시에 두 번 제출(유니크 위반) → 내 부수효과만 되돌리고 409
-    await restoreCards(cardsBefore);
-    if (isUniqueViolation(inserted.error)) {
-      return err(409, "이미 제출이 처리되고 있습니다. 화면을 확인해 주세요.", "duplicate");
-    }
-    return err(500, inserted.error.message);
+  // 내 행이 그 사이 다른 요청(다시 고르기)에 교체됐으면 내 효과만 거두고 409
+  const stillMine = await supabase.from("defense_action").select("id").eq("id", insertedId).maybeSingle();
+  if (!stillMine.error && !stillMine.data) {
+    await undoEffects();
+    return err(409, "다른 제출이 먼저 처리되었습니다. 화면을 확인해 주세요.", "conflict");
   }
 
   // 저장 직후 라운드가 넘어갔으면(정산과 겹침) 이 행동은 정산에 들어가지 못했다 → 되돌리고 명확히 409
@@ -249,8 +277,8 @@ export async function POST(request: Request) {
     .maybeSingle();
   const afterRound = (after.data as { round?: number } | null)?.round;
   if (typeof afterRound === "number" && afterRound !== currentRound) {
-    await supabase.from("defense_action").delete().eq("id", (inserted.data as { id: number }).id);
-    await restoreCards(cardsBefore);
+    await supabase.from("defense_action").delete().eq("id", insertedId);
+    await undoEffects();
     await supabase.from("defense_player_log").insert({
       room_code: room,
       player_id: player.id,

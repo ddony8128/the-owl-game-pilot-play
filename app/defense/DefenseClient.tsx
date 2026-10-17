@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
@@ -99,7 +100,13 @@ export default function DefenseClient() {
 }
 
 function DefenseInner() {
+  const router = useRouter();
   const { player, roomCode, nickname, clearNickname } = usePlayerAuth();
+  // 강퇴/방 삭제 안내에서 [입장 화면으로]: 저장된 방·닉네임을 지우고 입장 화면으로 보낸다(같은 닉네임 재입장 가능).
+  const leaveToEntrance = () => {
+    clearNickname();
+    router.replace("/");
+  };
   const [timerState, setTimerState] = useState<TimerState | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
   const timerMetaRef = useRef<DefenseTimerApi | null>(null);
@@ -275,10 +282,10 @@ function DefenseInner() {
   // 강퇴/방 삭제: 입장(로그인)은 통과한 뒤이므로, 폴링이 403(not_registered) 으로 바뀌면 GM이 명단에서 지운 것이다
   // → 데이터가 비워지고 사유가 오면 즉시 안내(조용히 굳지 않음). 404 는 방 삭제.
   if (poll.status === 403) {
-    return <KickedScreen onLeave={clearNickname} />;
+    return <KickedScreen onLeave={leaveToEntrance} />;
   }
   if (poll.status === 404 && poll.reason === "room_not_found") {
-    return <RoomGoneScreen onLeave={clearNickname} />;
+    return <RoomGoneScreen onLeave={leaveToEntrance} />;
   }
 
   // 아직 한 번도 못 받았고 오류만 있는 경우: 오류 문구 + 재연결 배지(폴링은 계속된다)
@@ -312,7 +319,7 @@ function DefenseInner() {
 
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <TabLayout tabs={tabsDef} activeKey={effectiveTab} onChange={setActiveTab}>
-          {effectiveTab === "" && (
+          {effectiveTab === "info" && (
             <DefenseInfoTab
               monsters={defenseState?.monsters ?? []}
               cards={defenseState?.cards ?? []}
@@ -321,7 +328,7 @@ function DefenseInner() {
               showQueue={!hideInfoAndAction}
             />
           )}
-          {effectiveTab === "" && defenseState && !hideInfoAndAction && (
+          {effectiveTab === "action" && defenseState && !hideInfoAndAction && (
             // 라운드가 바뀌면 key 가 바뀌어 선택 단계가 초기화된다(effect 안 setState 없이).
             <DefenseActionTab
               key={`action-${roundNumber ?? "x"}`}
@@ -334,11 +341,11 @@ function DefenseInner() {
               notice={lateNotice}
             />
           )}
-          {effectiveTab === "" && <DefenseRulesTab />}
-          {effectiveTab === "" && defenseState && (
+          {effectiveTab === "rules" && <DefenseRulesTab />}
+          {effectiveTab === "dex" && defenseState && (
             <DefenseDexTab dex={defenseState.dex} />
           )}
-          {effectiveTab === "" && defenseState && (
+          {effectiveTab === "logs" && defenseState && (
             <DefenseLogsTab logs={defenseState.logs} />
           )}
         </TabLayout>

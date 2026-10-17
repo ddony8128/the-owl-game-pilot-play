@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type {
   MafiaAbilityResult,
   MafiaLog,
@@ -84,7 +85,13 @@ export default function MafiaClient() {
 }
 
 function MafiaInner() {
+  const router = useRouter();
   const { player, roomCode, nickname, clearNickname } = usePlayerAuth();
+  // 강퇴/방 삭제 안내에서 [입장 화면으로]: 저장된 방·닉네임을 지우고 입장 화면으로 보낸다(같은 닉네임 재입장 가능).
+  const leaveToEntrance = () => {
+    clearNickname();
+    router.replace("/");
+  };
   const [activeTab, setActiveTab] = useState<TabKey>("info");
 
   // 상태 폴링(공용 훅): in-flight 가드·타임아웃·실패해도 마지막 화면 유지(반면교사 1-5).
@@ -258,9 +265,9 @@ function MafiaInner() {
   if (!player) return <LoadingScreen />;
 
   // 강퇴/방 삭제: 입장은 통과했으므로 폴링 403 = GM이 명단에서 지운 것 → 즉시 안내. 404 = 방 없음.
-  if (poll.status === 403) return <KickedScreen onLeave={clearNickname} />;
+  if (poll.status === 403) return <KickedScreen onLeave={leaveToEntrance} />;
   if (poll.status === 404 && poll.reason === "room_not_found") {
-    return <RoomGoneScreen onLeave={clearNickname} />;
+    return <RoomGoneScreen onLeave={leaveToEntrance} />;
   }
 
   if (!data) {
@@ -320,18 +327,18 @@ function MafiaInner() {
 
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <TabLayout tabs={tabsDef} activeKey={effectiveTab} onChange={setActiveTab}>
-          {effectiveTab === "" && (
+          {effectiveTab === "info" && (
             <MafiaInfoTab
               mafiaPlayer={mafiaPlayer}
               stocks={stocks}
               logs={logs}
             />
           )}
-          {effectiveTab === "" && <MafiaRulesTab />}
-          {effectiveTab === "" && (
+          {effectiveTab === "rules" && <MafiaRulesTab />}
+          {effectiveTab === "stocks" && (
             <MafiaStocksTab stocks={stocks} stockHistory={stockHistory} />
           )}
-          {effectiveTab === "" && (
+          {effectiveTab === "auction" && (
             <MafiaAuctionTab
               player={player}
               roomCode={roomForTabs}
@@ -341,7 +348,7 @@ function MafiaInner() {
               onSubmitted={reload}
             />
           )}
-          {effectiveTab === "" && (
+          {effectiveTab === "trade" && (
             <MafiaTradeTab
               player={player}
               roomCode={roomForTabs}
@@ -353,7 +360,7 @@ function MafiaInner() {
               onSubmitted={reload}
             />
           )}
-          {effectiveTab === "" && (
+          {effectiveTab === "ability" && (
             <MafiaAbilityTab
               player={player}
               roomCode={roomForTabs}
@@ -366,10 +373,10 @@ function MafiaInner() {
               onSubmitted={reload}
             />
           )}
-          {effectiveTab === "" && (
+          {effectiveTab === "result" && (
             <MafiaResultTab abilityResults={abilityResults} />
           )}
-          {effectiveTab === "" && (
+          {effectiveTab === "vote" && (
             <MafiaVoteTab
               player={player}
               roomCode={roomForTabs}
@@ -381,7 +388,7 @@ function MafiaInner() {
               onSubmitted={reload}
             />
           )}
-          {effectiveTab === "" && <MafiaLogTab log={myLog} />}
+          {effectiveTab === "log" && <MafiaLogTab log={myLog} />}
         </TabLayout>
       </main>
     </div>

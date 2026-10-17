@@ -26,8 +26,10 @@ export type CasOutcome<T> =
   | { status: "exhausted"; attempts: number };
 
 export async function casUpdate<T>(deps: CasDeps<T>): Promise<CasOutcome<T>> {
-  const max = deps.maxAttempts ?? 5;
+  const max = deps.maxAttempts ?? 12;
   for (let attempt = 1; attempt <= max; attempt += 1) {
+    // 재시도 전 짧은 무작위 대기 — 같은 순간에 몰린 요청들이 계속 같은 박자로 충돌하지 않게 한다
+    if (attempt > 1) await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 30 * attempt)));
     const cur = await deps.read();
     if (!cur) return { status: "missing" };
     const computed = deps.compute(cur);

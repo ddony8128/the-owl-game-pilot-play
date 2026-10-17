@@ -148,10 +148,8 @@ export async function POST(request: Request) {
     const job = typeof payloadIn.job === "string" && payloadIn.job.length > 0 ? payloadIn.job : null;
     let amount = 0;
     if (!giveUp) {
-      const parsed = parsePositiveInt(
-        typeof payloadIn.amount === "number" ? Math.floor(payloadIn.amount) : payloadIn.amount,
-        MAX_AMOUNT,
-      );
+      // 정수만 받는다(1.5 같은 값은 400 — 입구에서 거른다)
+      const parsed = parsePositiveInt(payloadIn.amount, MAX_AMOUNT);
       if (parsed == null || !job) return err(400, "유효한 베팅 금액을 입력해 주세요.", "bad_request");
       amount = parsed;
 
@@ -176,10 +174,7 @@ export async function POST(request: Request) {
 
   // 주식 거래: 즉시 현금/보유 주식에 반영(CAS)
   const stockKey = typeof payloadIn.stock_key === "string" && payloadIn.stock_key.length > 0 && payloadIn.stock_key.length <= 32 ? payloadIn.stock_key : null;
-  const amount = parsePositiveInt(
-    typeof payloadIn.amount === "number" ? Math.floor(payloadIn.amount) : payloadIn.amount,
-    MAX_AMOUNT,
-  );
+  const amount = parsePositiveInt(payloadIn.amount, MAX_AMOUNT); // 정수만(소수·음수·문자열 400)
   if (!stockKey || amount == null) return err(400, "유효한 종목과 수량을 입력해 주세요.", "bad_request");
 
   // 같은 라운드/페이즈/종목에 대해 매수·매도를 동시에 할 수 없음
