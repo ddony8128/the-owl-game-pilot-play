@@ -32,7 +32,7 @@
 | 스타일 | Tailwind CSS v4 (유틸리티 클래스) | 4.1.18 |
 | DB | **Supabase** (호스팅 PostgreSQL). `@supabase/supabase-js`로 **서버에서만** 접근 | supabase-js 2.87 |
 | 런타임 | Node.js (로컬 22, Vercel 24.x) | - |
-| 테스트 | Vitest(단위 4파일 25건) · Playwright(E2E 17 스펙) | - |
+| 테스트 | Vitest(단위 166건) · Playwright(E2E 24 스펙 142건, 프로덕션 모드 3묶음 통과 2026-10-17) | - |
 | 호스팅 | **Vercel** (GitHub 연동 자동 배포) | - |
 
 구조 한 줄 요약: 브라우저(플레이어·GM) → Next.js 페이지 → `app/api/**` Route Handler(서버) → Supabase. 클라이언트는 DB를 직접 만지지 않고, 화면은 몇 초 간격 폴링으로 갱신합니다(실시간 소켓 없음). 별도 백엔드 서버는 없습니다.
