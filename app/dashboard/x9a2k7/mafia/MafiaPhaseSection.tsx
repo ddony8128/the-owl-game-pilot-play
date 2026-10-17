@@ -89,7 +89,7 @@ export function MafiaPhaseSection({
         )}
       </p>
       <p className="text-xs text-zinc-500">
-        등록 인원 {playerCount}명 · 권장 6~12명 · 5명 미만 시작 불가
+        참가자 {playerCount}명 · 권장 6~12명 · 5명 미만은 본게임 시작 불가
         {headcount.warn && !startBlocked && (
           <span className="ml-1 text-amber-300" data-testid="headcount-warning-inline">
             — {headcount.warn}

@@ -28,7 +28,10 @@ export async function PATCH(request: Request) {
   }
   if (!room) return NextResponse.json({ error: "방을 찾을 수 없습니다." }, { status: 404 });
 
-  const v = validateVideoPatch(room, { video: body.video, seekSec: body.seekSec });
+  // 장 시작 초는 소수(예 116.9)인데 board_video_seek_sec 는 INTEGER 라 내림되면(116) 패널의 "재생 중 · 장" 표시가
+  // 한 장 앞(116 < 116.9-0.5)으로 어긋났다 — 반올림해 저장한다(Iteration 5, 기존 E2E rule-video [b] defense 실패 원인).
+  const seekSec = typeof body.seekSec === "number" && Number.isFinite(body.seekSec) ? Math.round(body.seekSec) : body.seekSec;
+  const v = validateVideoPatch(room, { video: body.video, seekSec });
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: v.status });
 
   if (room.columnMissing) {
