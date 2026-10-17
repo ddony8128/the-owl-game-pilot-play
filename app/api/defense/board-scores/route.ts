@@ -47,7 +47,17 @@ export async function GET(request: Request) {
   // 튜토리얼 결과(3), 게임 종료(16)는
   // 직전에 끝난 라운드의 스냅샷을 사용한다.
   // 중간 점수 발표(7, 11)는 해당 라운드까지의 스냅샷을 그대로 사용한다.
-  const sourceRound = round === 3 || round === 16 ? round - 1 : round;
+  let sourceRound = round === 3 || round === 16 ? round - 1 : round;
+  if (round === 16) {
+    // 조기 종료(모든 몬스터 처치·도망)면 15 가 아니라 마지막으로 정산된 라운드의 스냅샷을 쓴다.
+    const { data: phaseRow } = await supabase
+      .from("defense_phase_state")
+      .select("ended_early_from")
+      .eq("room_code", room)
+      .maybeSingle();
+    const from = (phaseRow as { ended_early_from?: number | null } | null)?.ended_early_from;
+    if (typeof from === "number") sourceRound = from;
+  }
 
   const [playersRes, scoresSnapRes, actionsRes] = await Promise.all([
     supabase

@@ -28,12 +28,17 @@ function getRoundLabelForLog(round: number): string {
   return `알 수 없음 (DB round ${round})`;
 }
 
+export type DefenseAdvanceResult = {
+  /** 모든 몬스터가 처치·도망해 대기열과 풀이 모두 비었다 — 룰지 §7 "조기 종료". 호출자가 round 를 16(최종 결과)으로 보낸다. */
+  earlyEnd: boolean;
+};
+
 export async function handleDefenseAdvanceRound(
   supabase: ReturnType<typeof createServerSupabaseClient>,
   current: DefensePhaseState,
   nextRound: number,
   room: string
-) {
+): Promise<DefenseAdvanceResult> {
   // 1. 이번 라운드의 모든 액션/카드/몬스터/점수/플레이어 상태 로드
   const [actionsRes, cardsRes, monstersRes, scoresRes, playersRes] =
     await Promise.all([
@@ -478,4 +483,9 @@ export async function handleDefenseAdvanceRound(
       }))
     );
   }
+
+  // 6. 조기 종료 판정 — 본게임에서 대기열(active)과 남은 풀이 모두 0이면 더 싸울 상대가 없다(룰지 §7).
+  const poolLeft = [...countsMap.values()].reduce((a, b) => a + (b > 0 ? b : 0), 0);
+  const earlyEnd = current.round >= 4 && nextRound <= 15 && nextMonsters.length === 0 && poolLeft === 0;
+  return { earlyEnd };
 }

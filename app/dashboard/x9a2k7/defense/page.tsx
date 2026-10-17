@@ -37,12 +37,16 @@ export default function DashboardDefensePage() {
 
   const advanceRound = async (nextRound: number, from: number) => {
     if (!room) return;
-    await action.run<{ idempotent?: boolean }>(
+    await action.run<{ idempotent?: boolean; earlyEnd?: boolean }>(
       "/api/gm/defense/round",
       { body: { round: nextRound, from, room } },
       {
         notice: (json) =>
-          json.idempotent ? "이미 그 라운드입니다(다른 창에서 진행됨)." : `${getDefenseRoundLabel(nextRound)} 시작`,
+          json.idempotent
+            ? "이미 그 라운드입니다(다른 창에서 진행됨)."
+            : json.earlyEnd
+              ? "모든 몬스터가 처치·도망해 최종 결과로 넘어갔습니다(조기 종료)."
+              : `${getDefenseRoundLabel(nextRound)} 시작`,
       },
     );
   };

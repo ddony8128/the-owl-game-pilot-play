@@ -37,6 +37,12 @@ describe("stagesForRound — GM 라운드 → 보드 단계", () => {
       "score:16:16",
     ]);
   });
+  it("16 조기 종료(prevRound=9): 9라운드(본게임 6) 결과 → 최종 점수, 15 결과는 없음", () => {
+    expect(stagesForRound(16, 9).map((s) => `${s.kind}:${s.round}:${s.scoreRound ?? ""}`)).toEqual([
+      "result:9:",
+      "score:16:16",
+    ]);
+  });
   it("5~7·9~11·13~15: 결과 → 대기열", () => {
     for (const r of [5, 6, 7, 9, 10, 11, 13, 14, 15]) {
       expect(stagesForRound(r).map((s) => `${s.kind}:${s.round}`), `round ${r}`).toEqual([

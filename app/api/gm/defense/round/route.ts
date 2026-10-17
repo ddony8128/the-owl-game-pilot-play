@@ -6,6 +6,7 @@ import { decideAdvance, readFromIndex } from "@/lib/admin/advanceGuard";
 import { gmError, loadRoomForWrite } from "@/lib/admin/gmResponse";
 import { promoteDefenseTimerPending } from "@/lib/admin/timerStore";
 import { getDefenseRoundLabel } from "@/lib/admin/defenseLabels";
+import { addGmLog } from "@/lib/admin/gmLog";
 import { handleDefenseInitRound } from "./initGame";
 import { handleDefenseAdvanceRound } from "./advanceRound";
 
@@ -17,7 +18,7 @@ type Body = {
 };
 
 type ResponseBody =
-  | { ok: true; phase: DefensePhaseState; idempotent?: true }
+  | { ok: true; phase: DefensePhaseState; idempotent?: true; earlyEnd?: boolean }
   | { error: string; reason?: string };
 
 export async function POST(request: Request) {
@@ -112,6 +113,7 @@ export async function POST(request: Request) {
     return gmError(409, "다른 창에서 라운드를 넘기는 중이거나 이미 바뀌었습니다. 화면을 새로 고치세요.", "already_advanced");
   }
 
+  let earlyEnd = false;
   try {
     // 초기화 라운드 전환: 0->1 (튜토 시작), 3->4 (본게임 시작)
     if (
@@ -125,7 +127,8 @@ export async function POST(request: Request) {
       current.round <= 15 &&
       nextRound === current.round + 1
     ) {
-      await handleDefenseAdvanceRound(supabase, current, nextRound, room);
+      const result = await handleDefenseAdvanceRound(supabase, current, nextRound, room);
+      earlyEnd = result.earlyEnd;
     }
   } catch (e: unknown) {
     // 정산/초기화 실패: 라운드 번호는 아직 바꾸지 않았으므로 그대로 재시도할 수 있다(부분 적용은 GM 로그·화면 안내로 확인).
@@ -137,9 +140,11 @@ export async function POST(request: Request) {
   }
 
   // 정산/초기화가 끝난 뒤에 라운드 번호를 바꾼다 — 이 순간부터 폰·보드가 새 라운드를 본다.
+  // 모든 몬스터가 처치·도망했으면(조기 종료) 다음 라운드 대신 16(최종 결과)으로 간다.
+  const finalRound = earlyEnd ? 16 : nextRound;
   const { data: claimed, error: advanceError } = await supabase
     .from("defense_phase_state")
-    .update({ round: nextRound })
+    .update({ round: finalRound, ended_early_from: earlyEnd ? current.round : null })
     .eq("room_code", room)
     .eq("round", current.round)
     .select("room_code, round, updated_at")
@@ -149,11 +154,21 @@ export async function POST(request: Request) {
     return gmError(409, "라운드 처리 중 다른 창에서 라운드가 바뀌었습니다. 화면을 새로 고치세요.", "already_advanced");
   }
 
+  if (earlyEnd) {
+    await addGmLog(supabase, {
+      room,
+      game: "defense",
+      kind: "other",
+      content: `조기 종료: ${getDefenseRoundLabel(current.round)} 정산 후 모든 몬스터가 처치·도망해 최종 결과로 넘어갔습니다.`,
+      meta: { from: current.round, to: 16, earlyEnd: true },
+    });
+  }
+
   // "다음 라운드부터" 예약된 타이머 시간이 있으면 이 시점에 적용한다(타이머 자체는 GM이 리셋/시작).
   await promoteDefenseTimerPending(supabase, room).catch(() => undefined);
 
   return NextResponse.json(
-    { ok: true, phase: claimed as DefensePhaseState } as ResponseBody,
+    { ok: true, phase: claimed as DefensePhaseState, earlyEnd } as ResponseBody,
     { status: 200 }
   );
 }

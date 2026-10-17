@@ -19,3 +19,6 @@ CREATE INDEX IF NOT EXISTS gm_logs_room_created_idx ON gm_logs (room_code, creat
 -- 2026-10-17 (후속) GM 조작 재전송 멱등 — 점수/현금/주식 ±1 의 request_id 를 gm_logs 가 선점한다. 운영 DB 적용됨.
 ALTER TABLE gm_logs ADD COLUMN IF NOT EXISTS request_id TEXT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS gm_logs_room_request_key ON gm_logs (room_code, request_id) WHERE request_id IS NOT NULL;
+
+-- 2026-10-17 (후속) 디펜스 조기 종료 — 모든 몬스터 처치·도망 시 round 16 으로 가며 마지막 정산 라운드를 기록(보드 결과 단계·최종 점수·되돌리기 판정용). 운영 DB 적용됨.
+ALTER TABLE defense_phase_state ADD COLUMN IF NOT EXISTS ended_early_from INTEGER NULL;

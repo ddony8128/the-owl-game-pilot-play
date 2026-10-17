@@ -53,12 +53,19 @@ export async function POST(request: Request) {
 
   const { data: phaseRow, error: phaseError } = await supabase
     .from("defense_phase_state")
-    .select("room_code, round, updated_at")
+    .select("room_code, round, updated_at, ended_early_from")
     .eq("room_code", room)
     .maybeSingle();
   if (phaseError) return gmError(500, phaseError.message);
   const current = (phaseRow || null) as DefensePhaseState | null;
   if (!current) return gmError(500, "defense_phase_state가 초기화되지 않았습니다.");
+  if (current.round === 16 && typeof current.ended_early_from === "number") {
+    return gmError(
+      409,
+      `모든 몬스터가 처치·도망해 ${getDefenseRoundLabel(current.ended_early_from)} 뒤 조기 종료된 게임은 되돌릴 수 없습니다.`,
+      "not_rewindable",
+    );
+  }
 
   const from = readFromIndex(body?.from);
   if (from != null && from !== current.round) {

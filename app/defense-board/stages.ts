@@ -31,10 +31,11 @@ export function isBattleRound(round: number): boolean {
   return round === 1 || round === 2 || (round >= 4 && round <= 15);
 }
 
-export function stagesForRound(gmRound: number): BoardStage[] {
+export function stagesForRound(gmRound: number, prevRound?: number): BoardStage[] {
   if (gmRound <= 0) return [{ kind: "ready", round: 0, gmRound: 0 }];
   const out: BoardStage[] = [];
-  const prev = gmRound - 1;
+  // 조기 종료(모든 몬스터 처치·도망)로 16 에 왔으면 "직전 전투"는 15 가 아니라 마지막으로 정산된 라운드다.
+  const prev = prevRound ?? gmRound - 1;
   // 3→4 는 본게임 초기화(정산 없음) — 3 은 전투 라운드가 아니므로 result 없음
   if (isBattleRound(prev)) out.push({ kind: "result", round: prev, gmRound });
   const scoreParam = SCORE_ROUND_PARAM[gmRound];

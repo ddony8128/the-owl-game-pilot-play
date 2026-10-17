@@ -72,7 +72,7 @@ function DefenseBoard({ room }: { room: string }) {
 
   // ── 자동 추종 단계: GM 라운드가 바뀌면 그 라운드의 첫 단계부터(렌더 중 파생 — effect 안 setState 없음) ──
   const [auto, setAuto] = useState<{ round: number; idx: number }>({ round: -1, idx: 0 });
-  const autoStages = gmRound == null ? [] : stagesForRound(gmRound);
+  const autoStages = gmRound == null ? [] : stagesForRound(gmRound, phase.data?.prevRound);
   const autoIdx = gmRound != null && auto.round === gmRound ? Math.min(auto.idx, autoStages.length - 1) : 0;
 
   // ── 수동 모드: 옛 [이전]/[다음] 타임라인 ──

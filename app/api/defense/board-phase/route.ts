@@ -9,6 +9,9 @@ import { normalizeRoomCode } from "@/lib/rooms";
  */
 type DefenseBoardPhase = {
   round: number;
+  /** 이 라운드 화면이 "결과"로 보여 줄 직전 전투 라운드. 보통 round-1, 조기 종료(16)면 마지막으로 정산된 라운드. */
+  prevRound: number;
+  endedEarlyFrom: number | null;
   updatedAt: string | null;
   roomStatus: "active" | "ended" | null;
   playerCount: number;
@@ -24,7 +27,7 @@ export async function GET(request: Request) {
 
   const [roomRes, phaseRes, playersRes] = await Promise.all([
     supabase.from("rooms").select("code, status, game").eq("code", room).maybeSingle(),
-    supabase.from("defense_phase_state").select("round, updated_at").eq("room_code", room).maybeSingle(),
+    supabase.from("defense_phase_state").select("round, updated_at, ended_early_from").eq("room_code", room).maybeSingle(),
     supabase.from("players").select("id", { count: "exact", head: true }).eq("room_code", room),
   ]);
 
@@ -38,8 +41,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: phaseRes.error.message }, { status: 500 });
   }
 
+  const round = typeof phaseRes.data?.round === "number" ? phaseRes.data.round : 0;
+  const endedEarlyFrom =
+    typeof (phaseRes.data as { ended_early_from?: number | null } | null)?.ended_early_from === "number"
+      ? ((phaseRes.data as { ended_early_from: number }).ended_early_from as number)
+      : null;
   const body: DefenseBoardPhase = {
-    round: typeof phaseRes.data?.round === "number" ? phaseRes.data.round : 0,
+    round,
+    prevRound: round === 16 && endedEarlyFrom != null ? endedEarlyFrom : round - 1,
+    endedEarlyFrom,
     updatedAt: (phaseRes.data?.updated_at as string | null) ?? null,
     roomStatus: (roomRes.data.status as "active" | "ended" | null) ?? null,
     playerCount: playersRes.count ?? 0,
