@@ -65,7 +65,6 @@ export async function handleVoteToEnd(
     }
 
     const stocks = (stockRows ?? []) as { stock_key: string; price: number }[];
-    if (stocks.length === 0) return results;
 
     // 최고가 주식 찾기
     let maxPrice = 0;
@@ -76,7 +75,6 @@ export async function handleVoteToEnd(
       .filter((s) => s.price === maxPrice)
       .map((s) => s.stock_key);
 
-    if (topStocks.length === 0) return results;
 
     // 마피아 플레이어 조회
     const { data: mafiaRows, error: mafiaError } = await supabase
@@ -91,8 +89,8 @@ export async function handleVoteToEnd(
       );
     }
 
-    const mafiaPlayers = (mafiaRows ?? []) as MafiaPlayerState[];
-    if (mafiaPlayers.length === 0) return results;
+    // 마피아가 0명인 라운드에도 아래 "전체 공개 메시지"는 똑같이 보낸다 — 공지 유무로 마피아 존재가 새지 않게(또니 10-17).
+    const mafiaPlayers = topStocks.length > 0 ? ((mafiaRows ?? []) as MafiaPlayerState[]) : [];
 
     // 각 마피아에게 주식 지급
     const mafiaUpdates: Partial<MafiaPlayerState>[] = [];
