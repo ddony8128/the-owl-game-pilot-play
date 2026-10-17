@@ -6,6 +6,11 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 import { RoomEndedNotice } from "../RoomEndedNotice";
 import { RuleVideoPanel } from "../RuleVideoPanel";
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { ConnectionBadge } from "@/components/ConnectionBadge";
+import { GmErrorBanner, GmNoticeBanner } from "@/components/GmBanners";
+import { GmLogSection } from "@/components/GmLogSection";
+import { useGmAction } from "@/lib/hooks/useGmAction";
+import { getDefenseRoundLabel } from "@/lib/admin/defenseLabels";
 import { useDefenseAdminState } from "./useDefenseAdminState";
 import { DefenseCountdownSection } from "./DefenseCountdownSection";
 import { DefenseRoundSection } from "./DefenseRoundSection";
@@ -24,65 +29,36 @@ export default function DashboardDefensePage() {
     setMounted(true);
   }, []);
 
-  const { round, players, loading, error, reload } = useDefenseAdminState(room);
+  const { round, players, pending, roomStatus, gmLogs, gmLogsWarning, loading, error, failures, reload } =
+    useDefenseAdminState(room);
+  // 모든 GM 조작은 이 하나를 거친다: 잠금·12초 제한·실패 배너·성공 후 즉시 갱신.
+  const action = useGmAction(reload);
+  const ended = roomStatus === "ended";
 
-  const advanceRound = async (nextRound: number) => {
+  const advanceRound = async (nextRound: number, from: number) => {
     if (!room) return;
-    try {
-      const res = await fetch("/api/gm/defense/round", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ round: nextRound, room }),
-      });
-      const json = (await res.json().catch(() => null)) as {
-        ok?: true;
-        error?: string;
-      } | null;
+    await action.run<{ idempotent?: boolean }>(
+      "/api/gm/defense/round",
+      { body: { round: nextRound, from, room } },
+      {
+        notice: (json) =>
+          json.idempotent ? "이미 그 라운드입니다(다른 창에서 진행됨)." : `${getDefenseRoundLabel(nextRound)} 시작`,
+      },
+    );
+  };
 
-      if (!res.ok || !json?.ok) {
-        // eslint-disable-next-line no-console
-        console.error(
-          json?.error ?? "디펜스 라운드 변경 중 오류가 발생했습니다."
-        );
-      } else {
-        reload();
-      }
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error(e);
-    }
+  const rewind = async (from: number) => {
+    if (!room) return;
+    await action.run<{ phase?: { round: number } }>(
+      "/api/gm/defense/rewind",
+      { body: { room, from } },
+      { notice: (json) => `${getDefenseRoundLabel(json.phase?.round ?? from - 1)}로 되돌렸습니다.` },
+    );
   };
 
   const changeScore = async (playerId: string, delta: -1 | 1) => {
     if (!room) return;
-    try {
-      const res = await fetch("/api/gm/defense/score", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ playerId, delta, room }),
-      });
-      const json = (await res.json().catch(() => null)) as {
-        ok?: true;
-        error?: string;
-        points?: number;
-      } | null;
-
-      if (!res.ok || !json?.ok) {
-        // eslint-disable-next-line no-console
-        console.error(
-          json?.error ?? "디펜스 점수 변경 중 오류가 발생했습니다."
-        );
-      } else {
-        reload();
-      }
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error(e);
-    }
+    await action.run("/api/gm/defense/score", { body: { playerId, delta, room } });
   };
 
   if (!mounted) return <LoadingScreen />;
@@ -116,6 +92,7 @@ export default function DashboardDefensePage() {
         <span className="text-zinc-400">
           방 <b className="font-mono text-amber-300">{room}</b>
         </span>
+        <ConnectionBadge failures={failures} className="ml-2" />
         <button
           onClick={() => window.open(`/join?code=${room}`, "owl-join", "width=720,height=900")}
           title="참가 QR과 방 코드를 새 창에 크게 띄웁니다 (입장·중간 합류·재접속용)"
@@ -133,12 +110,25 @@ export default function DashboardDefensePage() {
           결과 페이지 ↗
         </a>
       </div>
+      <div className="sticky top-0 z-40 space-y-2 bg-zinc-950/95 py-1 empty:hidden">
+        <GmErrorBanner message={action.error} onClose={action.clearError} />
+        <GmNoticeBanner message={action.notice} />
+      </div>
       <RoomEndedNotice room={room} />
       <RuleVideoPanel room={room} video="defense" />
-      <DefenseCountdownSection room={room} />
-      <DefenseRoundSection round={round} onAdvanceRound={advanceRound} />
-      <MonsterConfigSection room={room} playerCount={players.length} />
-      <DefenseScoreSection players={players} onChangeScore={changeScore} />
+      <DefenseCountdownSection room={room} action={action} disabled={ended} />
+      <DefenseRoundSection
+        round={round}
+        playerCount={players.length}
+        pending={pending}
+        disabled={ended}
+        busy={action.busy}
+        onAdvanceRound={advanceRound}
+        onRewind={rewind}
+      />
+      <MonsterConfigSection room={room} playerCount={players.length} action={action} disabled={ended} />
+      <DefenseScoreSection players={players} onChangeScore={changeScore} disabled={ended || action.busy} />
+      <GmLogSection logs={gmLogs} warning={gmLogsWarning} />
       <DefenseRoundSummarySection room={room} currentRound={round} />
     </div>
   );

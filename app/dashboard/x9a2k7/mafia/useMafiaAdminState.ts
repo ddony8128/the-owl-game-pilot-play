@@ -1,94 +1,75 @@
-import { useEffect, useState } from "react";
+"use client";
+
+import { useCallback } from "react";
 import type {
   MafiaLog,
   MafiaPhaseState,
   MafiaPlayerState,
   MafiaStockState,
 } from "@/lib/types";
+import { usePolling } from "@/lib/hooks/usePolling";
+import type { GmLogItem } from "@/components/GmLogSection";
+import type { PendingInfo } from "../defense/useDefenseAdminState";
 
-type MafiaAdminState = {
+export type MafiaDashboardDto = {
+  room: { code: string; game: string; status: "active" | "ended"; reveal_result?: boolean | null };
   phase: MafiaPhaseState | null;
   stocks: MafiaStockState[];
   players: MafiaPlayerState[];
   playerNames: Record<string, string>;
+  playerCount: number;
   logs: MafiaLog[];
-  loading: boolean;
-  error: string | null;
-  reload: () => void;
+  pending: PendingInfo | null;
+  gmLogs: GmLogItem[];
+  gmLogsWarning: string | null;
+  serverNow: string;
 };
 
+type MafiaAdminState = {
+  data: MafiaDashboardDto | null;
+  phase: MafiaPhaseState | null;
+  stocks: MafiaStockState[];
+  players: MafiaPlayerState[];
+  playerNames: Record<string, string>;
+  playerCount: number;
+  logs: MafiaLog[];
+  pending: PendingInfo | null;
+  roomStatus: "active" | "ended" | null;
+  revealResult: boolean;
+  gmLogs: GmLogItem[];
+  gmLogsWarning: string | null;
+  loading: boolean;
+  error: string | null;
+  failures: number;
+  reload: () => Promise<void>;
+};
+
+// 마피아 GM 대시보드 상태 — 공용 usePolling 위에 얹는다(실패 시 마지막 화면 유지 + failures 로 재연결 배지).
 export function useMafiaAdminState(room: string | null): MafiaAdminState {
-  const [phase, setPhase] = useState<MafiaPhaseState | null>(null);
-  const [stocks, setStocks] = useState<MafiaStockState[]>([]);
-  const [players, setPlayers] = useState<MafiaPlayerState[]>([]);
-  const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
-  const [logs, setLogs] = useState<MafiaLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
+  const url = room ? `/api/gm/mafia/dashboard?room=${encodeURIComponent(room)}` : null;
+  const { data, error, failures, reload } = usePolling<MafiaDashboardDto>(url, 4000);
 
-  useEffect(() => {
-    if (!room) {
-      setLoading(false);
-      return;
-    }
+  const refresh = useCallback(async () => {
+    await reload();
+    setTimeout(() => void reload(), 350);
+  }, [reload]);
 
-    let cancelled = false;
-
-    // silent=true 면 주기 폴링 시 로딩 스피너를 띄우지 않고 조용히 갱신한다.
-    const load = async (silent = false) => {
-      if (!silent) setLoading(true);
-      try {
-        const res = await fetch(
-          `/api/mafia/state?all=1&room=${encodeURIComponent(room)}`
-        );
-        const json = (await res.json().catch(() => null)) as
-          | {
-              phase: MafiaPhaseState | null;
-              stocks: MafiaStockState[];
-              players: MafiaPlayerState[];
-              logs: MafiaLog[];
-              playerNames?: Record<string, string>;
-              error?: undefined;
-            }
-          | { error: string }
-          | null;
-        if (!res.ok || !json || "error" in json) {
-          throw new Error(
-            (json as { error?: string })?.error ??
-              "마피아 정보를 불러오지 못했습니다."
-          );
-        }
-        if (cancelled) return;
-        setPhase(json.phase ?? null);
-        setStocks(json.stocks ?? []);
-        setPlayers(json.players ?? []);
-        setLogs(json.logs ?? []);
-        setPlayerNames(json.playerNames ?? {});
-        setError(null);
-      } catch (e: unknown) {
-        if (!cancelled) {
-          const message =
-            e instanceof Error
-              ? e.message
-              : "마피아 정보를 불러오지 못했습니다.";
-          setError(message);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    void load();
-    // 플레이어 행동으로 바뀌는 정보(페이즈/주식/자산/로그)를 주기적으로 갱신한다.
-    const interval = setInterval(() => void load(true), 4000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [reloadToken, room]);
-
-  const reload = () => setReloadToken((v) => v + 1);
-
-  return { phase, stocks, players, playerNames, logs, loading, error, reload };
+  return {
+    data,
+    phase: data?.phase ?? null,
+    stocks: data?.stocks ?? [],
+    players: data?.players ?? [],
+    playerNames: data?.playerNames ?? {},
+    playerCount: data?.playerCount ?? 0,
+    logs: data?.logs ?? [],
+    pending: data?.pending ?? null,
+    roomStatus: data?.room.status ?? null,
+    revealResult: !!data?.room.reveal_result,
+    gmLogs: data?.gmLogs ?? [],
+    gmLogsWarning: data?.gmLogsWarning ?? null,
+    loading: !data && !error,
+    error: !data ? error : null,
+    failures,
+    reload: refresh,
+  };
 }

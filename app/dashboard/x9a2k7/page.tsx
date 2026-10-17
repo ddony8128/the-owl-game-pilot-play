@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RoomGame, Player } from "@/lib/types";
 import { RoomEndedBadge, useRoomStatus } from "./RoomEndedNotice";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { GmErrorBanner, GmNoticeBanner } from "@/components/GmBanners";
+import { useGmAction } from "@/lib/hooks/useGmAction";
 
 const GAME_LABEL: Record<RoomGame, string> = {
   mafia: "자본주의 마피아",
@@ -154,15 +157,15 @@ function RoomPanel({
 }) {
   const dashboardHref = `/dashboard/x9a2k7/${room.game}?room=${room.code}`;
   const ended = useRoomStatus(room.code) === "ended";
+  const action = useGmAction();
+  const [confirmEnd, setConfirmEnd] = useState(false);
 
   const endRoom = async () => {
-    if (!window.confirm(`방 ${room.code}을(를) 종료 처리할까요?`)) return;
-    await fetch("/api/gm/rooms", {
+    const r = await action.run("/api/gm/rooms", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: room.code, status: "ended", ended_normally: true }),
+      body: { code: room.code, status: "ended", ended_normally: true },
     });
-    onLeave();
+    if (r?.ok) onLeave();
   };
 
   return (
@@ -175,6 +178,9 @@ function RoomPanel({
           ← 다른 방 만들기/입장
         </button>
       </div>
+
+      <GmErrorBanner message={action.error} onClose={action.clearError} />
+      <GmNoticeBanner message={action.notice} />
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -214,8 +220,10 @@ function RoomPanel({
           )}
           {!ended && (
             <button
-              onClick={() => void endRoom()}
-              className="rounded bg-red-900 px-3 py-1.5 text-red-200 hover:bg-red-800"
+              onClick={() => setConfirmEnd(true)}
+              disabled={action.busy}
+              data-testid="end-room"
+              className="rounded bg-red-900 px-3 py-1.5 text-red-200 hover:bg-red-800 disabled:opacity-40"
             >
               방 종료
             </button>
@@ -223,24 +231,43 @@ function RoomPanel({
         </div>
       </div>
 
+      <ConfirmDialog
+        open={confirmEnd}
+        title={`방 ${room.code} 종료`}
+        confirmLabel="종료"
+        danger
+        busy={action.busy}
+        onClose={() => setConfirmEnd(false)}
+        onConfirm={async () => {
+          setConfirmEnd(false);
+          await endRoom();
+        }}
+      >
+        <p className="text-zinc-300">
+          종료하면 이 방의 라운드·페이즈·점수·타이머 조작이 모두 막히고(읽기 전용) 참가자도 더 행동할 수 없습니다. 기록은 보존됩니다.
+          다시 진행하려면 새 방을 만들어야 합니다.
+        </p>
+      </ConfirmDialog>
+
       <div>
         <h2 className="mb-2 text-sm font-semibold">참가자 등록</h2>
-        <RoomRoster room={room.code} />
+        <RoomRoster room={room.code} ended={ended} />
       </div>
     </div>
   );
 }
 
-function RoomRoster({ room }: { room: string }) {
+function RoomRoster({ room, ended }: { room: string; ended: boolean }) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [kick, setKick] = useState<Player | null>(null);
 
   const reload = useCallback(async () => {
     const res = await fetch(`/api/gm/players?room=${encodeURIComponent(room)}`);
     const json = await res.json();
     if (json.players) setPlayers(json.players);
   }, [room]);
+  const action = useGmAction(reload);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 명단을 서버에서 불러온다
@@ -250,49 +277,40 @@ function RoomRoster({ room }: { room: string }) {
   const add = async () => {
     const nick = name.trim();
     if (!nick) return;
-    setError(null);
-    const res = await fetch("/api/gm/players", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ room, nickname: nick }),
-    });
-    const json = await res.json();
-    if (json.error) {
-      setError(json.error);
-      return;
-    }
-    setName("");
-    await reload();
+    const r = await action.run("/api/gm/players", { body: { room, nickname: nick } });
+    if (r?.ok) setName("");
   };
 
-  const remove = async (id: string) => {
-    await fetch("/api/gm/players", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    await reload();
+  const remove = async (p: Player) => {
+    await action.run(
+      "/api/gm/players",
+      { method: "DELETE", body: { id: p.id } },
+      { notice: `${p.nickname} 삭제됨` },
+    );
   };
 
   return (
-    <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+    <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900 p-3" data-testid="roster">
       <div className="flex gap-2">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void add()}
           placeholder="참가자 닉네임"
-          className="h-8 flex-1 rounded border border-zinc-700 bg-zinc-950 px-2 outline-none"
+          disabled={ended}
+          className="h-8 flex-1 rounded border border-zinc-700 bg-zinc-950 px-2 outline-none disabled:opacity-50"
         />
         <button
           onClick={() => void add()}
-          className="rounded bg-amber-500 px-3 text-zinc-950 hover:bg-amber-400"
+          disabled={ended || action.busy}
+          className="rounded bg-amber-500 px-3 text-zinc-950 hover:bg-amber-400 disabled:opacity-40"
         >
           등록
         </button>
         <span className="self-center text-xs text-zinc-500">총 {players.length}명</span>
       </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      <GmErrorBanner message={action.error} onClose={action.clearError} />
+      <GmNoticeBanner message={action.notice} />
       <div className="flex flex-wrap gap-1.5">
         {players.map((p) => (
           <span
@@ -300,18 +318,40 @@ function RoomRoster({ room }: { room: string }) {
             className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-0.5 text-xs"
           >
             {p.nickname}
-            <button
-              onClick={() => void remove(p.id)}
-              className="text-zinc-500 hover:text-red-400"
-            >
-              ✕
-            </button>
+            {!ended && (
+              <button
+                onClick={() => setKick(p)}
+                aria-label={`${p.nickname} 삭제`}
+                className="text-zinc-500 hover:text-red-400"
+              >
+                ✕
+              </button>
+            )}
           </span>
         ))}
         {players.length === 0 && (
           <span className="text-xs text-zinc-600">등록된 참가자 없음</span>
         )}
       </div>
+
+      <ConfirmDialog
+        open={kick != null}
+        title={`${kick?.nickname ?? ""} 삭제(강퇴)`}
+        confirmLabel="삭제"
+        danger
+        busy={action.busy}
+        onClose={() => setKick(null)}
+        onConfirm={async () => {
+          const target = kick;
+          setKick(null);
+          if (target) await remove(target);
+        }}
+      >
+        <p className="text-zinc-300">
+          이 참가자의 행동·자산·점수 기록이 모두 지워지고 즉시 접속이 끊깁니다. 진행 중인 라운드의 미제출 수·정산·순위에서도 빠집니다.
+          같은 닉네임을 다시 등록하면 새 참가자로 들어옵니다.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

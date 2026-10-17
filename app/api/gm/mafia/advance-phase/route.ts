@@ -69,6 +69,14 @@ export async function POST(request: Request) {
     return gmError(500, "mafia_phase_state가 초기화되지 않았습니다.");
   }
 
+  // 라운드 종료(end)에서는 전환이 없다 — 다음 라운드는 /api/gm/mafia/phase(라운드 선택)로만. 같은 단계 재요청만 멱등.
+  if (current.phase === "end") {
+    if (to === "end") {
+      return NextResponse.json({ ok: true, idempotent: true, phase: current } as AdvanceResponse, { status: 200 });
+    }
+    return gmError(409, "라운드 종료 상태입니다. 다음 라운드는 [라운드 선택]으로 시작하세요.", "cannot_skip");
+  }
+
   // 화면이 보고 있던 페이즈(from)와 서버를 대조: 이미 넘어갔으면 200(멱등), 뒤처진/건너뛰기면 409.
   const decision = decideAdvance({
     currentIndex: phaseIndex(current.phase),
@@ -80,10 +88,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, idempotent: true, phase: current } as AdvanceResponse, { status: 200 });
   }
   if (decision.kind === "reject") {
-    // end 에서는 라운드 변경(/api/gm/mafia/phase)으로만 넘어간다.
-    if (current.phase === "end") {
-      return gmError(409, "라운드 종료 상태입니다. 다음 라운드는 [라운드 선택]으로 시작하세요.", "cannot_skip");
-    }
     return gmError(409, decision.error, decision.reason);
   }
 

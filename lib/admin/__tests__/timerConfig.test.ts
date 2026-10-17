@@ -55,10 +55,10 @@ describe("computeNewTotal", () => {
 describe("applyTimerChange / promotePending", () => {
   const base = normalizeTimerConfig({ durations: { defense: 300 }, pending: { defense: 600, trade: 480 } });
 
-  it("즉시 적용은 durations 를 바꾸고 같은 키의 예약을 지운다", () => {
+  it("즉시 적용은 durations 만 바꾸고 다음 라운드 예약은 그대로 둔다", () => {
     const next = applyTimerChange(base, "defense", 240, "now");
     expect(next.durations.defense).toBe(240);
-    expect(next.pending.defense).toBeUndefined();
+    expect(next.pending.defense).toBe(600);
     expect(next.pending.trade).toBe(480);
     // 불변
     expect(base.durations.defense).toBe(300);

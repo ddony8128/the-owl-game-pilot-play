@@ -106,11 +106,8 @@ export function applyTimerChange(
   when: TimerApplyWhen,
 ): TimerConfig {
   if (when === "now") {
-    return {
-      durations: { ...cfg.durations, [key]: total },
-      // 지금 바꾸면 같은 키의 예약은 의미가 없어지므로 지운다.
-      pending: Object.fromEntries(Object.entries(cfg.pending).filter(([k]) => k !== key)),
-    };
+    // 즉시 적용은 현재 라운드만 바꾼다. "다음 라운드부터" 예약은 별개의 결정이므로 그대로 둔다.
+    return { durations: { ...cfg.durations, [key]: total }, pending: { ...cfg.pending } };
   }
   return { durations: { ...cfg.durations }, pending: { ...cfg.pending, [key]: total } };
 }

@@ -16,9 +16,9 @@ export type Room = {
   reveal_result?: boolean;
 };
 
-/** 방 코드 정규화(대문자, 공백 제거) */
-export function normalizeRoomCode(input: string): string {
-  return (input ?? "").trim().toUpperCase();
+/** 방 코드 정규화(대문자, 공백 제거). 문자열이 아닌 입력(숫자·객체)은 빈 코드로 취급한다(1-17: 잘못된 형식이 500 이 되지 않게). */
+export function normalizeRoomCode(input: unknown): string {
+  return typeof input === "string" ? input.trim().toUpperCase() : "";
 }
 
 /** 무작위 방 코드 1개 생성 (index 로 결정성 부여 가능) */
