@@ -95,11 +95,19 @@ export default function DashboardMafiaPage() {
         <span className="text-zinc-400">
           방 <b className="font-mono text-amber-300">{room}</b>
         </span>
+        <button
+          onClick={() => window.open(`/join?code=${room}`, "owl-join", "width=720,height=900")}
+          title="참가 QR과 방 코드를 새 창에 크게 띄웁니다 (입장·중간 합류·재접속용)"
+          data-testid="join-qr-open"
+          className="ml-auto rounded bg-zinc-800 px-3 py-1.5 text-amber-300 hover:bg-zinc-700"
+        >
+          📲 참가 QR
+        </button>
         <a
           href={`/mafia-board?room=${room}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-auto rounded bg-zinc-800 px-3 py-1.5 text-amber-300 hover:bg-zinc-700"
+          className="rounded bg-zinc-800 px-3 py-1.5 text-amber-300 hover:bg-zinc-700"
         >
           결과 페이지 ↗
         </a>

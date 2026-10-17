@@ -204,6 +204,16 @@ function RoomPanel({
           </a>
           {!ended && (
             <button
+              onClick={() => window.open(`/join?code=${room.code}`, "owl-join", "width=720,height=900")}
+              title="참가 QR과 방 코드를 새 창에 크게 띄웁니다 (입장·중간 합류·재접속용)"
+              data-testid="join-qr-open"
+              className="rounded bg-zinc-800 px-3 py-1.5 font-semibold text-amber-300 hover:bg-zinc-700"
+            >
+              📲 참가 QR
+            </button>
+          )}
+          {!ended && (
+            <button
               onClick={() => void endRoom()}
               className="rounded bg-red-900 px-3 py-1.5 text-red-200 hover:bg-red-800"
             >

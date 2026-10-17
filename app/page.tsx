@@ -42,6 +42,23 @@ export default function EntryPage() {
   // 눌렀을 때(attempted)만, 방+닉네임 검증이 끝나면 해당 게임으로 이동한다.
   const [attempted, setAttempted] = useState(false);
 
+  // 참가 QR(/join?code=)로 들어오면 주소의 ?code= 로 방 코드를 미리 채운다(마운트 뒤 window에서 읽어
+  // hydration 불일치를 피한다). 닉네임만 적고 [입장]을 누르면 된다.
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("code");
+    if (!fromUrl) return;
+    const code = fromUrl.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
+    if (!code) return;
+    // 동기 setState 금지 규칙(react-hooks/set-state-in-effect) — 마이크로태스크로 미룬다.
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setInputRoom(code);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (!attempted || authLoading) return;
     const path = gamePath(roomGame);
