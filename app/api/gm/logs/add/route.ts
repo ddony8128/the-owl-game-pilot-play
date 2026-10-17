@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
 import type { MafiaLog, MafiaPhaseState } from "@/lib/types";
+import { loadRoomForWrite } from "@/lib/admin/gmResponse";
 
 type Body = {
   content?: string;
@@ -25,6 +26,10 @@ export async function POST(request: Request) {
       status: 400,
     });
   }
+
+  // 종료된 방은 읽기 전용(409 room_ended)
+  const guard = await loadRoomForWrite(supabase, room);
+  if (!guard.ok) return guard.response;
 
   // 현재 라운드/페이즈 정보를 함께 기록한다.
   const { data: phaseRow, error: phaseError } = await supabase

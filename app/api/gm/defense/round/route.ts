@@ -2,31 +2,35 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
 import type { DefensePhaseState } from "@/lib/types";
+import { decideAdvance, readFromIndex } from "@/lib/admin/advanceGuard";
+import { gmError, loadRoomForWrite } from "@/lib/admin/gmResponse";
+import { promoteDefenseTimerPending } from "@/lib/admin/timerStore";
+import { getDefenseRoundLabel } from "@/lib/admin/defenseLabels";
 import { handleDefenseInitRound } from "./initGame";
 import { handleDefenseAdvanceRound } from "./advanceRound";
 
 type Body = {
   room?: string;
   round?: number;
+  /** 화면이 보고 있던 라운드(Iteration 5 — 뒤처진 탭 보호). 없으면 옛 요청으로 취급. */
+  from?: unknown;
 };
 
-type ResponseBody = { ok: true; phase: DefensePhaseState } | { error: string };
+type ResponseBody =
+  | { ok: true; phase: DefensePhaseState; idempotent?: true }
+  | { error: string; reason?: string };
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as Body | null;
 
-  const room = normalizeRoomCode(body?.room ?? "");
+  const room = normalizeRoomCode(typeof body?.room === "string" ? body.room : "");
   if (!room) {
-    return NextResponse.json({ error: "room 필요" } as ResponseBody, {
-      status: 400,
-    });
+    return gmError(400, "room 필요", "invalid_input");
   }
 
-  if (!body || typeof body.round !== "number") {
-    return NextResponse.json({ error: "round is required" } as ResponseBody, {
-      status: 400,
-    });
+  if (!body || typeof body.round !== "number" || !Number.isInteger(body.round)) {
+    return gmError(400, "round is required", "invalid_input");
   }
 
   const nextRound = body.round;
@@ -37,11 +41,12 @@ export async function POST(request: Request) {
   // 4~15: 본게임 1~12라운드
   // 16: 본게임 결과 (게임 종료)
   if (nextRound < 0 || nextRound > 16) {
-    return NextResponse.json(
-      { error: "round must be between 0 and 12" } as ResponseBody,
-      { status: 400 }
-    );
+    return gmError(400, "round must be between 0 and 16", "invalid_input");
   }
+
+  // 종료된 방은 읽기 전용(409 room_ended)
+  const guard = await loadRoomForWrite(supabase, room);
+  if (!guard.ok) return guard.response;
 
   const { data: phaseRow, error: phaseError } = await supabase
     .from("defense_phase_state")
@@ -50,29 +55,58 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (phaseError) {
-    return NextResponse.json(
-      { error: phaseError.message } as ResponseBody,
-      { status: 500 }
-    );
+    return gmError(500, phaseError.message);
   }
 
   const current = (phaseRow || null) as DefensePhaseState | null;
   if (!current) {
-    return NextResponse.json(
-      {
-        error: "defense_phase_state가 초기화되지 않았습니다.",
-      } as ResponseBody,
-      { status: 500 }
-    );
+    return gmError(500, "defense_phase_state가 초기화되지 않았습니다.");
   }
 
-  if (nextRound !== current.round + 1) {
+  // 화면이 보고 있던 라운드(from)와 서버 라운드를 대조한다.
+  //  - 이미 넘어가 있으면 200(멱등) — 다른 창·재전송.
+  //  - 화면이 서버보다 앞서 있으면(되돌리기 뒤의 옛 탭) 409.
+  const decision = decideAdvance({
+    currentIndex: current.round,
+    targetIndex: nextRound,
+    fromIndex: readFromIndex(body.from),
+    label: getDefenseRoundLabel,
+  });
+  if (decision.kind === "idempotent") {
     return NextResponse.json(
-      {
-        error: `현재 라운드(${current.round})에서 ${nextRound}로는 이동할 수 없습니다.`,
-      } as ResponseBody,
-      { status: 400 }
+      { ok: true, idempotent: true, phase: current } as ResponseBody,
+      { status: 200 },
     );
+  }
+  if (decision.kind === "reject") {
+    return gmError(409, decision.error, decision.reason);
+  }
+
+  // 전환을 먼저 선점한다(compare-and-swap). 같은 전환을 동시에 보낸 두 요청 중 하나만 정산을 실행한다.
+  // (예전엔 정산 뒤에 round 를 올려서, 동시 두 건이 전투 정산을 두 번 적용했다 — 반면교사 1-1·1-8)
+  const { data: claimed, error: claimError } = await supabase
+    .from("defense_phase_state")
+    .update({ round: nextRound })
+    .eq("room_code", room)
+    .eq("round", current.round)
+    .select("room_code, round, updated_at")
+    .maybeSingle();
+
+  if (claimError) {
+    return gmError(500, claimError.message);
+  }
+  if (!claimed) {
+    // 그 사이 다른 요청이 라운드를 바꿨다 → 다시 읽어 멱등/409 를 가른다.
+    const { data: nowRow } = await supabase
+      .from("defense_phase_state")
+      .select("room_code, round, updated_at")
+      .eq("room_code", room)
+      .maybeSingle();
+    const now = (nowRow || null) as DefensePhaseState | null;
+    if (now && now.round >= nextRound) {
+      return NextResponse.json({ ok: true, idempotent: true, phase: now } as ResponseBody, { status: 200 });
+    }
+    return gmError(409, "다른 창에서 라운드가 바뀌어 적용하지 않았습니다. 화면을 새로 고치세요.", "already_advanced");
   }
 
   try {
@@ -91,36 +125,24 @@ export async function POST(request: Request) {
       await handleDefenseAdvanceRound(supabase, current, nextRound, room);
     }
   } catch (e: unknown) {
+    // 정산 실패 시 라운드를 원복해 재시도할 수 있게 한다(부분 적용은 GM 로그·화면 안내로 확인).
+    await supabase
+      .from("defense_phase_state")
+      .update({ round: current.round })
+      .eq("room_code", room)
+      .eq("round", nextRound);
     const message =
       e instanceof Error
         ? e.message
         : "디펜스 라운드 전환 처리 중 오류가 발생했습니다.";
-    return NextResponse.json({ error: message } as ResponseBody, {
-      status: 500,
-    });
+    return gmError(500, `라운드 전환 실패(라운드는 ${getDefenseRoundLabel(current.round)}로 유지): ${message}`);
   }
 
-  const { data: updatedPhase, error: updateError } = await supabase
-    .from("defense_phase_state")
-    .update({ round: nextRound })
-    .eq("room_code", room)
-    .select("room_code, round, updated_at")
-    .maybeSingle();
-
-  if (updateError || !updatedPhase) {
-    return NextResponse.json(
-      {
-        error:
-          updateError?.message ??
-          "defense_phase_state를 업데이트하지 못했습니다.",
-      } as ResponseBody,
-      { status: 500 }
-    );
-  }
+  // "다음 라운드부터" 예약된 타이머 시간이 있으면 이 시점에 적용한다(타이머 자체는 GM이 리셋/시작).
+  await promoteDefenseTimerPending(supabase, room).catch(() => undefined);
 
   return NextResponse.json(
-    { ok: true, phase: updatedPhase as DefensePhaseState } as ResponseBody,
+    { ok: true, phase: claimed as DefensePhaseState } as ResponseBody,
     { status: 200 }
   );
 }
-

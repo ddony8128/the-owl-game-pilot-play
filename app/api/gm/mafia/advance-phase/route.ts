@@ -7,6 +7,10 @@ import type {
   MafiaPlayerState,
   MafiaPlayerSnapshot,
 } from "@/lib/types";
+import { getMafiaPhaseLabel } from "@/lib/labels/mafia";
+import { decideAdvance } from "@/lib/admin/advanceGuard";
+import { gmError, loadRoomForWrite } from "@/lib/admin/gmResponse";
+import { MAFIA_PHASE_ORDER } from "@/lib/admin/rewindRules";
 import { handlePrepareToAuction } from "./prepareToAuction";
 import { handleAuctionToTrade } from "./auctionToTrade";
 import { handleTradeToApply } from "./tradeToApply";
@@ -14,31 +18,40 @@ import { handleVoteToEnd } from "./voteToEnd";
 
 type AdvanceBody = {
   room?: string;
+  /** 화면이 보고 있던 페이즈(Iteration 5 — 뒤처진 탭 보호). 없으면 옛 요청. */
   from?: string;
   to?: string;
 };
 
-type AdvanceResponse = { ok: true; phase: MafiaPhaseState } | { error: string };
+type AdvanceResponse =
+  | { ok: true; phase: MafiaPhaseState; idempotent?: true }
+  | { error: string; reason?: string };
+
+const phaseIndex = (p: string): number => MAFIA_PHASE_ORDER.indexOf(p as MafiaPhase);
+const phaseLabelByIndex = (i: number) => getMafiaPhaseLabel(MAFIA_PHASE_ORDER[i] ?? null);
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as AdvanceBody | null;
 
-  const room = normalizeRoomCode(body?.room ?? "");
+  const room = normalizeRoomCode(typeof body?.room === "string" ? body.room : "");
   if (!room) {
-    return NextResponse.json({ error: "room 필요" } as AdvanceResponse, {
-      status: 400,
-    });
+    return gmError(400, "room 필요", "invalid_input");
   }
 
   if (!body || typeof body.to !== "string") {
-    return NextResponse.json({ error: "to is required" } as AdvanceResponse, {
-      status: 400,
-    });
+    return gmError(400, "to is required", "invalid_input");
   }
 
   const to = body.to.trim();
-  //  const from = body.from?.trim();
+  if (phaseIndex(to) < 0) {
+    return gmError(400, `알 수 없는 페이즈: ${to}`, "invalid_input");
+  }
+  const from = typeof body.from === "string" && phaseIndex(body.from.trim()) >= 0 ? body.from.trim() : null;
+
+  // 종료된 방은 읽기 전용(409 room_ended)
+  const guard = await loadRoomForWrite(supabase, room);
+  if (!guard.ok) return guard.response;
 
   // 현재 phase 조회
   const { data: phaseRow, error: phaseError } = await supabase
@@ -48,37 +61,34 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (phaseError) {
-    return NextResponse.json({ error: phaseError.message } as AdvanceResponse, {
-      status: 500,
-    });
+    return gmError(500, phaseError.message);
   }
 
   const current = (phaseRow || null) as MafiaPhaseState | null;
   if (!current) {
-    return NextResponse.json(
-      {
-        error: "mafia_phase_state가 초기화되지 않았습니다.",
-      } as AdvanceResponse,
-      { status: 500 }
-    );
+    return gmError(500, "mafia_phase_state가 초기화되지 않았습니다.");
   }
 
-  const allowedNextByPhase: Partial<Record<MafiaPhase, MafiaPhase>> = {
-    prepare: "auction",
-    auction: "trade",
-    trade: "apply",
-    apply: "vote",
-    vote: "end",
-  };
+  // 라운드 종료(end)에서는 전환이 없다 — 다음 라운드는 /api/gm/mafia/phase(라운드 선택)로만. 같은 단계 재요청만 멱등.
+  if (current.phase === "end") {
+    if (to === "end") {
+      return NextResponse.json({ ok: true, idempotent: true, phase: current } as AdvanceResponse, { status: 200 });
+    }
+    return gmError(409, "라운드 종료 상태입니다. 다음 라운드는 [라운드 선택]으로 시작하세요.", "cannot_skip");
+  }
 
-  const nextAllowed = current ? allowedNextByPhase[current.phase] : null;
-  if (!nextAllowed || to !== nextAllowed) {
-    return NextResponse.json(
-      {
-        error: `현재 페이즈(${current.phase})에서 ${to}로 전환할 수 없습니다.`,
-      } as AdvanceResponse,
-      { status: 400 }
-    );
+  // 화면이 보고 있던 페이즈(from)와 서버를 대조: 이미 넘어갔으면 200(멱등), 뒤처진/건너뛰기면 409.
+  const decision = decideAdvance({
+    currentIndex: phaseIndex(current.phase),
+    targetIndex: phaseIndex(to),
+    fromIndex: from ? phaseIndex(from) : null,
+    label: phaseLabelByIndex,
+  });
+  if (decision.kind === "idempotent") {
+    return NextResponse.json({ ok: true, idempotent: true, phase: current } as AdvanceResponse, { status: 200 });
+  }
+  if (decision.kind === "reject") {
+    return gmError(409, decision.error, decision.reason);
   }
 
   // 동시 더블클릭/중복요청 방지: 현재 phase일 때만 to로 전환되도록 compare-and-swap.
@@ -93,17 +103,20 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (updateError) {
-    return NextResponse.json(
-      { error: updateError.message } as AdvanceResponse,
-      { status: 500 }
-    );
+    return gmError(500, updateError.message);
   }
   if (!updatedPhase) {
     // 다른 요청이 이미 이 전환을 처리했거나 그 사이 phase가 바뀜 → 중복 적용 방지
-    return NextResponse.json(
-      { error: "이미 처리되었거나 페이즈가 변경되었습니다." } as AdvanceResponse,
-      { status: 409 }
-    );
+    const { data: nowRow } = await supabase
+      .from("mafia_phase_state")
+      .select("room_code, round_number, phase, updated_at")
+      .eq("room_code", room)
+      .maybeSingle();
+    const now = (nowRow || null) as MafiaPhaseState | null;
+    if (now && now.round_number === current.round_number && phaseIndex(now.phase) >= phaseIndex(to)) {
+      return NextResponse.json({ ok: true, idempotent: true, phase: now } as AdvanceResponse, { status: 200 });
+    }
+    return gmError(409, "이미 처리되었거나 페이즈가 변경되었습니다.", "already_advanced");
   }
 
   // 스냅샷 생성 (현재 phase 종료 시점)
@@ -152,15 +165,14 @@ export async function POST(request: Request) {
       e instanceof Error
         ? e.message
         : "페이즈 전환 비즈니스 로직 처리 중 오류가 발생했습니다.";
-    return NextResponse.json({ error: message } as AdvanceResponse, {
-      status: 500,
-    });
+    return gmError(500, `페이즈 전환 실패(${getMafiaPhaseLabel(current.phase)} 유지): ${message}`);
   }
 
   // 특정 페이즈 전환 시 타이머를 해당 페이즈 기본값으로 리셋한다.
   // - prepare -> auction (직업 경매 시작)
   // - auction -> trade (주식 거래 시작)
   // - apply -> vote (투표 시작)
+  // (리셋 시 "다음 라운드부터" 예약된 시간이 있으면 그때 적용된다 — timers/mafia reset)
   if (to === "auction" || to === "trade" || to === "vote") {
     try {
       const origin = new URL(request.url).origin;

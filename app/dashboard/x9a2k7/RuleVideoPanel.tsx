@@ -136,7 +136,8 @@ export function RuleVideoPanel({ room, video }: { room: string; video: RuleVideo
           <button
             key={c.label}
             type="button"
-            onClick={() => void send(video, Math.floor(c.atSec))}
+            // 장 시작 초(소수)는 반올림해 보낸다 — 내림(116)은 chapterAt(116 < 116.9-0.5)에서 한 장 앞으로 표시됐다(Iteration 5 수정).
+            onClick={() => void send(video, Math.round(c.atSec))}
             disabled={disabled}
             title={`${fmtMinSec(c.atSec)}부터`}
             className={`rounded-full px-2.5 py-1 text-xs disabled:opacity-40 ${

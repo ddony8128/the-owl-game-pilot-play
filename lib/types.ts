@@ -9,6 +9,7 @@ export type Room = {
   status: "active" | "ended";
   ended_normally: boolean;
   created_at: string;
+  reveal_result?: boolean;
 };
 
 // 공통

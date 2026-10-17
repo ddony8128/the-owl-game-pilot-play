@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
 import type { DefenseScore } from "@/lib/types";
+import { gmError, loadRoomForWrite } from "@/lib/admin/gmResponse";
+import { addGmLog } from "@/lib/admin/gmLog";
 
 type GetResponse =
   | {
@@ -20,7 +22,7 @@ type PostResponse =
       ok: true;
       points: number;
     }
-  | { error: string };
+  | { error: string; reason?: string };
 
 export async function GET(request: Request) {
   const supabase = createServerSupabaseClient();
@@ -56,18 +58,13 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const body = (await request.json().catch(() => null)) as PostBody | null;
 
-  const room = normalizeRoomCode(body?.room ?? "");
+  const room = normalizeRoomCode(typeof body?.room === "string" ? body.room : "");
   if (!room) {
-    return NextResponse.json({ error: "room 필요" } as PostResponse, {
-      status: 400,
-    });
+    return gmError(400, "room 필요", "invalid_input");
   }
 
-  if (!body || typeof body.playerId !== "string") {
-    return NextResponse.json(
-      { error: "playerId is required" } as PostResponse,
-      { status: 400 }
-    );
+  if (!body || typeof body.playerId !== "string" || !body.playerId.trim()) {
+    return gmError(400, "playerId is required", "invalid_input");
   }
 
   const delta =
@@ -76,11 +73,22 @@ export async function POST(request: Request) {
       : 0;
 
   if (!delta) {
-    return NextResponse.json(
-      { error: "delta must be +1 or -1" } as PostResponse,
-      { status: 400 }
-    );
+    return gmError(400, "delta must be +1 or -1", "invalid_input");
   }
+
+  // 종료된 방은 읽기 전용
+  const guard = await loadRoomForWrite(supabase, room);
+  if (!guard.ok) return guard.response;
+
+  // 그 방의 참가자인지 확인(다른 방 참가자 id 로 점수를 만들지 않는다)
+  const { data: playerRow, error: playerError } = await supabase
+    .from("players")
+    .select("id, nickname")
+    .eq("room_code", room)
+    .eq("id", body.playerId)
+    .maybeSingle();
+  if (playerError) return gmError(500, playerError.message);
+  if (!playerRow) return gmError(404, "그 방의 참가자가 아닙니다.", "invalid_input");
 
   const { data: existingRow, error: existingError } = await supabase
     .from("defense_score")
@@ -90,10 +98,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (existingError) {
-    return NextResponse.json(
-      { error: existingError.message } as PostResponse,
-      { status: 500 }
-    );
+    return gmError(500, existingError.message);
   }
 
   const currentPoints =
@@ -114,16 +119,19 @@ export async function POST(request: Request) {
     );
 
   if (upsertError) {
-    return NextResponse.json(
-      { error: upsertError.message } as PostResponse,
-      { status: 500 }
-    );
+    return gmError(500, upsertError.message);
   }
+
+  await addGmLog(supabase, {
+    room,
+    game: "defense",
+    kind: "adjust",
+    content: `점수 보정: ${(playerRow as { nickname: string }).nickname} ${delta > 0 ? "+" : ""}${delta}점 (${currentPoints} → ${nextPoints})`,
+    meta: { player_id: body.playerId, delta, before: currentPoints, after: nextPoints },
+  });
 
   return NextResponse.json(
     { ok: true, points: nextPoints } as PostResponse,
     { status: 200 }
   );
 }
-
-
