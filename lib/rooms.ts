@@ -12,6 +12,8 @@ export type Room = {
   status: "active" | "ended";
   ended_normally: boolean;
   created_at: string;
+  /** 마피아 결과 공개 토글(Iteration 5). 컬럼이 없는 DB 에서는 undefined. */
+  reveal_result?: boolean;
 };
 
 /** 방 코드 정규화(대문자, 공백 제거) */
@@ -52,6 +54,13 @@ export async function getRoom(code: string): Promise<Room | null> {
   const normalized = normalizeRoomCode(code);
   if (!normalized) return null;
   const supabase = createServerSupabaseClient();
+  const full = await supabase
+    .from("rooms")
+    .select("code, game, status, ended_normally, created_at, reveal_result")
+    .eq("code", normalized)
+    .maybeSingle();
+  if (!full.error) return (full.data as Room | null) ?? null;
+  // reveal_result 컬럼이 없는 DB(마이그레이션 전) 폴백
   const { data } = await supabase
     .from("rooms")
     .select("code, game, status, ended_normally, created_at")

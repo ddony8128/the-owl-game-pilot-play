@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
 import { DEFENSE_MONSTERS } from "@/lib/defense/monsters";
+import { loadRoomForWrite } from "@/lib/admin/gmResponse";
 
 // GET /api/gm/defense/monster-config?room=CODE
 //   → 그 방의 몬스터 종류별 기준값(base_count) + 현재 풀(count) + 도감 정보
@@ -57,6 +58,10 @@ export async function POST(request: Request) {
   if (!counts || typeof counts !== "object") {
     return NextResponse.json({ error: "counts 필요" }, { status: 400 });
   }
+
+  // 종료된 방은 읽기 전용(409 room_ended) — Iteration 5 WS-A 8
+  const guard = await loadRoomForWrite(supabase, room);
+  if (!guard.ok) return guard.response;
 
   // 본게임이 이미 진행 중(라운드 ≥ 4)이면 살아있는 풀(count)을 건드리지 않고
   // base_count 만 갱신한다(다음 본게임 시작 시 반영). 시작 전(튜토리얼/대기)에는
