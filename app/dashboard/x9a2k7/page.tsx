@@ -31,8 +31,14 @@ async function fetchRoomList(force = false): Promise<CurrentRoom[]> {
 
   roomListRequest = (async () => {
     const res = await fetch("/api/gm/rooms");
-    const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error ?? "방 목록 조회 실패");
+    const json = (await res.json().catch(() => null)) as
+      | { rooms?: CurrentRoom[]; error?: string }
+      | null;
+    if (!res.ok || !json || json.error) {
+      throw new Error(
+        json?.error ?? `방 목록 조회 실패 (서버 응답 ${res.status || "없음"})`,
+      );
+    }
     const nextRooms = (json.rooms ?? []) as CurrentRoom[];
     roomListCache = { rooms: nextRooms, fetchedAt: Date.now() };
     return nextRooms;

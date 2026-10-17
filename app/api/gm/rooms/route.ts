@@ -17,17 +17,30 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
 
   if (!code) {
-    const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase
-      .from("rooms")
-      .select("code, game, status, ended_normally, created_at")
-      .in("game", VALID_GAMES)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    try {
+      const supabase = createServerSupabaseClient();
+      const { data, error } = await supabase
+        .from("rooms")
+        .select("code, game, status, ended_normally, created_at")
+        .in("game", VALID_GAMES)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ rooms: data ?? [] });
+    } catch (error) {
+      console.error("Failed to load GM rooms", error);
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load room list",
+        },
+        { status: 500 },
+      );
     }
-    return NextResponse.json({ rooms: data ?? [] });
   }
 
   const room = await getRoom(code);
