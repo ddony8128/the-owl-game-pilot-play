@@ -1,277 +1,178 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-
-type PlayerAsset = {
-  player_id: string;
-  nickname: string | null;
-  job: string | null;
-  is_mafia: boolean;
-  cash: number;
-  holdings_value: number;
-  total_assets: number;
-};
-
-type Summary = {
-  finished: boolean;
-  currentRound: number;
-  rounds: { round: number; players: PlayerAsset[] }[];
-  final: PlayerAsset[];
-};
-
-const JOB_LABEL: Record<string, string> = {
-  up_manipulator: "상승 조작범",
-  down_manipulator: "하락 조작범",
-  robber: "강도",
-  police: "경찰",
-  tax_auditor: "세무조사원",
-  mayor: "시장",
-  broker: "증권사 직원",
-  ceo: "CEO",
-  salaryman: "월급쟁이",
-};
-
-function jobLabel(job: string | null): string {
-  if (!job) return "월급쟁이";
-  return JOB_LABEL[job] ?? job;
-}
-
-const RANK_ACCENT = ["text-amber-300", "text-zinc-200", "text-orange-400"];
+import { useState } from "react";
+import { usePolling } from "@/lib/hooks/usePolling";
+import type { MafiaBoardSummary } from "@/lib/mafia/boardSummary";
+import { BoardFrame, type BoardBg } from "@/components/board/BoardFrame";
+import { BoardLobby } from "@/components/board/BoardLobby";
+import { BoardCountdown, useBoardTimer } from "@/components/board/BoardCountdown";
+import { useMounted, useRoomParam } from "@/components/board/useBoardRoom";
+import { StockBoard } from "./StockBoard";
+import { PriceReveal } from "./PriceReveal";
+import { MafiaResult } from "./MafiaResult";
+import { PHASE_LABEL, PHASE_TIMER_LABEL, mafiaRoundLabel } from "./labels";
 
 export function MafiaBoardClient() {
-  // 하이드레이션 안전: URL(room)은 서버에서 알 수 없으므로 마운트 후에만 읽는다.
-  const [room, setRoom] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setRoom(new URLSearchParams(window.location.search).get("room"));
-    setMounted(true);
-  }, []);
+  const mounted = useMounted();
+  const room = useRoomParam();
+  if (!mounted) return <div className="h-dvh bg-zinc-950" />;
+  if (!room) return <RoomPrompt />;
+  return <MafiaBoard room={room} />;
+}
+
+function RoomPrompt() {
   const [roomInput, setRoomInput] = useState("");
-  const [data, setData] = useState<Summary | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-zinc-950 px-8 text-zinc-50">
+      <p className="text-2xl">결과 페이지 — 방 코드가 필요합니다.</p>
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const code = roomInput.trim().toUpperCase();
+          if (code) window.location.search = `?room=${encodeURIComponent(code)}`;
+        }}
+      >
+        <input
+          className="h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-base outline-none focus:border-zinc-400"
+          placeholder="방 코드"
+          value={roomInput}
+          onChange={(e) => setRoomInput(e.target.value)}
+        />
+        <button type="submit" className="h-10 rounded-lg bg-amber-400 px-4 text-base font-semibold text-zinc-950 hover:bg-amber-300">
+          이동
+        </button>
+      </form>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    if (!room) return;
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const res = await fetch(
-          `/api/mafia/board-summary?room=${encodeURIComponent(room)}`
-        );
-        const json = (await res.json().catch(() => null)) as
-          | Summary
-          | { error: string }
-          | null;
-        if (!res.ok || !json || "error" in json) {
-          throw new Error(
-            (json as { error?: string })?.error ??
-              "결과를 불러오지 못했습니다."
-          );
-        }
-        if (cancelled) return;
-        setData(json);
-        setError(null);
-      } catch (e: unknown) {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : "결과를 불러오지 못했습니다.");
-      }
-    };
-    void load();
-    const interval = setInterval(() => void load(), 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [room]);
+type View = "lobby" | "live" | "waiting" | "result";
 
-  // 라운드별 추이 테이블용: player_id → (round → asset)
-  const { rowOrder, byPlayerRound, roundList } = useMemo(() => {
-    const order = (data?.final ?? []).map((p) => p.player_id);
-    const map = new Map<string, Map<number, PlayerAsset>>();
-    const rounds: number[] = [];
-    for (const rd of data?.rounds ?? []) {
-      rounds.push(rd.round);
-      for (const p of rd.players) {
-        if (!map.has(p.player_id)) map.set(p.player_id, new Map());
-        map.get(p.player_id)!.set(rd.round, p);
-      }
-    }
-    return { rowOrder: order, byPlayerRound: map, roundList: rounds };
-  }, [data]);
+function MafiaBoard({ room }: { room: string }) {
+  const q = encodeURIComponent(room);
+  const summary = usePolling<MafiaBoardSummary>(`/api/mafia/board-summary?room=${q}`, 3000);
+  const timer = useBoardTimer(`/api/gm/timers/mafia?room=${q}`);
+  const data = summary.data;
 
-  // 마운트 전에는 서버 렌더와 동일한 빈 화면을 그려 하이드레이션 불일치를 피한다.
-  if (!mounted) {
-    return <div className="min-h-screen bg-zinc-950" />;
+  // 주가 변동 묶음 순차 공개 규칙(렌더 중 파생 — effect 안 setState 없음):
+  //  - 처음 받은 응답의 묶음은 "이미 본 것"(열자마자 옛 변동을 다시 틀지 않는다).
+  //  - 그 뒤 새로 생긴 묶음 중 **현재 라운드** 것만, 생긴 순서대로(정산 → 투표) 하나씩 공개한다.
+  //  - 지난 라운드 묶음이 밀려 있으면(보드가 뒤처졌거나 GM 이 빠르게 넘김) 틀지 않고 본 것으로 처리한다.
+  //  - 공개 중에는 새 묶음이 와도 끝날 때까지 바꾸지 않는다(리마운트로 0에서 다시 시작하는 사고 방지).
+  const [seen, setSeen] = useState<Set<string> | null>(null);
+  const [active, setActive] = useState<string | null>(null);
+  if (data && seen === null) setSeen(new Set(data.changes.map((c) => c.key)));
+  const unseen = data && seen ? data.changes.filter((c) => !seen.has(c.key)) : [];
+  const stale = unseen.filter((c) => data && c.round !== data.round);
+  if (stale.length > 0) {
+    setSeen((prev) => {
+      const next = new Set(prev ?? []);
+      for (const c of stale) next.add(c.key);
+      return next;
+    });
   }
+  const nextGroup = unseen.find((c) => data && c.round === data.round) ?? null;
+  if (active === null && nextGroup) setActive(nextGroup.key);
+  const pending = active ? (data?.changes.find((c) => c.key === active) ?? null) : null;
+  const finishReveal = (key: string) => {
+    setSeen((prev) => {
+      const next = new Set(prev ?? []);
+      next.add(key);
+      return next;
+    });
+    setActive(null);
+  };
 
-  if (!room) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-8 text-zinc-50">
-        <p className="text-2xl">결과 페이지 — 방 코드가 필요합니다.</p>
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const code = roomInput.trim().toUpperCase();
-            if (code) window.location.search = `?room=${encodeURIComponent(code)}`;
-          }}
-        >
-          <input
-            className="h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-base outline-none focus:border-zinc-400"
-            placeholder="방 코드"
-            value={roomInput}
-            onChange={(e) => setRoomInput(e.target.value)}
-          />
-          <button
-            type="submit"
-            className="h-10 rounded-lg bg-amber-400 px-4 text-base font-semibold text-zinc-950 hover:bg-amber-300"
-          >
-            이동
-          </button>
-        </form>
-      </div>
-    );
-  }
+  const view: View | null = !data
+    ? null
+    : data.revealed
+      ? "result"
+      : data.finished
+        ? "waiting"
+        : data.round <= 0 && (data.phase === "prepare" || data.phase === null)
+          ? "lobby"
+          : "live";
 
-  // 게임 종료 전: 결과 비공개
-  if (!data?.finished) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-zinc-950 px-8 text-center text-zinc-50">
-        <p className="text-4xl font-bold">자본주의 마피아</p>
-        <p className="mt-2 text-2xl text-zinc-300">게임이 끝나면 결과가 공개됩니다</p>
-        <p className="text-lg text-zinc-500">
-          각 라운드의 재산 변동과 직업(마피아 포함)은 게임 종료 후 이 화면에 표시됩니다.
-        </p>
-        {error && <p className="mt-4 text-base text-red-400">{error}</p>}
-      </div>
-    );
-  }
+  const failures = Math.max(summary.failures, timer.failures);
+  const roomMissing = summary.status === 404;
+  const phaseLabel = data?.phase ? PHASE_LABEL[data.phase] : "";
+  const title =
+    view === "result"
+      ? "자본주의 마피아 — 최종 결과"
+      : view === "waiting"
+        ? "모든 라운드가 끝났습니다"
+        : view === "lobby"
+          ? "곧 자본주의 마피아가 시작됩니다"
+          : view === "live" && data
+            ? `${mafiaRoundLabel(data.round)} · ${phaseLabel}`
+            : roomMissing
+              ? "방을 찾을 수 없습니다"
+              : "불러오는 중…";
+  const bg: BoardBg = view === "result" ? "skyline-mafia" : view === "lobby" ? "hall-mafia" : "floor-mafia";
 
   return (
-    <div className="min-h-screen bg-zinc-950 px-8 py-8 text-zinc-50">
-      <h1 className="mb-6 text-4xl font-bold tracking-tight">
-        자본주의 마피아 — 최종 결과
-      </h1>
-
-      {/* 최종 순위 */}
-      <section className="mb-10">
-        <h2 className="mb-3 text-2xl font-semibold text-zinc-200">최종 순위</h2>
-        <ol className="space-y-3">
-          {data.final.map((r, i) => (
-            <li
-              key={r.player_id}
-              className={`flex items-center justify-between rounded-2xl border px-6 py-4 ${
-                r.is_mafia
-                  ? "border-red-500/70 bg-red-950/40"
-                  : "border-zinc-800 bg-zinc-900"
-              }`}
-            >
-              <div className="flex items-center gap-6">
-                <span
-                  className={`w-14 text-center text-4xl font-black ${
-                    RANK_ACCENT[i] ?? "text-zinc-500"
-                  }`}
-                >
-                  {i + 1}
-                </span>
-                <div>
-                  <p className="text-3xl font-bold">
-                    {r.nickname ?? "(이름 없음)"}
-                    {r.is_mafia && (
-                      <span className="ml-3 rounded bg-red-600 px-2 py-0.5 text-lg font-semibold text-white">
-                        마피아
-                      </span>
-                    )}
-                  </p>
-                  <p className="mt-1 text-lg text-zinc-400">
-                    최종 직업: {jobLabel(r.job)}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-4xl font-black text-amber-300">
-                  {r.total_assets.toLocaleString()}원
-                </p>
-                <p className="mt-1 text-base text-zinc-400">
-                  현금 {r.cash.toLocaleString()} · 주식{" "}
-                  {r.holdings_value.toLocaleString()}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      {/* 라운드별 재산/직업 추이 */}
-      <section>
-        <h2 className="mb-3 text-2xl font-semibold text-zinc-200">
-          라운드별 재산 추이 · 직업
-        </h2>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-base">
-            <thead>
-              <tr>
-                <th className="sticky left-0 bg-zinc-950 px-3 py-2 text-left text-zinc-400">
-                  플레이어
-                </th>
-                {roundList.map((r) => (
-                  <th
-                    key={r}
-                    className="px-3 py-2 text-center text-zinc-400"
-                  >
-                    {r}라운드
-                  </th>
-                ))}
-                <th className="px-3 py-2 text-center text-amber-300">최종</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rowOrder.map((pid) => {
-                const fin = data.final.find((p) => p.player_id === pid);
-                const perRound = byPlayerRound.get(pid);
-                return (
-                  <tr key={pid} className="border-t border-zinc-800">
-                    <td className="sticky left-0 bg-zinc-950 px-3 py-2 font-semibold">
-                      {fin?.nickname ?? "(이름 없음)"}
-                    </td>
-                    {roundList.map((r) => {
-                      const cell = perRound?.get(r) ?? null;
-                      return (
-                        <td
-                          key={r}
-                          className={`px-3 py-2 text-center ${
-                            cell?.is_mafia ? "bg-red-950/40 text-red-200" : ""
-                          }`}
-                        >
-                          {cell ? (
-                            <>
-                              <div className="text-sm text-zinc-400">
-                                {jobLabel(cell.job)}
-                              </div>
-                              <div className="font-semibold">
-                                {cell.total_assets.toLocaleString()}원
-                              </div>
-                            </>
-                          ) : (
-                            <span className="text-zinc-600">-</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="px-3 py-2 text-center font-bold text-amber-300">
-                      {fin ? `${fin.total_assets.toLocaleString()}원` : "-"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-3 text-sm text-zinc-500">
-          빨간 칸은 그 라운드에 마피아(주가조작범·강도) 직업이었음을 뜻합니다. 자산 =
-          현금 + 보유주식 평가액(해당 라운드 종료 시점 주가 기준).
+    <BoardFrame
+      bg={bg}
+      dim={view === "lobby" ? 0.62 : view === "live" ? 0.82 : 0.78}
+      title={title}
+      subtitle={
+        <>
+          자본주의 마피아 · 방 {room}
+          {data ? ` · ${mafiaRoundLabel(data.round)} ${phaseLabel}` : ""}
+          {data?.roomStatus === "ended" ? " · 종료된 방" : ""}
+        </>
+      }
+      failures={failures}
+      stage={{
+        game: "mafia",
+        view: view ?? "none",
+        round: data?.round ?? null,
+        phase: data?.phase ?? null,
+        finished: data?.finished ?? false,
+        revealed: data?.revealed ?? false,
+      }}
+      right={<BoardCountdown state={timer.state} label={data?.phase ? PHASE_TIMER_LABEL[data.phase] : undefined} />}
+    >
+      {roomMissing ? (
+        <p className="m-auto text-[clamp(1.2rem,3vh,2rem)] text-red-300">방 코드 {room} 을(를) 찾을 수 없습니다.</p>
+      ) : !data || !view ? (
+        <p className="m-auto text-[clamp(1rem,2.6vh,1.6rem)] text-zinc-400" data-testid="board-stage-loading">
+          {summary.error ? `서버와 연결하는 중… (${summary.error})` : "불러오는 중…"}
         </p>
-      </section>
-    </div>
+      ) : view === "lobby" ? (
+        <BoardLobby
+          code={room}
+          playerCount={data.playerCount}
+          heading="곧 자본주의 마피아가 시작됩니다"
+          hint="QR을 찍어 입장하세요. 닉네임은 진행자가 등록한 이름과 같아야 합니다. 권장 인원 6~12명."
+        />
+      ) : view === "result" ? (
+        <MafiaResult data={data} />
+      ) : (
+        <div className="relative flex min-h-0 flex-1 flex-col justify-center gap-[2vh]" data-testid="board-live">
+          {view === "waiting" ? (
+            <div className="flex-none text-center" data-testid="board-waiting-reveal">
+              <p className="text-[clamp(1.6rem,5vh,3.4rem)] font-black text-amber-300">게임이 끝나면 결과가 공개됩니다</p>
+              <p className="mt-[1vh] text-[clamp(1rem,2.6vh,1.7rem)] text-zinc-300">
+                최종 순위와 직업(마피아 포함)은 진행자가 공개 버튼을 누르면 이 화면에 표시됩니다.
+              </p>
+            </div>
+          ) : (
+            <p className="flex-none text-center text-[clamp(1rem,2.6vh,1.7rem)] text-zinc-300">
+              {data.phase === "trade"
+                ? "거래가 끝나면 주가 변동을 종목별로 공개합니다"
+                : data.phase === "auction"
+                  ? "폰에서 원하는 직업에 베팅하세요"
+                  : data.phase === "vote"
+                    ? "경제사범으로 의심되는 사람에게 투표하세요"
+                    : "현재 주가"}
+            </p>
+          )}
+          <StockBoard prices={data.prices} changes={data.changes} />
+          {pending ? <PriceReveal key={pending.key} group={pending} onDone={() => finishReveal(pending.key)} /> : null}
+        </div>
+      )}
+    </BoardFrame>
   );
 }

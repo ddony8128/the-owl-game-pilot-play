@@ -20,4 +20,26 @@ export type BoardApiResponse = {
   monsters: BoardMonster[];
 };
 
+/** /api/defense/board-scores 의 한 줄 — rank·tieCount 는 lib/defense/rank.ts 가 매긴다 */
+export type BoardScore = {
+  playerId: string;
+  nickname: string | null;
+  points: number;
+  damage: number;
+  rank: number;
+  tieCount: number;
+};
 
+export type BoardScoresResponse = {
+  round: number;
+  scores: BoardScore[];
+};
+
+/** /api/defense/board-phase */
+export type BoardPhaseResponse = {
+  round: number;
+  updatedAt: string | null;
+  roomStatus: "active" | "ended" | null;
+  playerCount: number;
+  serverNow: string;
+};

@@ -1,0 +1,95 @@
+/* 보드(빔) 연출 — Iteration 5 WS-C. 두 보드가 같이 쓴다. */
+
+@keyframes board-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes board-drum {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes board-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.9);
+  }
+  100% {
+    box-shadow: 0 0 0 28px rgba(251, 191, 36, 0);
+  }
+}
+
+@keyframes board-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px) rotate(-1deg);
+  }
+  40% {
+    transform: translateX(6px) rotate(1deg);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes board-flee {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(60px);
+    opacity: 0.35;
+  }
+}
+
+.board-reveal {
+  animation: board-reveal 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.board-drum {
+  animation: board-drum 0.9s ease-in-out infinite;
+}
+.board-flash {
+  animation: board-flash 1s ease-out 1;
+}
+.board-shake {
+  animation: board-shake 0.5s ease-in-out 1;
+}
+.board-flee {
+  animation: board-flee 0.8s ease-in forwards;
+}
+
+/* 넘침 안전망(마지막 수단): 레이아웃이 넘쳐도 스크롤바를 그리지 않는다. 넘침 자체는 E2E 가 0 으로 단언한다. */
+.board-root {
+  scrollbar-width: none;
+}
+.board-root::-webkit-scrollbar {
+  display: none;
+}
+
+/* 긴 닉네임이 칸을 밀지 않도록 */
+.board-user-text {
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
