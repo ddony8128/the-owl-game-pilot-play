@@ -50,7 +50,7 @@ test("[모바일] 플레이어 화면(대기열 5칸) 가로 오버플로 없음
   expect(await noHOverflow(page), "정보 탭 가로 오버플로 없음").toBeLessThanOrEqual(2);
 
   // 행동 탭도 확인(몬스터/카드 선택 UI)
-  await page.getByRole("button", { name: "행동" }).click();
+  await page.getByTestId("tab-action").click(); // Iteration 5: 탭은 role=tab
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${SHOT}/player-action.png`, fullPage: true });
   expect(await noHOverflow(page), "행동 탭 가로 오버플로 없음").toBeLessThanOrEqual(2);
