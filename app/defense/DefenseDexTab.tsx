@@ -19,9 +19,6 @@ export function DefenseDexTab({ dex }: Props) {
 
   return (
     <div className="space-y-3 text-base text-zinc-200">
-      <p className="text-base text-zinc-400">
-        뭐가 쳐들어올지 미리 알 수 있다부엉!
-      </p>
       <div className="space-y-2">
         {sorted.map((m) => (
           <div
@@ -46,7 +43,6 @@ export function DefenseDexTab({ dex }: Props) {
                   남은 수: {m.remainingCount}마리
                 </div>
               </div>
-              <p className="text-sm text-zinc-400">{m.description}</p>
               <div className="flex items-center gap-3 text-sm text-zinc-400">
                 <span>HP {m.maxHp}</span>
                 <span>잔여 시간 {m.baseTime}</span>

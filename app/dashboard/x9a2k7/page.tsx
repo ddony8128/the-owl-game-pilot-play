@@ -1,55 +1,103 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import type { RoomGame, Player } from "@/lib/types";
-import { RoomEndedBadge, useRoomStatus } from "./RoomEndedNotice";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { GmErrorBanner, GmNoticeBanner } from "@/components/GmBanners";
-import { useGmAction } from "@/lib/hooks/useGmAction";
+import type { RoomGame } from "@/lib/types";
 
 const GAME_LABEL: Record<RoomGame, string> = {
   mafia: "자본주의 마피아",
   defense: "디펜스 딜레마",
-  subway: "이상교통",
+  subway: "현재 운영하지 않는 게임",
 };
 
 const CURRENT_ROOM_KEY = "owlgm:room";
 
-type CurrentRoom = { code: string; game: RoomGame };
+type CurrentRoom = {
+  code: string;
+  game: RoomGame;
+  status?: "active" | "ended";
+  created_at?: string;
+};
+
+let roomListRequest: Promise<CurrentRoom[]> | null = null;
+let roomListCache: { rooms: CurrentRoom[]; fetchedAt: number } | null = null;
+
+async function fetchRoomList(force = false): Promise<CurrentRoom[]> {
+  if (!force && roomListRequest) return roomListRequest;
+  if (!force && roomListCache && Date.now() - roomListCache.fetchedAt < 1000) {
+    return roomListCache.rooms;
+  }
+
+  roomListRequest = (async () => {
+    const res = await fetch("/api/gm/rooms");
+    const json = (await res.json().catch(() => null)) as
+      | { rooms?: CurrentRoom[]; error?: string }
+      | null;
+    if (!res.ok || !json || json.error) {
+      throw new Error(
+        json?.error ?? `방 목록 조회 실패 (서버 응답 ${res.status || "없음"})`,
+      );
+    }
+    const nextRooms = (json.rooms ?? []) as CurrentRoom[];
+    roomListCache = { rooms: nextRooms, fetchedAt: Date.now() };
+    return nextRooms;
+  })();
+
+  try {
+    return await roomListRequest;
+  } finally {
+    roomListRequest = null;
+  }
+}
 
 export default function RoomRegistryPage() {
-  // 지금 다루는 방 1개만 기억한다(새로고침해도 유지). 목록 개념은 없다.
-  const [current, setCurrent] = useState<CurrentRoom | null>(null);
-  const [ready, setReady] = useState(false);
-  const [codeInput, setCodeInput] = useState("");
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [rooms, setRooms] = useState<CurrentRoom[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [selectedEndedCodes, setSelectedEndedCodes] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [bulkEnding, setBulkEnding] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const loadRooms = useCallback(async (force = false) => {
+    setRoomsLoading(true);
     try {
-      const raw = localStorage.getItem(CURRENT_ROOM_KEY);
-      if (raw) setCurrent(JSON.parse(raw));
-    } catch {
-      /* ignore */
+      const nextRooms = await fetchRoomList(force);
+      setRooms(nextRooms);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "방 목록 조회 실패");
+    } finally {
+      setRoomsLoading(false);
     }
-    setReady(true);
   }, []);
 
+  useEffect(() => {
+    void loadRooms();
+  }, [loadRooms]);
+
   const openRoom = useCallback((room: CurrentRoom) => {
-    setCurrent(room);
     if (typeof window !== "undefined") {
       localStorage.setItem(CURRENT_ROOM_KEY, JSON.stringify(room));
     }
   }, []);
 
-  const leave = useCallback(() => {
-    setCurrent(null);
-    setError(null);
-    setCodeInput("");
-    if (typeof window !== "undefined") {
+  const forgetRoomIfSelected = (codes: string[]) => {
+    try {
+      const raw = localStorage.getItem(CURRENT_ROOM_KEY);
+      const remembered = raw ? (JSON.parse(raw) as CurrentRoom) : null;
+      if (remembered && codes.includes(remembered.code)) {
+        localStorage.removeItem(CURRENT_ROOM_KEY);
+      }
+    } catch {
       localStorage.removeItem(CURRENT_ROOM_KEY);
     }
-  }, []);
+  };
 
   const createRoom = async (game: RoomGame) => {
     setError(null);
@@ -61,42 +109,111 @@ export default function RoomRegistryPage() {
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
-      openRoom({ code: json.room.code, game });
+      const room = { code: json.room.code, game, status: "active" as const };
+      openRoom(room);
+      router.push(`/dashboard/x9a2k7/${game}?room=${room.code}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "방 생성 실패");
     }
   };
 
-  const enterByCode = async () => {
-    const code = codeInput.trim().toUpperCase();
-    if (!code) return;
+  const endSelectedRooms = async () => {
+    const codes = [...selectedCodes];
+    if (codes.length === 0) return;
+    if (!window.confirm(`선택한 방 ${codes.length}개를 종료할까요?\n종료된 방은 아래 기록으로 이동합니다.`)) return;
+
+    setBulkEnding(true);
     setError(null);
     try {
-      const res = await fetch(`/api/gm/rooms?code=${encodeURIComponent(code)}`);
-      if (res.status === 404) throw new Error("그런 방 코드가 없습니다.");
-      const json = await res.json();
-      if (json.error || !json.room) throw new Error(json.error ?? "방을 찾을 수 없습니다.");
-      openRoom({ code: json.room.code, game: json.room.game });
+      await Promise.all(
+        codes.map(async (code) => {
+          const res = await fetch("/api/gm/rooms", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, status: "ended", ended_normally: true }),
+          });
+          if (!res.ok) {
+            const json = await res.json().catch(() => null);
+            throw new Error(json?.error ?? `${code} 종료 실패`);
+          }
+        })
+      );
+      forgetRoomIfSelected(codes);
+      setSelectedCodes(new Set());
+      await loadRooms(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "방 조회 실패");
+      setError(e instanceof Error ? e.message : "선택한 방을 종료하지 못했습니다.");
+    } finally {
+      setBulkEnding(false);
     }
   };
 
-  // 초기 localStorage 읽기 전에는 깜빡임을 막기 위해 비워둔다.
-  if (!ready) return <div className="text-sm text-zinc-500">불러오는 중…</div>;
+  const deleteSelectedRooms = async () => {
+    const codes = [...selectedEndedCodes];
+    if (codes.length === 0) return;
+    if (!window.confirm(`종료된 방 ${codes.length}개를 영구 삭제할까요?\n플레이어, 점수, 행동과 라운드 기록도 복구할 수 없습니다.`)) return;
 
-  if (current) {
-    return (
-      <RoomPanel room={current} onLeave={leave} />
-    );
-  }
+    setBulkDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/gm/rooms", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codes }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || json?.error) {
+        throw new Error(json?.error ?? "종료된 방 삭제 실패");
+      }
+      forgetRoomIfSelected(codes);
+      setSelectedEndedCodes(new Set());
+      await loadRooms(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "종료된 방을 삭제하지 못했습니다.");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const activeRooms = rooms.filter((room) => room.status !== "ended");
+  const endedRooms = rooms.filter((room) => room.status === "ended");
+  const allActiveSelected =
+    activeRooms.length > 0 &&
+    activeRooms.every((room) => selectedCodes.has(room.code));
+  const allEndedSelected =
+    endedRooms.length > 0 &&
+    endedRooms.every((room) => selectedEndedCodes.has(room.code));
+
+  const toggleAllActiveRooms = () => {
+    setSelectedCodes((currentCodes) => {
+      const next = new Set(currentCodes);
+      if (allActiveSelected) {
+        activeRooms.forEach((room) => next.delete(room.code));
+      } else {
+        activeRooms.forEach((room) => next.add(room.code));
+      }
+      return next;
+    });
+  };
+
+  const toggleAllEndedRooms = () => {
+    setSelectedEndedCodes((currentCodes) => {
+      const next = new Set(currentCodes);
+      if (allEndedSelected) {
+        endedRooms.forEach((room) => next.delete(room.code));
+      } else {
+        endedRooms.forEach((room) => next.add(room.code));
+      }
+      return next;
+    });
+  };
 
   return (
-    <div className="space-y-6 text-sm text-zinc-100">
+    <div className="mx-auto w-full max-w-6xl space-y-7 text-base text-zinc-100">
       <div>
-        <h1 className="text-lg font-bold">방(room) 관리</h1>
-        <p className="text-xs text-zinc-400">
-          새 방을 만들면 코드가 발급됩니다. 기존 방은 <b>코드를 입력</b>해 관리합니다(전체 목록은 보이지 않습니다).
+        <h1 className="text-2xl font-bold">방 관리</h1>
+        <p className="mt-1 text-sm text-zinc-400">
+          새 방을 만들거나 아래 목록에서 기존 방을 선택하세요. 방 코드를 외울 필요가 없습니다.
         </p>
       </div>
 
@@ -109,249 +226,161 @@ export default function RoomRegistryPage() {
       {/* 새 방 만들기 */}
       <div className="space-y-2">
         <h2 className="text-sm font-semibold">새 방 만들기</h2>
-        <div className="flex gap-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <button
             onClick={() => void createRoom("mafia")}
-            className="rounded bg-amber-500 px-3 py-1.5 font-semibold text-zinc-950 hover:bg-amber-400"
+            className="min-h-14 rounded-xl bg-amber-500 px-4 text-base font-bold text-zinc-950 hover:bg-amber-400 active:scale-[0.99]"
           >
             + 마피아 방
           </button>
           <button
             onClick={() => void createRoom("defense")}
-            className="rounded bg-amber-500 px-3 py-1.5 font-semibold text-zinc-950 hover:bg-amber-400"
+            className="min-h-14 rounded-xl bg-sky-500 px-4 text-base font-bold text-zinc-950 hover:bg-sky-400 active:scale-[0.99]"
           >
             + 디펜스 방
           </button>
         </div>
       </div>
 
-      {/* 기존 방 입장 */}
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold">기존 방 입장</h2>
-        <div className="flex gap-2">
-          <input
-            value={codeInput}
-            onChange={(e) => setCodeInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void enterByCode()}
-            placeholder="방 코드 입력 (예: A3F82)"
-            className="h-8 w-48 rounded border border-zinc-700 bg-zinc-950 px-2 font-mono uppercase outline-none"
-          />
-          <button
-            onClick={() => void enterByCode()}
-            className="rounded bg-zinc-800 px-3 hover:bg-zinc-700"
-          >
-            입장
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RoomPanel({
-  room,
-  onLeave,
-}: {
-  room: CurrentRoom;
-  onLeave: () => void;
-}) {
-  const dashboardHref = `/dashboard/x9a2k7/${room.game}?room=${room.code}`;
-  const ended = useRoomStatus(room.code) === "ended";
-  const action = useGmAction();
-  const [confirmEnd, setConfirmEnd] = useState(false);
-
-  const endRoom = async () => {
-    const r = await action.run("/api/gm/rooms", {
-      method: "PATCH",
-      body: { code: room.code, status: "ended", ended_normally: true },
-    });
-    if (r?.ok) onLeave();
-  };
-
-  return (
-    <div className="space-y-5 text-sm text-zinc-100">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onLeave}
-          className="rounded bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
-        >
-          ← 다른 방 만들기/입장
-        </button>
-      </div>
-
-      <GmErrorBanner message={action.error} onClose={action.clearError} />
-      <GmNoticeBanner message={action.notice} />
-
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-zinc-400">방 코드</span>
-          <span className="font-mono text-2xl font-bold tracking-widest text-amber-300">
-            {room.code}
-          </span>
-          <span className="rounded bg-zinc-800 px-2 py-0.5 text-zinc-300">
-            {GAME_LABEL[room.game] ?? room.game}
-          </span>
-          {ended && <RoomEndedBadge />}
-        </div>
-        {ended ? (
-          <p className="mt-1 text-xs text-red-300">
-            종료된 방입니다. 대시보드는 기록 확인용(읽기 전용)으로만 보세요. 게임을 다시 진행하려면 새 방을 만드세요.
-          </p>
-        ) : (
-          <p className="mt-1 text-xs text-zinc-500">이 코드를 참가자에게 안내하세요.</p>
-        )}
-
-        <div className="mt-3 flex gap-2">
-          <a
-            href={dashboardHref}
-            className="rounded bg-amber-500 px-3 py-1.5 font-semibold text-zinc-950 hover:bg-amber-400"
-          >
-            {ended ? "대시보드 보기(읽기 전용) →" : "대시보드 입장 →"}
-          </a>
-          {!ended && (
-            <button
-              onClick={() => window.open(`/join?code=${room.code}`, "owl-join", "width=720,height=900")}
-              title="참가 QR과 방 코드를 새 창에 크게 띄웁니다 (입장·중간 합류·재접속용)"
-              data-testid="join-qr-open"
-              className="rounded bg-zinc-800 px-3 py-1.5 font-semibold text-amber-300 hover:bg-zinc-700"
-            >
-              📲 참가 QR
-            </button>
-          )}
-          {!ended && (
-            <button
-              onClick={() => setConfirmEnd(true)}
-              disabled={action.busy}
-              data-testid="end-room"
-              className="rounded bg-red-900 px-3 py-1.5 text-red-200 hover:bg-red-800 disabled:opacity-40"
-            >
-              방 종료
-            </button>
-          )}
-        </div>
-      </div>
-
-      <ConfirmDialog
-        open={confirmEnd}
-        title={`방 ${room.code} 종료`}
-        confirmLabel="종료"
-        danger
-        busy={action.busy}
-        onClose={() => setConfirmEnd(false)}
-        onConfirm={async () => {
-          setConfirmEnd(false);
-          await endRoom();
-        }}
-      >
-        <p className="text-zinc-300">
-          종료하면 이 방의 라운드·페이즈·점수·타이머 조작이 모두 막히고(읽기 전용) 참가자도 더 행동할 수 없습니다. 기록은 보존됩니다.
-          다시 진행하려면 새 방을 만들어야 합니다.
-        </p>
-      </ConfirmDialog>
-
-      <div>
-        <h2 className="mb-2 text-sm font-semibold">참가자 등록</h2>
-        <RoomRoster room={room.code} ended={ended} />
-      </div>
-    </div>
-  );
-}
-
-function RoomRoster({ room, ended }: { room: string; ended: boolean }) {
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [name, setName] = useState("");
-  const [kick, setKick] = useState<Player | null>(null);
-
-  const reload = useCallback(async () => {
-    const res = await fetch(`/api/gm/players?room=${encodeURIComponent(room)}`);
-    const json = await res.json();
-    if (json.players) setPlayers(json.players);
-  }, [room]);
-  const action = useGmAction(reload);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 명단을 서버에서 불러온다
-    void reload();
-  }, [reload]);
-
-  const add = async () => {
-    const nick = name.trim();
-    if (!nick) return;
-    const r = await action.run("/api/gm/players", { body: { room, nickname: nick } });
-    if (r?.ok) setName("");
-  };
-
-  const remove = async (p: Player) => {
-    await action.run(
-      "/api/gm/players",
-      { method: "DELETE", body: { id: p.id } },
-      { notice: `${p.nickname} 삭제됨` },
-    );
-  };
-
-  return (
-    <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900 p-3" data-testid="roster">
-      <div className="flex gap-2">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void add()}
-          placeholder="참가자 닉네임"
-          disabled={ended}
-          className="h-8 flex-1 rounded border border-zinc-700 bg-zinc-950 px-2 outline-none disabled:opacity-50"
-        />
-        <button
-          onClick={() => void add()}
-          disabled={ended || action.busy}
-          className="rounded bg-amber-500 px-3 text-zinc-950 hover:bg-amber-400 disabled:opacity-40"
-        >
-          등록
-        </button>
-        <span className="self-center text-xs text-zinc-500">총 {players.length}명</span>
-      </div>
-      <GmErrorBanner message={action.error} onClose={action.clearError} />
-      <GmNoticeBanner message={action.notice} />
-      <div className="flex flex-wrap gap-1.5">
-        {players.map((p) => (
-          <span
-            key={p.id}
-            className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-0.5 text-xs"
-          >
-            {p.nickname}
-            {!ended && (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-zinc-900 px-2.5 py-2 text-xs text-zinc-400">
+              <input
+                type="checkbox"
+                checked={allActiveSelected}
+                onChange={toggleAllActiveRooms}
+                disabled={roomsLoading || activeRooms.length === 0}
+                className="h-4 w-4 accent-red-500 disabled:opacity-40"
+              />
+              전체 선택
+            </label>
+            <div>
+            <h2 className="font-semibold">진행 가능한 방</h2>
+            <p className="text-xs text-zinc-500">사용하지 않는 방을 선택해 한 번에 종료할 수 있습니다.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedCodes.size > 0 && (
               <button
-                onClick={() => setKick(p)}
-                aria-label={`${p.nickname} 삭제`}
-                className="text-zinc-500 hover:text-red-400"
+                type="button"
+                onClick={() => void endSelectedRooms()}
+                disabled={bulkEnding}
+                className="min-h-10 rounded-lg bg-red-950 px-3 text-sm font-semibold text-red-300 hover:bg-red-900 disabled:opacity-50"
               >
-                ✕
+                {bulkEnding ? "정리 중…" : `선택 ${selectedCodes.size}개 종료`}
               </button>
             )}
-          </span>
-        ))}
-        {players.length === 0 && (
-          <span className="text-xs text-zinc-600">등록된 참가자 없음</span>
+            <button onClick={() => void loadRooms(true)} className="min-h-10 rounded-lg bg-zinc-800 px-3 text-sm hover:bg-zinc-700">↻ 새로고침</button>
+          </div>
+        </div>
+        {roomsLoading ? (
+          <p className="text-xs text-zinc-500">방 목록을 불러오는 중…</p>
+        ) : activeRooms.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-zinc-700 p-5 text-center text-sm text-zinc-500">진행 가능한 방이 없습니다. 위에서 새 방을 만들어 주세요.</p>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/70">
+            {activeRooms.map((room) => (
+              <div key={room.code} className="flex items-center gap-3 border-b border-zinc-800 px-3 py-3 last:border-b-0">
+                <input
+                  type="checkbox"
+                  aria-label={`${room.code} 선택`}
+                  checked={selectedCodes.has(room.code)}
+                  onChange={() =>
+                    setSelectedCodes((currentCodes) => {
+                      const next = new Set(currentCodes);
+                      if (next.has(room.code)) next.delete(room.code);
+                      else next.add(room.code);
+                      return next;
+                    })
+                  }
+                  className="h-4 w-4 accent-red-500"
+                />
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="font-mono text-base font-bold tracking-widest text-amber-300">{room.code}</span>
+                  <span className="truncate text-sm font-semibold text-zinc-200">{GAME_LABEL[room.game]}</span>
+                  {room.created_at && <span className="ml-auto hidden text-xs text-zinc-500 sm:inline">{new Date(room.created_at).toLocaleString("ko-KR")}</span>}
+                  <Link
+                    prefetch={false}
+                    href={`/dashboard/x9a2k7/${room.game}?room=${room.code}`}
+                    onClick={() => openRoom(room)}
+                    className="shrink-0 rounded-md bg-amber-500 px-3 py-2 text-xs font-bold text-zinc-950 hover:bg-amber-400"
+                  >
+                    입장하기 →
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      <ConfirmDialog
-        open={kick != null}
-        title={`${kick?.nickname ?? ""} 삭제(강퇴)`}
-        confirmLabel="삭제"
-        danger
-        busy={action.busy}
-        onClose={() => setKick(null)}
-        onConfirm={async () => {
-          const target = kick;
-          setKick(null);
-          if (target) await remove(target);
-        }}
-      >
-        <p className="text-zinc-300">
-          이 참가자의 행동·자산·점수 기록이 모두 지워지고 즉시 접속이 끊깁니다. 진행 중인 라운드의 미제출 수·정산·순위에서도 빠집니다.
-          같은 닉네임을 다시 등록하면 새 참가자로 들어옵니다.
-        </p>
-      </ConfirmDialog>
+      {endedRooms.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-zinc-900 px-2.5 py-2 text-xs text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={allEndedSelected}
+                  onChange={toggleAllEndedRooms}
+                  className="h-4 w-4 accent-red-500"
+                />
+                전체 선택
+              </label>
+              <div>
+                <h2 className="font-semibold text-zinc-300">종료된 방</h2>
+                <p className="text-xs text-zinc-500">결과를 다시 보거나 테스트 기록을 완전히 삭제할 수 있습니다.</p>
+              </div>
+            </div>
+            {selectedEndedCodes.size > 0 && (
+              <button
+                type="button"
+                onClick={() => void deleteSelectedRooms()}
+                disabled={bulkDeleting}
+                className="min-h-10 rounded-lg bg-red-700 px-3 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-50"
+              >
+                {bulkDeleting ? "삭제 중…" : `선택 ${selectedEndedCodes.size}개 영구 삭제`}
+              </button>
+            )}
+          </div>
+          <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50">
+            {endedRooms.map((room) => (
+              <div key={room.code} className="flex items-center gap-3 border-b border-zinc-800 px-3 py-3 last:border-b-0">
+                <input
+                  type="checkbox"
+                  aria-label={`${room.code} 삭제 선택`}
+                  checked={selectedEndedCodes.has(room.code)}
+                  onChange={() =>
+                    setSelectedEndedCodes((currentCodes) => {
+                      const next = new Set(currentCodes);
+                      if (next.has(room.code)) next.delete(room.code);
+                      else next.add(room.code);
+                      return next;
+                    })
+                  }
+                  className="h-4 w-4 accent-red-500"
+                />
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="font-mono text-base font-bold tracking-widest text-zinc-400">{room.code}</span>
+                  <span className="truncate text-sm font-semibold text-zinc-400">{GAME_LABEL[room.game]}</span>
+                  {room.created_at && <span className="ml-auto hidden text-xs text-zinc-600 sm:inline">{new Date(room.created_at).toLocaleString("ko-KR")}</span>}
+                  <Link
+                    prefetch={false}
+                    href={`/dashboard/x9a2k7/${room.game}?room=${room.code}`}
+                    onClick={() => openRoom(room)}
+                    className="shrink-0 rounded-md bg-zinc-800 px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-700"
+                  >
+                    결과 보기 →
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+

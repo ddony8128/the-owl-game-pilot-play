@@ -1,17 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
-import { ConnectionBadge } from "@/components/ConnectionBadge";
-import { defenseStageTitle } from "@/lib/defense/steps";
-import { KickedScreen, RoomEndedBanner, RoomGoneScreen } from "@/components/PhoneNotices";
 import { TabLayout, type TabKey } from "@/components/TabLayout";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
-import { usePolling } from "@/lib/hooks/usePolling";
-import { LATE_COMBAT_LOG_PREFIX } from "@/lib/defense/action";
 import { DefenseHeader } from "./DefenseHeader";
 import { DefenseRulesTab } from "./DefenseRulesTab";
 import { DefenseInfoTab } from "./DefenseInfoTab";
@@ -69,29 +63,13 @@ type DefenseLogEntry = {
 
 type DefenseState = {
   round: number | null;
-  roomStatus?: "active" | "ended";
-  stage?: string | null;
-  prevRound?: number | null;
+  resultPending: boolean;
   monsters: DefenseMonsterClient[];
   cards: DefenseCardClient[];
   score: number;
   action: DefenseActionClient;
   dex: DefenseDexEntry[];
   logs: DefenseLogEntry[];
-};
-
-type DefenseTimerApi = {
-  timerStart: boolean;
-  timerStartAt: string | null;
-  pauseAt: string | null;
-  totalSeconds: number;
-};
-
-type TimerState = {
-  remainingSeconds: number;
-  isRunning: boolean;
-  /** 서버 타이머가 한 번이라도 시작됐는지(시작 전 0:00 과 "시간 끝" 을 구분) */
-  started: boolean;
 };
 
 export default function DefenseClient() {
@@ -103,128 +81,58 @@ export default function DefenseClient() {
 }
 
 function DefenseInner() {
-  const router = useRouter();
-  const { player, roomCode, nickname, clearNickname } = usePlayerAuth();
-  // 강퇴/방 삭제 안내에서 [입장 화면으로]: 저장된 방·닉네임을 지우고 입장 화면으로 보낸다(같은 닉네임 재입장 가능).
-  const leaveToEntrance = () => {
-    clearNickname();
-    router.replace("/");
-  };
-  const [timerState, setTimerState] = useState<TimerState | null>(null);
+  const { player, roomCode, nickname } = usePlayerAuth();
+  const [defenseState, setDefenseState] = useState<DefenseState | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
-  const timerMetaRef = useRef<DefenseTimerApi | null>(null);
 
-  // 플레이어 전용 상태 폴링(공용 훅): in-flight 가드·8초 타임아웃·실패해도 마지막 화면 유지.
-  const stateUrl =
-    roomCode && nickname
-      ? `/api/defense/state?${new URLSearchParams({ room: roomCode, nickname }).toString()}`
-      : null;
-  const poll = usePolling<DefenseState>(stateUrl, 5000);
-  const defenseState = poll.data;
-  const loadState = poll.reload;
+  const loadState = useCallback(async () => {
+    if (!roomCode || !nickname) return;
+    try {
+      const params = new URLSearchParams({ room: roomCode, nickname });
+      const res = await fetch(`/api/defense/state?${params.toString()}`);
+      const json = (await res.json().catch(() => null)) as
+        | DefenseState
+        | { error: string }
+        | null;
 
-  const computeRemaining = useCallback(
-    (api: DefenseTimerApi | null, nowMs: number): TimerState => {
-      if (!api) {
-        return { remainingSeconds: 0, isRunning: false, started: false };
+      if (!res.ok || !json || "error" in json) {
+        throw new Error(
+          (json as { error?: string })?.error ??
+            "디펜스 상태를 불러오지 못했습니다."
+        );
       }
 
-      const total = api.totalSeconds || 0;
-      if (total <= 0) {
-        return { remainingSeconds: 0, isRunning: false, started: false };
-      }
+      setDefenseState(json as DefenseState);
+      setError(null);
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "디펜스 상태를 불러오지 못했습니다.";
+      setError(message);
+    }
+  }, [roomCode, nickname]);
 
-      if (!api.timerStart && !api.pauseAt) {
-        return { remainingSeconds: total, isRunning: false, started: false };
-      }
+  // 플레이어 상태는 최초 입장 때 한 번만 조회한다.
+  // 이후에는 행동 완료 또는 사용자의 명시적 새로고침으로만 갱신한다.
+  useEffect(() => {
+    void loadState();
+  }, [loadState]);
 
-      if (api.timerStart && api.timerStartAt) {
-        const startMs = new Date(api.timerStartAt).getTime();
-        if (Number.isNaN(startMs)) {
-          return { remainingSeconds: total, isRunning: false, started: false };
-        }
-        const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
-        const remaining = Math.max(0, total - elapsed);
-        return { remainingSeconds: remaining, isRunning: remaining > 0, started: true };
-      }
-
-      if (!api.timerStart && api.timerStartAt && api.pauseAt) {
-        const startMs = new Date(api.timerStartAt).getTime();
-        const pauseMs = new Date(api.pauseAt).getTime();
-        if (Number.isNaN(startMs) || Number.isNaN(pauseMs)) {
-          return { remainingSeconds: total, isRunning: false, started: false };
-        }
-        const elapsed = Math.max(0, Math.floor((pauseMs - startMs) / 1000));
-        const remaining = Math.max(0, total - elapsed);
-        return { remainingSeconds: remaining, isRunning: false, started: true };
-      }
-
-      return { remainingSeconds: total, isRunning: false, started: false };
-    },
-    []
-  );
-
-  // 타이머 폴링 + 1초 틱 (마피아/서브웨이와 동일한 패턴). 타이머 오류는 게임 진행을 막지 않는다.
   useEffect(() => {
     if (!roomCode) return;
-    let cancelled = false;
-
-    const loadTimer = async () => {
-      try {
-        const res = await fetch(
-          `/api/gm/timers/defense?room=${encodeURIComponent(roomCode)}`,
-          { cache: "no-store", signal: AbortSignal.timeout(8000) }
-        );
-        const json = (await res
-          .json()
-          .catch(() => null)) as DefenseTimerApi | null;
-        if (!res.ok || !json || cancelled) return;
-
-        const api = json;
-        const prevMeta = timerMetaRef.current;
-
-        if (
-          prevMeta &&
-          prevMeta.timerStart === api.timerStart &&
-          prevMeta.timerStartAt === api.timerStartAt &&
-          prevMeta.pauseAt === api.pauseAt &&
-          prevMeta.totalSeconds === api.totalSeconds
-        ) {
-          return;
-        }
-
-        const now = Date.now();
-        const nextState = computeRemaining(api, now);
-        timerMetaRef.current = api;
-        setTimerState(nextState);
-      } catch {
-        // 타이머 오류는 게임 진행을 막지 않음
-      }
+    const events = new EventSource(
+      `/api/defense/phase-events?room=${encodeURIComponent(roomCode)}`
+    );
+    events.onmessage = () => void loadState();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadState();
     };
-
-    void loadTimer();
-    const pollId = setInterval(() => {
-      void loadTimer();
-    }, 2000);
-
-    const tickId = setInterval(() => {
-      setTimerState((prev) => {
-        if (!prev) return prev;
-        if (!prev.isRunning || prev.remainingSeconds <= 0) return prev;
-        const next = prev.remainingSeconds - 1;
-        if (next <= 0) {
-          return { ...prev, remainingSeconds: 0 };
-        }
-        return { ...prev, remainingSeconds: next };
-      });
-    }, 1000);
-
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      cancelled = true;
-      clearInterval(pollId);
-      clearInterval(tickId);
+      events.close();
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [computeRemaining, roomCode]);
+  }, [loadState, roomCode]);
 
   const roundNumber = defenseState?.round ?? null;
   const getRoundLabel = (r: number | null) => {
@@ -241,29 +149,18 @@ function DefenseInner() {
     return `알 수 없음 (DB round ${r})`;
   };
 
-  const totalSeconds = timerState?.remainingSeconds ?? null;
-  const minutes =
-    totalSeconds != null ? Math.floor(totalSeconds / 60) % 60 : null;
-  const seconds = totalSeconds != null ? totalSeconds % 60 : null;
-  const timerExpired = timerState != null && timerState.started && timerState.remainingSeconds <= 0;
-
-  const stageNow = defenseState?.stage ?? null;
-  const roundLabel =
-    stageNow && stageNow !== "action" && roundNumber != null
-      ? defenseStageTitle(roundNumber, stageNow, defenseState?.prevRound ?? null)
-      : getRoundLabel(roundNumber);
+  const roundLabel = getRoundLabel(roundNumber);
   const isInitialLoading = !defenseState;
-  const roomEnded = defenseState?.roomStatus === "ended";
-  // 행동 탭은 "행동" 단계에만 연다(결과·점수 발표·본게임 준비 중에는 닫힘 — GM 이 [다음]으로 열어 준다)
   const hideInfoAndAction =
-    roundNumber === 0 || roundNumber === 3 || roundNumber === 16 || (stageNow != null && stageNow !== "action");
+    defenseState?.resultPending === true ||
+    roundNumber === 0 || roundNumber === 3 || roundNumber === 16;
 
   const tabsDef = useMemo(() => {
     const base: { key: TabKey; label: string }[] = [
       { key: "info", label: "정보" },
-      { key: "rules", label: "규칙" },
       { key: "dex", label: "몬스터 도감" },
       { key: "logs", label: "로그" },
+      { key: "rules", label: "규칙" },
     ];
 
     if (!hideInfoAndAction) {
@@ -273,87 +170,61 @@ function DefenseInner() {
     return base;
   }, [hideInfoAndAction]);
 
-  // 현재 라운드에 없는 탭(예: 결과 화면의 "행동")을 보고 있었다면 첫 탭으로 — effect 의 setState 대신 렌더에서 유도한다.
-  const effectiveTab: TabKey = tabsDef.some((t) => t.key === activeTab) ? activeTab : tabsDef[0].key;
-
-  // 정산과 겹쳐 반영되지 않은 전투가 되돌려졌을 때 서버가 남긴 "알림:" 로그(현재 라운드)를 행동 탭 위에 띄운다.
-  const lateNotice = useMemo(() => {
-    if (!defenseState || roundNumber == null) return null;
-    const hit = defenseState.logs.find(
-      (l) => l.round === roundNumber && l.log.startsWith(LATE_COMBAT_LOG_PREFIX)
-    );
-    return hit ? hit.log.slice(LATE_COMBAT_LOG_PREFIX.length).trim() : null;
-  }, [defenseState, roundNumber]);
+  useEffect(() => {
+    if (!tabsDef.find((t) => t.key === activeTab) && tabsDef.length > 0) {
+      setActiveTab(tabsDef[0].key);
+    }
+  }, [activeTab, tabsDef]);
 
   if (!player) return <LoadingScreen />;
-
-  // 강퇴/방 삭제: 입장(로그인)은 통과한 뒤이므로, 폴링이 403(not_registered) 으로 바뀌면 GM이 명단에서 지운 것이다
-  // → 데이터가 비워지고 사유가 오면 즉시 안내(조용히 굳지 않음). 404 는 방 삭제.
-  if (poll.status === 403) {
-    return <KickedScreen onLeave={leaveToEntrance} />;
-  }
-  if (poll.status === 404 && poll.reason === "room_not_found") {
-    return <RoomGoneScreen onLeave={leaveToEntrance} />;
-  }
-
-  // 아직 한 번도 못 받았고 오류만 있는 경우: 오류 문구 + 재연결 배지(폴링은 계속된다)
-  if (!defenseState && poll.error && poll.failures > 0 && poll.status !== null && poll.status >= 500) {
+  if (error) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-zinc-950 px-4 text-zinc-50">
-        <ErrorMessage message={poll.error} />
-        <ConnectionBadge failures={poll.failures} />
+      <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 px-4 text-zinc-50">
+        <ErrorMessage message={error} />
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
-      <DefenseHeader
-        minutes={minutes}
-        seconds={seconds}
-        roundLabel={roundLabel}
-      />
-
-      <ConnectionBadge failures={poll.failures} className="mt-2 w-full max-w-md" />
-      {roomEnded && (
-        <div className="mt-2 w-full max-w-md">
-          <RoomEndedBanner />
-        </div>
-      )}
+      <DefenseHeader roundLabel={roundLabel} />
 
       <p className="mt-2 text-base text-red-300">
         이 화면은 다른 플레이어에게 보여주면 안 됩니다.
       </p>
 
+      <p className="mt-2 text-xs text-zinc-600">
+        관리자가 다음 라운드로 넘기면 자동으로 갱신됩니다.
+      </p>
+
+      {defenseState?.resultPending ? (
+        <p className="mt-4 rounded-xl border border-sky-500/30 bg-sky-950/40 px-4 py-3 text-center text-sm font-bold text-sky-200">
+          전투 결과 확인 중입니다. 전광판을 확인해주세요.
+        </p>
+      ) : null}
+
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
-        <TabLayout tabs={tabsDef} activeKey={effectiveTab} onChange={setActiveTab}>
-          {effectiveTab === "info" && (
+        <TabLayout tabs={tabsDef} activeKey={activeTab} onChange={setActiveTab}>
+          {activeTab === "info" && (
             <DefenseInfoTab
-              monsters={defenseState?.monsters ?? []}
               cards={defenseState?.cards ?? []}
               score={defenseState?.score ?? 0}
               isLoading={isInitialLoading}
-              showQueue={!hideInfoAndAction}
             />
           )}
-          {effectiveTab === "action" && defenseState && !hideInfoAndAction && (
-            // 라운드가 바뀌면 key 가 바뀌어 선택 단계가 초기화된다(effect 안 setState 없이).
+          {activeTab === "action" && defenseState && !hideInfoAndAction && (
             <DefenseActionTab
-              key={`action-${roundNumber ?? "x"}`}
               state={defenseState}
               nickname={player.nickname}
               room={player.room_code}
               onActionCompleted={loadState}
-              roomEnded={roomEnded}
-              timerExpired={timerExpired}
-              notice={lateNotice}
             />
           )}
-          {effectiveTab === "rules" && <DefenseRulesTab />}
-          {effectiveTab === "dex" && defenseState && (
+          {activeTab === "rules" && <DefenseRulesTab />}
+          {activeTab === "dex" && defenseState && (
             <DefenseDexTab dex={defenseState.dex} />
           )}
-          {effectiveTab === "logs" && defenseState && (
+          {activeTab === "logs" && defenseState && (
             <DefenseLogsTab logs={defenseState.logs} />
           )}
         </TabLayout>

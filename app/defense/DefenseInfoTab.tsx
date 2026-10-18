@@ -1,20 +1,4 @@
-import Image from "next/image";
-
 type MonsterProps = {
-  monsters: {
-    instanceId: string;
-    monsterId: number;
-    slotIndex: number;
-    currentHp: number;
-    remainingTime: number;
-    status: string;
-    name: string;
-    description: string;
-    maxHp: number;
-    baseTime: number;
-    points: number;
-    image: string;
-  }[];
   cards: {
     cardSlot: number;
     cardValue: number;
@@ -22,100 +6,51 @@ type MonsterProps = {
   }[];
   score: number;
   isLoading: boolean;
-  showQueue: boolean;
 };
 
 export function DefenseInfoTab({
-  monsters,
   cards,
   score,
   isLoading,
-  showQueue,
 }: MonsterProps) {
-  const sortedMonsters = [...monsters].sort(
-    (a, b) => a.slotIndex - b.slotIndex
-  );
-
   const sortedCards = [...cards].sort((a, b) => a.cardSlot - b.cardSlot);
 
   return (
-    <div className="space-y-4 text-base text-zinc-200">
-      {showQueue && (
-        <section className="space-y-2">
-          <h2 className="text-lg font-semibold">대기열 몬스터</h2>
-          <p className="text-xs text-zinc-500">
-            대기열 칸 수는 참가 인원에 따라 달라집니다 (6~9명 4칸 / 10~12명 5칸).
-          </p>
-          {isLoading ? (
-            <p className="text-sm text-zinc-400">몬스터들이 습격 중입니다!</p>
-          ) : sortedMonsters.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              모든 몬스터를 무찔렀습니다! 게임이 종료되었습니다.
-            </p>
-          ) : (
-            <div className="grid gap-3">
-              {sortedMonsters.map((m) => (
-                <div
-                  key={m.instanceId}
-                  className="flex gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-2"
-                >
-                  {m.image && (
-                    <div className="relative h-30 w-30 shrink-0 overflow-hidden rounded bg-zinc-800">
-                      <Image
-                        src={m.image}
-                        alt={m.name}
-                        fill
-                        sizes="120px"
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <div className="text-2xl font-semibold">{m.name}</div>
-                      <div className="text-2xl text-amber-300">
-                        +{m.points}점
-                      </div>
-                    </div>
-                    <p className="text-sm text-zinc-400">{m.description}</p>
-                    <div className="flex items-center justify-between text-base">
-                      HP {m.currentHp}/{m.maxHp}
-                      <br />
-                      잔여 시간: {m.remainingTime}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      <section className="space-y-2">
-        <h2 className="text-lg font-semibold">내 점수 및 카드</h2>
-        <div className="flex items-center justify-between rounded-lg bg-zinc-900 px-3 py-2">
-          <span className="text-sm text-zinc-400">현재 포인트</span>
-          <span className="text-lg font-semibold text-amber-300">
-            {score.toString()}점
-          </span>
+    <div className="space-y-4 text-sm text-zinc-200">
+      <section className="overflow-hidden rounded-2xl border border-amber-400/25 bg-gradient-to-br from-zinc-900 to-amber-950/20 p-4 shadow-lg shadow-black/20">
+        <p className="text-[11px] font-black tracking-[0.2em] text-amber-400">MY STATUS</p>
+        <div className="mt-3 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs text-zinc-500">현재 점수</p>
+            <p className="mt-1 text-3xl font-black tabular-nums text-white">{score}<span className="ml-1 text-base text-amber-300">점</span></p>
+          </div>
+          <p className="max-w-48 text-right text-xs leading-relaxed text-zinc-500">몬스터 현황은 전광판에서 확인하고, 공격할 때 행동 탭에서 대상을 선택하세요.</p>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between px-1">
+          <div><p className="text-[11px] font-black tracking-[0.18em] text-amber-400">MY DECK</p><h2 className="mt-1 text-xl font-black text-white">내 숫자 카드</h2></div>
+          <span className="text-xs text-zinc-600">{isLoading ? "불러오는 중" : `${sortedCards.filter((card) => card.isActive).length}장 사용 가능`}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
           {sortedCards.map((c) => (
             <div
               key={c.cardSlot}
-              className={`rounded-lg border px-3 py-2 text-base ${
+              className={`relative flex min-h-32 flex-col items-center justify-center overflow-hidden rounded-2xl border px-3 py-3 ${
                 c.isActive
-                  ? "border-emerald-500/60 bg-zinc-900"
-                  : "border-zinc-700 bg-zinc-950 opacity-60"
+                  ? "border-amber-400/70 bg-gradient-to-br from-zinc-800 to-zinc-950 shadow-lg shadow-amber-950/20"
+                  : "border-zinc-800 bg-zinc-950 opacity-55 grayscale"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-amber-300">
+              <span className="absolute left-3 top-2 text-[10px] font-bold tracking-widest text-zinc-600">CARD {c.cardSlot}</span>
+              <div className="flex items-center justify-center">
+                <span className={`text-5xl font-black ${c.isActive ? "text-amber-300" : "text-zinc-600"}`}>
                   {c.cardValue}
                 </span>
               </div>
-              <p className="mt-1 text-base text-zinc-400">
-                {c.isActive ? "활성" : "비활성"}
+              <p className={`mt-3 rounded-full px-3 py-1 text-xs font-bold ${c.isActive ? "bg-emerald-500/15 text-emerald-300" : "bg-zinc-800 text-zinc-500"}`}>
+                {c.isActive ? "● 사용 가능" : "× 비활성"}
               </p>
             </div>
           ))}

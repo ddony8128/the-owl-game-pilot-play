@@ -1,76 +1,153 @@
-"use client";
-
-import { useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Player } from "@/lib/types";
-import { usePolling } from "@/lib/hooks/usePolling";
-import type { GmLogItem } from "@/components/GmLogSection";
 
-export type DefenseAdminPlayer = Player & { defensePoints?: number | null };
-
-export type PendingInfo = {
-  applicable: boolean;
-  label: string;
-  total: number;
-  submitted: number;
-  pending: { id: string; nickname: string }[];
-};
-
-export type DefenseDashboardDto = {
-  room: { code: string; game: string; status: "active" | "ended"; reveal_result?: boolean | null };
-  round: number;
-  stage: string;
-  prevRound: number;
-  stageTitle: string;
-  nextStep: { label: string; kind: "round" | "stage"; settles: boolean } | null;
-  players: DefenseAdminPlayer[];
-  pending: PendingInfo;
-  gmLogs: GmLogItem[];
-  gmLogsWarning: string | null;
-  serverNow: string;
-};
+type DefenseAdminPlayer = Player & { defensePoints?: number | null };
 
 type DefenseAdminState = {
-  data: DefenseDashboardDto | null;
   round: number | null;
-  stage: string | null;
-  prevRound: number | null;
+  resultPending: boolean;
+  scorePending: boolean;
   players: DefenseAdminPlayer[];
-  pending: PendingInfo | null;
-  roomStatus: "active" | "ended" | null;
-  gmLogs: GmLogItem[];
-  gmLogsWarning: string | null;
   loading: boolean;
   error: string | null;
-  /** 연속 폴링 실패 횟수(≥1 이면 "다시 연결 중" 배지) */
-  failures: number;
-  reload: () => Promise<void>;
+  reload: () => void;
+  addPlayer: (player: { id: string; nickname: string; room_code?: string; created_at?: string }) => void;
+  removePlayer: (id: string) => void;
 };
 
-// 디펜스 GM 대시보드 상태 — 공용 usePolling(in-flight 가드·8초 제한·실패 시 마지막 화면 유지) 위에 얹는다.
-// Iteration 5 WS-A 7: 폴링이 실패해도 data 가 남아 화면이 사라지지 않고, failures 로 재연결 배지를 띄운다.
 export function useDefenseAdminState(room: string | null): DefenseAdminState {
-  const url = room ? `/api/gm/defense/dashboard?room=${encodeURIComponent(room)}` : null;
-  const { data, error, failures, reload } = usePolling<DefenseDashboardDto>(url, 4000);
+  const [round, setRound] = useState<number | null>(null);
+  const [resultPending, setResultPending] = useState(false);
+  const [scorePending, setScorePending] = useState(false);
+  const [players, setPlayers] = useState<DefenseAdminPlayer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const loadedOnceRef = useRef(false);
 
-  // GM 조작 뒤 즉시 갱신. 폴링 요청이 떠 있어 건너뛰어졌을 수 있으니 잠시 뒤 한 번 더 읽는다.
-  const refresh = useCallback(async () => {
-    await reload();
-    setTimeout(() => void reload(), 350);
-  }, [reload]);
+  const load = async () => {
+    if (!room) {
+      setLoading(false);
+      return;
+    }
+    if (!loadedOnceRef.current) setLoading(true);
+    setError(null);
+    try {
+      const roomParam = `?room=${encodeURIComponent(room)}`;
+      const [roundRes, playersRes, scoresRes] = await Promise.all([
+        fetch(`/api/defense/state${roomParam}`),
+        fetch(`/api/gm/main-state${roomParam}`),
+        fetch(`/api/gm/defense/score${roomParam}`),
+      ]);
+
+      const roundJson = (await roundRes.json().catch(() => null)) as
+        | { round?: number | null; resultPending?: boolean; scorePending?: boolean; error?: string }
+        | { error: string }
+        | null;
+      const mainJson = (await playersRes.json().catch(() => null)) as
+        | {
+            game: unknown;
+            rules: unknown[];
+            players: Player[];
+            error?: undefined;
+          }
+        | { error: string }
+        | null;
+      const scoresJson = (await scoresRes.json().catch(() => null)) as
+        | { scores: { player_id: string; points: number }[]; error?: undefined }
+        | { error: string }
+        | null;
+
+      if (!roundRes.ok || !roundJson || "error" in roundJson) {
+        throw new Error(
+          (roundJson as { error?: string })?.error ??
+            "디펜스 라운드 정보를 불러오지 못했습니다."
+        );
+      }
+
+      if (!playersRes.ok || !mainJson || "error" in mainJson) {
+        throw new Error(
+          (mainJson as { error?: string })?.error ??
+            "플레이어 정보를 불러오지 못했습니다."
+        );
+      }
+
+      if (!scoresRes.ok || !scoresJson || "error" in scoresJson) {
+        throw new Error(
+          (scoresJson as { error?: string })?.error ??
+            "디펜스 점수 정보를 불러오지 못했습니다."
+        );
+      }
+
+      const scoreMap = new Map<string, number>();
+      (scoresJson.scores ?? []).forEach((s) => {
+        scoreMap.set(s.player_id, s.points);
+      });
+
+      const mergedPlayers: DefenseAdminPlayer[] = (mainJson.players ?? []).map(
+        (p) => ({
+          ...p,
+          defensePoints: scoreMap.get(p.id) ?? 0,
+        })
+      );
+
+      setRound(
+        typeof roundJson.round === "number" ? roundJson.round : round ?? 0
+      );
+      setResultPending(roundJson.resultPending === true);
+      setScorePending(roundJson.scorePending === true);
+      setPlayers(mergedPlayers);
+      setError(null);
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "디펜스 정보를 불러오지 못했습니다.";
+      setError(message);
+    } finally {
+      loadedOnceRef.current = true;
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!room) {
+      loadedOnceRef.current = false;
+      setRound(null);
+      setResultPending(false);
+      setScorePending(false);
+      setPlayers([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room]);
 
   return {
-    data,
-    round: data ? data.round : null,
-    stage: data ? data.stage : null,
-    prevRound: data ? data.prevRound : null,
-    players: data?.players ?? [],
-    pending: data?.pending ?? null,
-    roomStatus: data?.room.status ?? null,
-    gmLogs: data?.gmLogs ?? [],
-    gmLogsWarning: data?.gmLogsWarning ?? null,
-    loading: !data && !error,
-    error: !data ? error : null,
-    failures,
-    reload: refresh,
+    round,
+    resultPending,
+    scorePending,
+    players,
+    loading,
+    error,
+    reload: () => {
+      void load();
+    },
+    addPlayer: (player) => {
+      setPlayers((current) => {
+        if (current.some((item) => item.id === player.id)) return current;
+        return [...current, {
+          ...player,
+          room_code: player.room_code ?? room ?? "",
+          created_at: player.created_at ?? new Date().toISOString(),
+          defensePoints: 0,
+        }].sort((a, b) =>
+          a.nickname.localeCompare(b.nickname, "ko")
+        );
+      });
+    },
+    removePlayer: (id) => {
+      setPlayers((current) => current.filter((player) => player.id !== id));
+    },
   };
 }
+

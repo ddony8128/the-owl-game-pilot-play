@@ -3,8 +3,6 @@
 import { useMemo, useState } from "react";
 import type { Player } from "@/lib/types";
 import { ErrorMessage } from "@/components/ErrorMessage";
-import { describeSubmitFailure } from "@/components/PhoneNotices";
-import { newRequestId } from "@/lib/requestId";
 
 type Props = {
   // 인증은 상위(MafiaInner)에서 한 번만 확인하고 내려준다 — 탭마다 재확인하면 직후 제출이 버려진다.
@@ -18,8 +16,12 @@ type Props = {
     vote_count: number;
     total_spent: number;
   }[];
-  roomEnded?: boolean;
-  onSubmitted?: () => Promise<void> | void;
+  onVoteSubmitted: (result: {
+    target: string;
+    vote_count: number;
+    total_spent: number;
+    cash: number;
+  }) => void;
 };
 
 export function MafiaVoteTab({
@@ -29,8 +31,7 @@ export function MafiaVoteTab({
   playerCash,
   players,
   myVoteSummary,
-  roomEnded = false,
-  onSubmitted,
+  onVoteSubmitted,
 }: Props) {
   // 선택된 대상은 players.id (uuid)를 들고 있고,
   // 화면에는 nickname을 표시한다.
@@ -50,8 +51,8 @@ export function MafiaVoteTab({
     }
 
     const voteCount = Number(count);
-    if (!Number.isInteger(voteCount) || voteCount <= 0) {
-      setError("표 수는 1 이상의 정수로 입력해 주세요.");
+    if (!Number.isFinite(voteCount) || voteCount <= 0) {
+      setError("표 수를 올바르게 입력해 주세요.");
       return;
     }
 
@@ -61,46 +62,48 @@ export function MafiaVoteTab({
       return;
     }
 
-    if (submitting) return;
     setSubmitting(true);
     setError(null);
 
-    // 제출 1건 = requestId 1개(응답 유실 재전송 멱등)
-    const request_id = newRequestId();
-    let status: number | null = null;
     try {
       const res = await fetch("/api/mafia/vote", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        signal: AbortSignal.timeout(12000),
         body: JSON.stringify({
           room: roomCode,
           nickname: player.nickname,
           target_id: selectedTarget,
           vote_count: voteCount,
-          request_id,
         }),
       });
-      status = res.status;
       const json = (await res.json().catch(() => null)) as {
         ok?: true;
+        cash?: number;
+        total_spent?: number;
         error?: string;
-        reason?: string;
       } | null;
       if (!res.ok || !json?.ok) {
-        throw new Error(describeSubmitFailure(status, json, "투표를 기록하지 못했습니다."));
+        throw new Error(json?.error ?? "투표를 기록하지 못했습니다.");
+      }
+      const target = otherPlayers.find((item) => item.id === selectedTarget);
+      if (typeof json.cash === "number") {
+        onVoteSubmitted({
+          target: target?.nickname ?? "선택된 플레이어",
+          vote_count: voteCount,
+          total_spent: json.total_spent ?? totalCost,
+          cash: json.cash,
+        });
       }
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "투표를 기록하지 못했습니다.";
-      setError(status === null ? describeSubmitFailure(null, null, message) : message);
+      setError(message);
       setSubmitting(false);
       return;
     }
 
-    await onSubmitted?.();
     setSubmitting(false);
     setSelectedTarget(null);
     setCount("1");
@@ -156,12 +159,6 @@ export function MafiaVoteTab({
         )}
       </div>
 
-      {roomEnded && (
-        <p className="rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-400">종료된 방입니다. 투표할 수 없습니다.</p>
-      )}
-
-      {!roomEnded && (
-      <>
       <p className="mt-1 text-base text-zinc-400">
         마피아로 의심되는 사람을 선택하고, 몇 표를 행사할지 정해 주세요. <br />{" "}
         (여러 번 투표 가능합니다.)
@@ -173,11 +170,8 @@ export function MafiaVoteTab({
             <button
               key={p.id}
               type="button"
-              aria-label={`${p.nickname}에게 투표 대상 선택`}
-              aria-pressed={selectedTarget === p.id}
-              data-testid={`vote-target-${p.nickname}`}
               onClick={() => setSelectedTarget(p.id)}
-              className={`user-text min-h-11 rounded-lg border px-2 text-sm ${
+              className={`h-9 rounded-lg border text-xs ${
                 selectedTarget === p.id
                   ? "border-amber-400 bg-amber-400/10 text-amber-300"
                   : "border-zinc-700 bg-zinc-900 text-zinc-100"
@@ -206,10 +200,8 @@ export function MafiaVoteTab({
           <label className="block space-y-1">
             <span className="text-base text-zinc-400">표 수 입력</span>
             <input
-              className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm outline-none focus:border-zinc-400"
+              className="h-9 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs outline-none focus:border-zinc-400"
               placeholder="표 수"
-              aria-label="표 수"
-              data-testid="vote-count"
               value={count}
               onChange={(e) => setCount(e.target.value)}
               inputMode="numeric"
@@ -229,14 +221,10 @@ export function MafiaVoteTab({
             onClick={handleSubmit}
             disabled={submitting}
             type="button"
-            aria-label="투표 제출"
-            data-testid="vote-submit"
           >
             {submitting ? "제출 중..." : "투표 제출"}
           </button>
         </div>
-      )}
-      </>
       )}
     </div>
   );
