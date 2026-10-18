@@ -17,13 +17,14 @@ type Props = {
 };
 
 // 폰 탭 바. 탭 버튼은 손가락 터치 기준 최소 44px 높이(Iteration 5 접근성) + role/aria 로 스크린리더에 탭임을 알린다.
+// ITER6 A — 탭이 한 줄에 안 들어가면(마피아 거래 단계 7개) 가로 스크롤로 숨기지 않고 두 줄로 감싼다(정보·규칙 탭이 화면 밖으로 밀리던 문제).
 export function TabLayout({ tabs, activeKey, onChange, children }: Props) {
   return (
     <div className="flex h-full flex-col">
       <div
         role="tablist"
         aria-label="화면 탭"
-        className="mb-3 flex gap-1.5 overflow-x-auto pb-1"
+        className="mb-3 flex flex-wrap gap-1.5 pb-1"
       >
         {tabs.map((tab) => {
           const selected = tab.key === activeKey;

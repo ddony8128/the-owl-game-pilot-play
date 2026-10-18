@@ -146,25 +146,13 @@ export default function DashboardDefensePage() {
         </div>
       </section>
 
-      <div className={panelClass}>
-        <PhoneTogglesSection game="defense" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
-      </div>
-
-      <details className={panelClass} open>
+      {/* ITER6 A — 저쪽 UI 배치: 진행 아래 패널은 접어 두고 필요할 때 펼친다(제출 현황 → 점수 보정 → 설정 및 수동 관리) */}
+      <details className={panelClass} data-testid="panel-round-summary">
         <summary className="cursor-pointer text-lg font-black text-white">
-          현재 라운드 제출·몬스터 현황 <span className="ml-2 text-sm font-normal text-zinc-500">몇 초마다 자동 갱신</span>
+          현재 라운드 제출·몬스터 현황 <span className="ml-2 text-sm font-normal text-zinc-500">필요할 때 펼치기</span>
         </summary>
         <div className="mt-4">
           <DefenseRoundSummarySection room={room} currentRound={round} />
-        </div>
-      </details>
-
-      <details className={panelClass} open>
-        <summary className="cursor-pointer text-lg font-black text-white">
-          몬스터 구성 <span className="ml-2 text-sm font-normal text-zinc-500">튜토리얼 시작 때 인원에 맞춰 자동 세팅 · 직접 바꿀 때만</span>
-        </summary>
-        <div className="mt-4">
-          <MonsterConfigSection room={room} playerCount={players.length} action={action} disabled={ended} />
         </div>
       </details>
 
@@ -177,12 +165,28 @@ export default function DashboardDefensePage() {
         </div>
       </details>
 
-      <div className={panelClass}>
-        <GmLogSection logs={gmLogs} warning={gmLogsWarning} />
-      </div>
+      <details className={panelClass} data-testid="panel-settings">
+        <summary className="cursor-pointer text-lg font-bold text-white">
+          설정 및 수동 관리 <span className="ml-2 text-sm font-normal text-zinc-500">몬스터 · 참가자 폰 · 영상</span>
+        </summary>
+        <div className="mt-4 divide-y divide-zinc-800">
+          <section className="pb-6">
+            <h3 className="mb-1 text-base font-black text-white">몬스터 구성</h3>
+            <p className="mb-3 text-xs text-zinc-500">튜토리얼 시작 때 인원에 맞춰 자동 세팅 · 직접 바꿀 때만</p>
+            <MonsterConfigSection room={room} playerCount={players.length} action={action} disabled={ended} />
+          </section>
+          <section className="py-6">
+            <PhoneTogglesSection game="defense" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
+          </section>
+          <section className="pt-6">
+            <h3 className="mb-3 text-base font-black text-white">룰 영상</h3>
+            <RuleVideoPanel room={room} video="defense" />
+          </section>
+        </div>
+      </details>
 
       <div className={panelClass}>
-        <RuleVideoPanel room={room} video="defense" />
+        <GmLogSection logs={gmLogs} warning={gmLogsWarning} />
       </div>
     </div>
   );

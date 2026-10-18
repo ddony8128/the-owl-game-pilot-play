@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { openPanels } from "./helpers/phone";
 import chapters from "../video/generated/chapters.json";
 
 // Iteration 2 — 룰 영상(디펜스 · 마피아): GM 대시보드 [룰 영상] 패널 ↔ 보드 전체 화면 재생.
@@ -48,6 +49,7 @@ test("[a] GM 대시보드 두 게임에 [룰 영상] 패널 — 이름·길이·
   for (const game of ["defense", "mafia"] as const) {
     const code = await newRoom(request, game, ["v1"]);
     await page.goto(`/dashboard/x9a2k7/${game}?room=${code}`);
+    await openPanels(page);
     const panel = page.getByTestId("rule-video-panel");
     await expect(panel).toBeVisible({ timeout: 20_000 });
     await expect(panel).toContainText(game === "defense" ? "디펜스 딜레마 · 규칙" : "자본주의 마피아 · 규칙");
@@ -81,6 +83,7 @@ test("[a] 종료된 방은 패널 버튼 비활성 + 안내", async ({ page, req
   const code = await newRoom(request, "mafia", ["e1"]);
   await endRoom(request, code);
   await page.goto(`/dashboard/x9a2k7/mafia?room=${code}`);
+  await openPanels(page);
   const panel = page.getByTestId("rule-video-panel");
   await expect(panel.getByTestId("rule-video-ended")).toBeVisible({ timeout: 20_000 });
   await expect(panel.getByRole("button", { name: "▶ 보드에서 재생" })).toBeDisabled();
@@ -91,6 +94,7 @@ test("[a] 컬럼이 없는 DB면 패널이 마이그레이션 안내 + 버튼 �
   const code = await newRoom(request, "defense", ["c1"]);
   test.skip(await columnExists(request, code), "board_video 컬럼이 이미 있음 — 해당 없음");
   await page.goto(`/dashboard/x9a2k7/defense?room=${code}`);
+  await openPanels(page);
   const panel = page.getByTestId("rule-video-panel");
   await expect(panel.getByTestId("rule-video-column-missing")).toContainText(
     "supabase/migrations/2026-10-08-board-video.sql",
@@ -114,6 +118,7 @@ test.describe("[b] 실재생 (board_video 컬럼 필요)", () => {
     const gm = await browser.newPage();
     const board = await browser.newPage();
     await gm.goto(`/dashboard/x9a2k7/${game}?room=${code}`);
+    await openPanels(gm);
     await board.goto(`/${game}-board?room=${code}`);
     const panel = gm.getByTestId("rule-video-panel");
 

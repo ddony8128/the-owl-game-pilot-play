@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
-import { addPlayers, createRoom, endRoom, mafiaAdvance, mafiaRound, primePhone } from "./helpers/phone";
+import { addPlayers, createRoom, endRoom, mafiaAdvance, mafiaRound, primePhone, openPanels } from "./helpers/phone";
 import { PRIVATE_KEY_RE, launchBoardBrowser, openBoard } from "./board-helpers";
 
 // ITER6(2026-10-18 CBT 피드백) — B3 단계별 탭 자동 이동 · B4 보드 투표 결과 · B5/C5 폰 토글 · C1 첫 접속 · C4 도감.
@@ -132,6 +132,7 @@ test("[B5] 마피아 대시보드 '참가자 폰 로그 탭' 스위치 — 끄�
 
   const gm = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   await gm.goto(`/dashboard/x9a2k7/mafia?room=${room}`);
+  await openPanels(gm);
   const sw = gm.getByTestId("toggle-phone_logs");
   await expect(sw).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
   await sw.click();
@@ -170,6 +171,7 @@ test("[C5·C4] 디펜스 스위치 2개(로그 탭·도감 남은 수) 켜기/�
 
   const gm = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   await gm.goto(`/dashboard/x9a2k7/defense?room=${room}`);
+  await openPanels(gm);
   const swLogs = gm.getByTestId("toggle-phone_logs");
   const swRemain = gm.getByTestId("toggle-phone_remaining_count");
   await expect(swRemain).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });

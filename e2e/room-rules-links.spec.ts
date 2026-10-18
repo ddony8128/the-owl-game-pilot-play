@@ -51,6 +51,6 @@ test("마피아 규칙 탭: 룰지 PDF 버튼 없음 + 로그 탭 안내", async
   await primePhone(page, room, "r1", "mafia");
   await page.goto("/mafia");
   await page.getByTestId("tab-rules").click();
-  await expect(page.getByText("단계 요약")).toBeVisible();
+  await expect(page.getByText("게임 진행 순서")).toBeVisible(); // ITER6 A — 저쪽 UI 제목
   await expect(page.getByTestId("rulesheet-link")).toHaveCount(0);
 });

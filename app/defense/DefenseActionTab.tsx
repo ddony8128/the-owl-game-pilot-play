@@ -245,6 +245,7 @@ export function DefenseActionTab({
           <div>
             <p className="text-sm font-bold text-amber-300">이번 라운드 행동</p>
             <h2 className="mt-1 text-2xl font-black text-white">무엇을 할까요?</h2>
+            <p className="mt-1 text-sm text-zinc-400" data-testid="action-final-note">한 번 제출하면 이번 라운드에는 바꿀 수 없습니다.</p>
           </div>
           <div className="grid gap-3">
             <button

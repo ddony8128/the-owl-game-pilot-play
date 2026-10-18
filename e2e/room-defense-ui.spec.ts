@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
+import { openPanels } from "./helpers/phone";
 import { recommendedMonsterCounts } from "../lib/defense/composition";
 
 // 브라우저 실제 렌더 검증: 12명·대기열 5칸 상태의 결과중계/플레이어/대시보드 화면.
@@ -73,6 +74,7 @@ test("[UI] GM 대시보드: 대기열 표시 + [인원 기준 자동 세팅] 버
   const room = await setup(request, 12);
 
   await page.goto(`/dashboard/x9a2k7/defense?room=${room}`);
+  await openPanels(page);
   await page.waitForLoadState("networkidle");
 
   const section = page.locator('section:has-text("몬스터 수 조절")');

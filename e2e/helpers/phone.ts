@@ -131,3 +131,12 @@ export async function mafiaVote(request: APIRequestContext, room: string, nick: 
 export async function horizontalOverflow(page: Page): Promise<number> {
   return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 }
+
+/**
+ * ITER6 A — GM 대시보드의 접힌 패널(<details>: 제출 현황·설정 및 수동 관리·룰 영상 제어 등)을 모두 편다.
+ * 저쪽 UI 배치를 따라 기본으로 접어 두었으므로, 그 안을 조작하는 테스트는 먼저 이걸 부른다.
+ */
+export async function openPanels(page: Page): Promise<void> {
+  await page.waitForSelector("details", { timeout: 30_000 }).catch(() => {});
+  await page.evaluate(() => document.querySelectorAll("details").forEach((d) => ((d as HTMLDetailsElement).open = true)));
+}

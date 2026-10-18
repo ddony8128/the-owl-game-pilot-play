@@ -184,20 +184,7 @@ export default function DashboardMafiaPage() {
         </div>
       </section>
 
-      <div className={panelClass}>
-        <PhoneTogglesSection game="mafia" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
-      </div>
-
-      <div className={panelClass}>
-        <MafiaRevealSection
-          reveal={revealResult}
-          finished={finished}
-          disabled={false}
-          busy={action.busy}
-          onToggle={toggleReveal}
-        />
-      </div>
-
+      {/* ITER6 A — 저쪽 UI 배치: 진행 → 현재 주가 → 자산 현황(펼침) → (우리 기능: 결과 공개 · 참가자 폰 · GM 기록) → 접힌 상세 패널 */}
       <div className={panelClass}>
         <MafiaStocksSection stocks={stocks} />
       </div>
@@ -218,12 +205,26 @@ export default function DashboardMafiaPage() {
       </details>
 
       <div className={panelClass}>
+        <MafiaRevealSection
+          reveal={revealResult}
+          finished={finished}
+          disabled={false}
+          busy={action.busy}
+          onToggle={toggleReveal}
+        />
+      </div>
+
+      <div className={panelClass}>
+        <PhoneTogglesSection game="mafia" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
+      </div>
+
+      <div className={panelClass}>
         <GmLogSection logs={gmLogs} warning={gmLogsWarning} />
       </div>
 
-      <details className={panelClass} open>
+      <details className={panelClass} data-testid="panel-round-summary">
         <summary className="cursor-pointer text-lg font-black text-white">
-          라운드 상세 기록 <span className="ml-2 text-sm font-normal text-zinc-500">몇 초마다 자동 갱신</span>
+          라운드 상세 기록 <span className="ml-2 text-sm font-normal text-zinc-500">필요할 때 펼치기</span>
         </summary>
         <div className="mt-4">
           <MafiaRoundSummarySection currentRound={phase?.round_number} room={room} />
@@ -237,9 +238,12 @@ export default function DashboardMafiaPage() {
         </div>
       </details>
 
-      <div className={panelClass}>
-        <RuleVideoPanel room={room} video="mafia" />
-      </div>
+      <details className={panelClass} data-testid="panel-rule-video">
+        <summary className="cursor-pointer text-base font-bold text-white">룰 영상 제어</summary>
+        <div className="mt-4">
+          <RuleVideoPanel room={room} video="mafia" />
+        </div>
+      </details>
     </div>
   );
 }

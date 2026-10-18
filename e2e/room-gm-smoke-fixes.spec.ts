@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { openPanels } from "./helpers/phone";
 
 // 2026-10-03 GM 운영 스모크에서 나온 5건 회귀 가드.
 //  1 탭 직후 제출 무시 · 2 자동 세팅 경쟁 · 3 요약 자동 갱신 · 5 하이드레이션/자산 안내/종료 배지
@@ -110,6 +111,7 @@ test("[2] 디펜스 대시보드 로드 직후 [인원 기준 자동 세팅] →
     ["d1", "d2", "d3", "d4", "d5", "d6", "d7"],
   );
   await page.goto(`/dashboard/x9a2k7/defense?room=${room}`);
+  await openPanels(page);
   await page.getByRole("button", { name: "인원 기준 자동 세팅" }).click();
   // 초기 로드가 끝난 뒤에도 기본값(24)으로 되돌아가지 않아야 한다.
   await page.waitForLoadState("networkidle");
@@ -126,6 +128,7 @@ test("[3] 디펜스 라운드별 상황 요약이 진행 중 제출을 자동으
   const room = await newRoom(request, "defense", ["s1"]);
   await request.post("/api/gm/defense/round", { data: { room, round: 1 } });
   await page.goto(`/dashboard/x9a2k7/defense?room=${room}`);
+  await openPanels(page);
   await expect(page.getByText("이 라운드에는 행동 기록이 없습니다.")).toBeVisible({
     timeout: 20_000,
   });
@@ -159,6 +162,7 @@ test("[3] 마피아 라운드별 상황 요약도 주기적으로 다시 불러�
     if (req.url().includes("/api/gm/mafia/round-state")) hits += 1;
   });
   await page.goto(`/dashboard/x9a2k7/mafia?room=${room}`);
+  await openPanels(page);
   await expect(page.getByText("라운드별 상황 요약")).toBeVisible({
     timeout: 20_000,
   });
@@ -182,6 +186,7 @@ test("[5a·5b] 마피아 대시보드·결과 페이지 하이드레이션 경�
   });
 
   await page.goto(`/dashboard/x9a2k7/mafia?room=${room}`);
+  await openPanels(page);
   await expect(page.getByText("자산은 직업 경매가 시작될 때 생성됩니다.")).toBeVisible({
     timeout: 20_000,
   });
@@ -219,6 +224,7 @@ test("[5c] 종료된 방을 코드로 다시 열면 '종료됨' 배지 + 읽기 
   // 진행 중인 방에는 배지가 없다
   const live = await newRoom(request, "mafia", ["l1"]);
   await page.goto(`/dashboard/x9a2k7/mafia?room=${live}`);
+  await openPanels(page);
   await expect(page.getByText("라운드 / 페이즈")).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(1000);
   await expect(page.getByTestId("room-ended-notice")).toHaveCount(0);

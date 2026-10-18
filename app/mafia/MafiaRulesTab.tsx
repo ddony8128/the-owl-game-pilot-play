@@ -76,7 +76,7 @@ export function MafiaRulesTab() {
     <div className="space-y-4 text-sm text-zinc-200">
       <section className="rounded-2xl border border-amber-400/25 bg-gradient-to-br from-zinc-900 to-amber-950/20 p-4">
         <p className="text-[11px] font-black tracking-[0.18em] text-amber-400">QUICK GUIDE</p>
-        <h2 className="mt-1 text-xl font-black text-white">단계 요약</h2>
+        <h2 className="mt-1 text-xl font-black text-white">게임 진행 순서</h2>
         <p className="mt-1 text-xs leading-relaxed text-zinc-500">
           자본주의 마피아 규칙 요약이다부엉! 총 5라운드입니다.
         </p>
@@ -89,7 +89,7 @@ export function MafiaRulesTab() {
               <span className="font-mono text-lg font-black text-amber-400">{phase.number}</span>
               <div>
                 <p className="font-black text-zinc-100">{phase.title}</p>
-                <p className="mt-1 text-sm leading-relaxed text-zinc-400">{phase.text}</p>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-400">{phase.text}</p>
               </div>
             </div>
           ))}
@@ -101,7 +101,7 @@ export function MafiaRulesTab() {
           <span>라운드 종료</span>
           <span className="text-zinc-500 transition group-open:rotate-180">⌄</span>
         </summary>
-        <div className="space-y-2 border-t border-zinc-800 px-4 py-3 text-sm leading-relaxed text-zinc-400">
+        <div className="space-y-2 border-t border-zinc-800 px-4 py-3 text-xs leading-relaxed text-zinc-400">
           <p>투표에서 뽑힌 사람은 경제사범이 됩니다.</p>
           <p>
             <b className="text-red-300">마피아가 경제사범으로 뽑히면</b> · 국채 가격이 1 오르고, 모든 시민은
