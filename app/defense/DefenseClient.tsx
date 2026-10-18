@@ -207,7 +207,8 @@ function DefenseInner() {
 
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <TabLayout tabs={tabsDef} activeKey={effectiveTab} onChange={setActiveTab}>
-          {effectiveTab === "info" && roundNumber === 16 && (
+          {/* 최종 결과 카드는 GM이 [최종 결과 발표](stage=score)를 누른 뒤에만 — 보드 발표보다 폰이 먼저 순위를 보여주지 않도록 */}
+          {effectiveTab === "info" && roundNumber === 16 && (stageNow === "score" || roomEnded) && (
             <DefenseFinalResult
               room={player.room_code}
               playerId={player.id}

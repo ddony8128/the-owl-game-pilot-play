@@ -72,6 +72,13 @@ test("[조기 종료] 스컬 스파이더 1마리만 있는 방: 본게임 1라�
   await primePhone(page, room, "끝1", "defense");
   await page.goto("/defense");
   const card = page.getByTestId("final-result");
+  // 16에 막 들어온 상태(stage=result, 마지막 라운드 결과)에서는 아직 안 보인다 — 보드 발표 전에 폰이 순위를 먼저 보여주지 않는다
+  await expect(page.getByTestId("tab-info")).toBeVisible({ timeout: 15_000 });
+  await expect(card).toHaveCount(0);
+  // GM [최종 결과 발표](stage=score) 뒤에 보인다
+  const step = await request.post("/api/gm/defense/step", { data: { room, from: 16 } });
+  expect(step.ok()).toBeTruthy();
+  expect((await step.json()).stage).toBe("score");
   await expect(card).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("final-points")).toContainText("2", { timeout: 15_000 });
   await expect(page.getByTestId("final-rank")).toHaveText("1위");
