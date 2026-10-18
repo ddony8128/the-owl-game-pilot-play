@@ -23,7 +23,7 @@ export function TabLayout({ tabs, activeKey, onChange, children }: Props) {
       <div
         role="tablist"
         aria-label="화면 탭"
-        className="mb-3 flex gap-2 overflow-x-auto pb-1"
+        className="mb-3 flex gap-1.5 overflow-x-auto pb-1"
       >
         {tabs.map((tab) => {
           const selected = tab.key === activeKey;
@@ -35,7 +35,7 @@ export function TabLayout({ tabs, activeKey, onChange, children }: Props) {
               aria-selected={selected}
               aria-label={`${tab.label} 탭`}
               data-testid={`tab-${tab.key}`}
-              className={`min-h-11 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              className={`min-h-11 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
                 selected
                   ? "bg-amber-400 text-zinc-950"
                   : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"

@@ -43,11 +43,11 @@ export function DefenseDexTab({ dex }: Props) {
                   남은 수: {m.remainingCount}마리
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-sm text-zinc-400">
-                <span>HP {m.maxHp}</span>
-                <span>잔여 시간 {m.baseTime}</span>
-                <span>포인트 +{m.points}</span>
-                <span>전체 {m.totalCount}마리</span>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-zinc-400">
+                <span className="whitespace-nowrap">HP {m.maxHp}</span>
+                <span className="whitespace-nowrap">잔여 시간 {m.baseTime}</span>
+                <span className="whitespace-nowrap">포인트 +{m.points}</span>
+                <span className="whitespace-nowrap">전체 {m.totalCount}마리</span>
               </div>
             </div>
           </div>
