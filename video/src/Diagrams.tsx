@@ -694,6 +694,13 @@ const Queue = ({ scene, narrSec }: Props) => {
           {scene.screen[1]}
         </Box>
       </Pop>
+      {scene.screen[2] ? (
+        <Pop p={at(cue('같은 종류의', 0.15))}>
+          <Box accent={T.gold} style={{ fontSize: 44, fontWeight: 900, padding: '10px 28px', color: T.gold }}>
+            {scene.screen[2]}
+          </Box>
+        </Pop>
+      ) : null}
       <Note text={str(scene.data?.note)} p={at(cue('인원에 따라', 0.8))} />
     </Stage>
   );
@@ -1064,7 +1071,7 @@ const Summary = ({ scene, narrSec }: Props) => {
 
 /**
  * 직업 경매 — 뱃지 9개 + 베팅 실연: 셋이 같은 직업에 돈을 건다. 가장 높은 금액이 둘이면 둘 다 탈락,
- * 혼자 건 사람이 낙찰. 못 받으면 월급쟁이.
+ * 혼자 제출한 사람이 낙찰. 못 받으면 월급쟁이.
  */
 const Auction = ({ scene, narrSec }: Props) => {
   const T = useT();
@@ -1072,7 +1079,7 @@ const Auction = ({ scene, narrSec }: Props) => {
   const jobs = strs(scene.data?.jobs);
   const pick = str(scene.data?.pick);
   const BADGE = 150;
-  const t0 = cue(cues[0], 0.2); // 혼자 건 사람이 낙찰
+  const t0 = cue(cues[0], 0.2); // 혼자 제출한 사람이 낙찰
   const t1 = cue(cues[1], 0.4); // 둘 이상 같으면
   const t2 = cue(cues[2], 0.6); // 못 받으면 월급쟁이
   const bids = [

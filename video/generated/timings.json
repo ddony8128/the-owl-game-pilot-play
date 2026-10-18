@@ -27,14 +27,14 @@
         "narrSec": 14.76
       },
       {
-        "frames": 608,
-        "audio": "audio/defense-05-d3f90586-x1.25.wav",
-        "narrSec": 18.65
+        "frames": 727,
+        "audio": "audio/defense-05-b4ef1203-x1.25.wav",
+        "narrSec": 22.63
       },
       {
-        "frames": 551,
-        "audio": "audio/defense-06-c3da5444-x1.25.wav",
-        "narrSec": 16.74
+        "frames": 518,
+        "audio": "audio/defense-06-0cb21b3c-x1.25.wav",
+        "narrSec": 15.65
       },
       {
         "frames": 502,
@@ -62,12 +62,12 @@
         "narrSec": 18.25
       },
       {
-        "frames": 685,
-        "audio": "audio/defense-12-7e04a291-x1.25.wav",
-        "narrSec": 21.2
+        "frames": 736,
+        "audio": "audio/defense-12-6ff4ff7b-x1.25.wav",
+        "narrSec": 22.92
       }
     ],
-    "total": 7379
+    "total": 7516
   },
   "mafia": {
     "scenes": [
@@ -87,9 +87,9 @@
         "narrSec": 11.73
       },
       {
-        "frames": 986,
-        "audio": "audio/mafia-03-7851fa8d-x1.28.wav",
-        "narrSec": 31.26
+        "frames": 982,
+        "audio": "audio/mafia-03-3bacbbad-x1.28.wav",
+        "narrSec": 31.12
       },
       {
         "frames": 1459,
@@ -137,6 +137,6 @@
         "narrSec": 27.64
       }
     ],
-    "total": 10343
+    "total": 10339
   }
 }

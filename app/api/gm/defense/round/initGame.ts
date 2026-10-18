@@ -6,7 +6,7 @@ import type {
 } from "@/lib/types";
 import type { createServerSupabaseClient } from "@/lib/supabase/server";
 import { DEFENSE_MONSTERS } from "@/lib/defense/monsters";
-import { computeQueueSize } from "@/lib/defense/queue";
+import { computeQueueSize, pickQueueMonster } from "@/lib/defense/queue";
 import { recommendedMonsterCounts } from "@/lib/defense/composition";
 import { randomUUID } from "crypto";
 
@@ -185,19 +185,8 @@ export async function handleDefenseInitRound(
 
   for (let slot = 0; slot < queueSize; slot += 1) {
     const forbidden = new Set<number>([...newlyChosenTypes]);
-
-    let pool = DEFENSE_MONSTERS.filter(
-      (m) => (countsMap.get(m.id) ?? 0) > 0 && !forbidden.has(m.id)
-    );
-
-    // 남은 겹치지 않는 몬스터가 없다면, 단순히 남은 몬스터 중에서 선택
-    if (pool.length === 0) {
-      pool = DEFENSE_MONSTERS.filter((m) => (countsMap.get(m.id) ?? 0) > 0);
-    }
-
-    if (pool.length === 0) break;
-
-    const chosen = pool[Math.floor(Math.random() * pool.length)] ?? null;
+    // 대기열에 없는 종류 우선(겹치지 않게), 없을 때만 아무거나 — lib/defense/queue.ts pickQueueMonster
+    const chosen = pickQueueMonster(countsMap, forbidden);
     if (!chosen) break;
 
     instancesToInsert.push({

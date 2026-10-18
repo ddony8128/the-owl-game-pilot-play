@@ -71,7 +71,7 @@ export function DefenseRulesTab() {
         <div className="space-y-2 border-t border-zinc-800 px-4 py-3 text-xs leading-relaxed text-zinc-400">
           <p><b className="text-zinc-200">숫자 카드</b> · 모든 플레이어는 활성 상태의 1 / 2 / 3 / 4 카드를 한 장씩 가지고 시작합니다.</p>
           <p><b className="text-zinc-200">몬스터</b> · 총 6종류이며, 마릿수는 참가 인원에 맞춰 조정됩니다.</p>
-          <p><b className="text-zinc-200">대기열</b> · 6~9명은 4칸, 10~12명은 5칸입니다. 빈 칸은 다음 라운드 시작 때 남은 몬스터로 채워집니다.</p>
+          <p><b className="text-zinc-200">대기열</b> · 6~9명은 4칸, 10~12명은 5칸입니다. 빈 칸은 다음 라운드 시작 때 남은 몬스터로 채워집니다. 대기열에는 같은 종류의 몬스터가 최대한 겹치지 않게 나옵니다.</p>
         </div>
       </details>
 
