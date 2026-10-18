@@ -30,3 +30,28 @@ export function recommendedMonsterCounts(playerCount: number): MonsterCounts {
   );
   return { ...TABLE[n] };
 }
+
+/**
+ * 이 방의 종류별 전체 마릿수(몬스터 도감 '전체 n마리').
+ * - 튜토리얼 시작 전(round 0)이고 GM이 구성을 손대지 않았으면(base_count 가 기본값 그대로) → 지금 입장 인원 기준 권장 구성.
+ *   튜토리얼을 시작하는 순간 initGame 이 같은 값으로 base_count 를 저장하므로 시작 전후 숫자가 같다.
+ * - 그 밖에는 방에 저장된 base_count(인원 자동 구성 또는 GM 저장값).
+ */
+export function roomMonsterTotals(
+  rows: readonly { id: number; base_count: number | null }[],
+  defaults: readonly { id: number; baseCount: number }[],
+  round: number | null,
+  headcount: number,
+): MonsterCounts {
+  const untouched = defaults.every((m) => {
+    const row = rows.find((r) => r.id === m.id);
+    return !row || row.base_count == null || row.base_count === m.baseCount;
+  });
+  if ((round ?? 0) === 0 && untouched) return recommendedMonsterCounts(headcount);
+  const out: MonsterCounts = {};
+  for (const m of defaults) {
+    const row = rows.find((r) => r.id === m.id);
+    out[m.id] = row?.base_count ?? m.baseCount;
+  }
+  return out;
+}

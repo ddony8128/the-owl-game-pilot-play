@@ -16,8 +16,7 @@ type Props = {
   showRemaining?: boolean;
 };
 
-// ITER6 C4 — '전체 n마리'는 표시하지 않는다. 그 값(totalCount)은 lib/defense/monsters.ts 의 기본 구성(8명 24마리)
-// baseCount 를 읽어, 인원 자동 구성·GM 저장으로 바뀐 이 방의 수와 달랐다(구성 4마리인데 '전체 6마리').
+// '전체 n마리' = 이 방의 실제 구성(인원 자동 구성·GM 저장값, 시작 전이면 입장 인원 기준 권장 구성) — /api/defense/state 가 계산.
 export function DefenseDexTab({ dex, showRemaining = true }: Props) {
   const sorted = [...dex].sort((a, b) => a.monsterId - b.monsterId);
 
@@ -53,6 +52,7 @@ export function DefenseDexTab({ dex, showRemaining = true }: Props) {
                 <span className="whitespace-nowrap">HP {m.maxHp}</span>
                 <span className="whitespace-nowrap">잔여 시간 {m.baseTime}</span>
                 <span className="whitespace-nowrap">포인트 +{m.points}</span>
+                <span className="whitespace-nowrap" data-testid="dex-total">전체 {m.totalCount}마리</span>
               </div>
             </div>
           </div>

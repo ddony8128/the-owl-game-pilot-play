@@ -156,7 +156,7 @@ test("[B5] 마피아 대시보드 '참가자 폰 로그 탭' 스위치 — 끄�
   await gm.close();
 });
 
-test("[C5·C4] 디펜스 스위치 2개(로그 탭·도감 남은 수) 켜기/끄기 + 도감에 '전체 n마리' 없음", async ({ browser, request }) => {
+test("[C5·C4] 디펜스 스위치 2개(로그 탭·도감 남은 수) 켜기/끄기 + 도감 '전체 n마리' = 이 방 실제 구성(6명)", async ({ browser, request }) => {
   test.setTimeout(120_000);
   const { room } = await newRoom(request, "defense", ["도감1", "도감2", "도감3", "도감4", "도감5", "도감6"]);
   expect((await request.post("/api/gm/defense/round", { data: { room, round: 1 } })).ok()).toBeTruthy();
@@ -166,7 +166,8 @@ test("[C5·C4] 디펜스 스위치 2개(로그 탭·도감 남은 수) 켜기/�
   await expect(phone.getByTestId("tab-dex")).toBeVisible({ timeout: 30_000 });
   await phone.getByTestId("tab-dex").click();
   await expect(phone.getByTestId("dex-remaining").first()).toBeVisible();
-  await expect(phone.getByText(/전체 \d+마리/)).toHaveCount(0);
+  // 6명 권장 구성 4·3·4·3·2·2(합 18) — 도감 순서는 몬스터 id 순
+  await expect(phone.getByTestId("dex-total")).toHaveText(["전체 4마리", "전체 3마리", "전체 4마리", "전체 3마리", "전체 2마리", "전체 2마리"]);
   await expect(phone.getByTestId("tab-logs")).toBeVisible();
 
   const gm = await browser.newPage({ viewport: { width: 1366, height: 768 } });

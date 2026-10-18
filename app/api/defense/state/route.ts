@@ -20,6 +20,7 @@ import { normalizeNickname } from "@/lib/nickname";
 import { loadRoom } from "@/lib/player/roomGuard";
 import { isLateCombat, lateCombatLog } from "@/lib/defense/action";
 import { normalizeStage } from "@/lib/defense/steps";
+import { roomMonsterTotals } from "@/lib/defense/composition";
 
 type DefenseGlobalStateResponse =
   | {
@@ -269,7 +270,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const [instancesRes, countsRes, cardsRes, scoreRes] = await Promise.all([
+  const [instancesRes, countsRes, cardsRes, scoreRes, headcountRes] = await Promise.all([
     supabase
       .from("defense_monster_instance")
       .select(
@@ -279,7 +280,7 @@ export async function GET(request: Request) {
       .in("status", ["active", "defeated", "expired"]),
     supabase
       .from("defense_monster_count")
-      .select("id, count")
+      .select("id, count, base_count")
       .eq("room_code", room),
     supabase
       .from("defense_card_state")
@@ -292,6 +293,7 @@ export async function GET(request: Request) {
       .eq("room_code", room)
       .eq("player_id", player.id)
       .maybeSingle(),
+    supabase.from("players").select("id", { count: "exact", head: true }).eq("room_code", room),
   ]);
 
   for (const r of [instancesRes, countsRes, cardsRes, scoreRes]) {
@@ -337,6 +339,13 @@ export async function GET(request: Request) {
       isActive: c.is_active,
     }));
 
+  // 도감 '전체 n마리' = 이 방 실제 구성(인원 자동 구성·GM 저장값). 시작 전이면 지금 입장 인원 기준 권장 구성.
+  const totals = roomMonsterTotals(
+    counts as unknown as { id: number; base_count: number | null }[],
+    DEFENSE_MONSTERS,
+    round,
+    headcountRes.count ?? 0,
+  );
   const dex = DEFENSE_MONSTERS.map((m) => {
     const row = counts.find((c) => c.id === m.id);
     return {
@@ -346,8 +355,8 @@ export async function GET(request: Request) {
       maxHp: m.maxHp,
       baseTime: m.baseTime,
       points: m.points,
-      remainingCount: row?.count ?? 0,
-      totalCount: m.baseCount,
+      remainingCount: (round ?? 0) === 0 ? (totals[m.id] ?? 0) : (row?.count ?? 0),
+      totalCount: totals[m.id] ?? 0,
       image: m.image,
     };
   });
