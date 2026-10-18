@@ -118,7 +118,7 @@ npm run lint
 - **GM 안내문 HTML 다시 만들기**: `docs/gm-guide/마피아.html`·`디펜스.html`(이미지 참조) → `node docs/gm-guide/build-standalone.mjs` → `docs/gm-guide/dist/*.html`(이미지 내장 단일 파일).
 - `docs/배포-운영-마스터.md`, `docs/운영-supabase-분리-가이드.md`, `docs/sql/*`은 **방 개념 도입 전(2026-06) 문서**입니다. 브랜치 분리·DB 덤프 절차는 더 이상 필요 없으니 참고만 하세요.
 - 룰지 PDF(`public/rulebook/rulesheet-2026-10-16_defense.pdf`, `rulesheet-2026-10-14_mafia.pdf`)는 `/rules`에서 열립니다(인쇄·배포용). 폰 규칙 탭에는 PDF 버튼이 없고 탭 내용만으로 규칙을 다 담습니다. 공개 토글(`rules_state`) 없이 **항상** 보입니다.
-- 참가자 폰은 폴링이 실패해도 마지막 화면을 유지하고 「다시 연결하는 중…」 배지만 띄웁니다. 디펜스 행동은 GM이 라운드를 넘기기 전까지 **[다시 고르기]로 변경(덮어쓰기)** 할 수 있고, 마피아 **로그** 탭은 내 라운드별 기록만 보여 줍니다. 종료된 방은 참가자 변경 API 가 409 로 막힙니다. 필요한 DB 컬럼/인덱스는 `supabase/migrations/2026-10-17-iter5-player-actions.sql`(ADD 만).
+- 참가자 폰은 폴링이 실패해도 마지막 화면을 유지하고 「다시 연결하는 중…」 배지만 띄웁니다. 디펜스 행동은 **한 번 제출하면 그 라운드에 바꿀 수 없고**(낙장불입 — 두 번째 제출은 409 `already_submitted`, 같은 내용 재전송은 멱등 200), 마피아 **로그** 탭은 내 라운드별 기록만 보여 줍니다. 종료된 방은 참가자 변경 API 가 409 로 막힙니다. 필요한 DB 컬럼/인덱스는 `supabase/migrations/2026-10-17-iter5-player-actions.sql`(ADD 만).
 - **룰 영상(디펜스·마피아) 다시 만들기**: 대본 `video/src/scenes.ts`(정본 `video/rule-video-plan-v1.md`) 수정 → `cd video && npm install && npm run render` → `public/video/{defense,mafia}.mp4`·`video/generated/chapters.json` 갱신 → `npm run check:video`(대본 대조). TTS 키는 `.env.local`의 `GEMINI_API_KEY`(같은 문장은 `video/assets/audio/` 캐시를 써서 다시 부르지 않음). 보드 재생에는 `rooms.board_video` 컬럼이 필요(`supabase/migrations/2026-10-08-board-video.sql`).
 
 ---

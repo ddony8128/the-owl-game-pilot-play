@@ -1,7 +1,8 @@
 import type { DefenseActionType, DefenseCardState } from "@/lib/types";
 
 // 디펜스 행동 제출(upsert)의 순수 판정 로직. API(route.ts)는 DB 입출력만 하고 판단은 여기서 한다.
-// 계약(ITER5): 라운드 진행 전까지 같은 라운드 행동을 다시 제출하면 덮어쓴다. 타이머 0 이후도 서버는 막지 않는다(소프트 타이머).
+// 계약(ITER6, 2026-10-18 또니 — 낙장불입): 같은 라운드에 이미 제출한 행동은 바꿀 수 없다(두 번째 제출은 409 already_submitted).
+// 단, 같은 내용의 재전송(응답 유실 뒤 재시도)은 멱등 200. 타이머 0 이후도 서버는 막지 않는다(소프트 타이머).
 
 export type CardSnapshotEntry = { cardSlot: number; cardValue: number; isActive: boolean };
 export type CardSnapshot = CardSnapshotEntry[];
@@ -56,22 +57,64 @@ export type ExistingAction = {
   id: number | string;
   action_type: string;
   cards_before: unknown;
+  target_monster_id?: string | null;
+  used_card_slot?: number | null;
+  training_from?: number | null;
+  training_to?: number | null;
+  rest_card?: string | null;
 };
 
 export type SubmitDecision =
   | { kind: "insert" }
-  | { kind: "replace"; restoreTo: CardSnapshot }
-  | { kind: "reject"; status: 400 | 409; reason: "not_playable" | "round_mismatch" | "legacy_action"; error: string };
+  | { kind: "idempotent" }
+  | { kind: "reject"; status: 400 | 409; reason: "not_playable" | "round_mismatch" | "already_submitted"; error: string };
+
+/** 이미 제출된 행동과 같은 내용인지(재전송 판별). 카드 값은 제출 직전 스냅샷(cards_before)에서 칸 → 값으로 찾는다. */
+export type SubmitBody = {
+  action_type?: unknown;
+  target_monster_id?: unknown;
+  used_card_slot?: unknown;
+  training_from_slot?: unknown;
+  training_to_slot?: unknown;
+  rest_slots?: unknown;
+};
+export function isSameSubmission(existing: ExistingAction, body: SubmitBody): boolean {
+  if (existing.action_type !== body.action_type) return false;
+  const snap = parseCardSnapshot(existing.cards_before);
+  const valueOf = (slot: unknown) =>
+    typeof slot === "number" ? snap?.find((c) => c.cardSlot === slot)?.cardValue ?? null : null;
+  if (body.action_type === "combat") {
+    return (
+      (existing.target_monster_id ?? null) === (body.target_monster_id ?? null) &&
+      (existing.used_card_slot ?? null) === (typeof body.used_card_slot === "number" ? body.used_card_slot : null)
+    );
+  }
+  if (body.action_type === "training") {
+    return (
+      snap != null &&
+      (existing.training_from ?? null) === valueOf(body.training_from_slot) &&
+      (existing.training_to ?? null) === valueOf(body.training_to_slot)
+    );
+  }
+  if (body.action_type === "rest") {
+    if (snap == null || !Array.isArray(body.rest_slots)) return false;
+    const values = (body.rest_slots as unknown[]).map(valueOf);
+    if (values.some((v) => v == null)) return false;
+    return (existing.rest_card ?? "") === values.join(",");
+  }
+  return false;
+}
 
 /**
  * 제출을 어떻게 처리할지 결정한다.
  *  - clientRound(폰이 보고 있던 라운드)가 서버 라운드와 다르면 409 round_mismatch — 늦은 화면의 옛 버튼(반면교사 1-2).
- *  - 같은 라운드 기존 행동이 있으면 replace(스냅샷으로 카드 복원 뒤 새 행동 적용). 스냅샷이 없는 옛 행은 바꿀 수 없다(409).
+ *  - 같은 라운드 기존 행동이 있으면: 같은 내용의 재전송이면 idempotent(200), 아니면 409 already_submitted(낙장불입).
  */
 export function decideSubmit(input: {
   serverRound: number | null | undefined;
   clientRound: unknown;
   existing: ExistingAction | null;
+  body?: SubmitBody;
 }): SubmitDecision {
   const { serverRound, clientRound, existing } = input;
   if (!isPlayableRound(serverRound)) {
@@ -92,16 +135,13 @@ export function decideSubmit(input: {
     };
   }
   if (!existing) return { kind: "insert" };
-  const snap = parseCardSnapshot(existing.cards_before);
-  if (!snap) {
-    return {
-      kind: "reject",
-      status: 409,
-      reason: "legacy_action",
-      error: "이 라운드의 행동은 이전 방식으로 제출되어 바꿀 수 없습니다.",
-    };
-  }
-  return { kind: "replace", restoreTo: snap };
+  if (input.body && isSameSubmission(existing, input.body)) return { kind: "idempotent" };
+  return {
+    kind: "reject",
+    status: 409,
+    reason: "already_submitted",
+    error: "이미 제출한 행동은 바꿀 수 없습니다.",
+  };
 }
 
 /** 새 행동을 (복원된) 카드 상태에 대해 검증한다. 통과하면 적용에 필요한 값들을 돌려준다. */

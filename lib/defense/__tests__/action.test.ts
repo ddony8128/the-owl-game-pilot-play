@@ -5,6 +5,7 @@ import {
   isDefenseActionType,
   isLateCombat,
   isPlayableRound,
+  isSameSubmission,
   isValidationFailure,
   lateCombatLog,
   parseCardSnapshot,
@@ -13,7 +14,7 @@ import {
   type CardSnapshot,
 } from "@/lib/defense/action";
 
-// Iteration 5 WS-B — 디펜스 행동 upsert 판정(순수). 계약: 라운드 진행 전까지 같은 라운드 행동은 덮어쓴다.
+// 디펜스 행동 제출 판정(순수). 계약(ITER6 낙장불입): 같은 라운드에 이미 제출했으면 409, 같은 내용 재전송만 멱등.
 const CARDS: CardSnapshot = [
   { cardSlot: 1, cardValue: 1, isActive: true },
   { cardSlot: 2, cardValue: 2, isActive: true },
@@ -35,7 +36,7 @@ describe("isPlayableRound / isDefenseActionType", () => {
   });
 });
 
-describe("decideSubmit (덮어쓰기 판정)", () => {
+describe("decideSubmit (낙장불입 판정)", () => {
   it("기존 행동이 없으면 insert", () => {
     expect(decideSubmit({ serverRound: 4, clientRound: 4, existing: null })).toEqual({ kind: "insert" });
   });
@@ -54,22 +55,45 @@ describe("decideSubmit (덮어쓰기 판정)", () => {
     const d = decideSubmit({ serverRound: 3, clientRound: 3, existing: null });
     expect(d.kind === "reject" && d.status === 400 && d.reason === "not_playable").toBe(true);
   });
-  it("같은 라운드 기존 행동(스냅샷 있음) → replace, 복원 대상은 스냅샷", () => {
+  const EXISTING = {
+    id: 1,
+    action_type: "combat",
+    cards_before: CARDS,
+    target_monster_id: "m-1",
+    used_card_slot: 2,
+  };
+  it("같은 라운드에 이미 제출했고 내용이 다르면 409 already_submitted", () => {
     const d = decideSubmit({
       serverRound: 4,
       clientRound: 4,
-      existing: { id: 1, action_type: "combat", cards_before: CARDS },
+      existing: EXISTING,
+      body: { action_type: "combat", target_monster_id: "m-1", used_card_slot: 4 },
     });
-    expect(d.kind).toBe("replace");
-    if (d.kind === "replace") expect(d.restoreTo).toEqual(CARDS);
+    expect(d).toMatchObject({ kind: "reject", status: 409, reason: "already_submitted" });
+    const rest = decideSubmit({ serverRound: 4, clientRound: 4, existing: EXISTING, body: { action_type: "rest", rest_slots: [3] } });
+    expect(rest).toMatchObject({ kind: "reject", reason: "already_submitted" });
   });
-  it("스냅샷 없는 옛 행은 바꿀 수 없다(409 legacy_action)", () => {
-    const d = decideSubmit({
-      serverRound: 4,
-      clientRound: 4,
-      existing: { id: 1, action_type: "combat", cards_before: null },
-    });
-    expect(d.kind === "reject" && d.status === 409 && d.reason === "legacy_action").toBe(true);
+  it("본문이 없으면(옛 호출) 기존 행동이 있을 때 409", () => {
+    const d = decideSubmit({ serverRound: 4, clientRound: 4, existing: EXISTING });
+    expect(d).toMatchObject({ kind: "reject", reason: "already_submitted" });
+  });
+  it("같은 내용의 재전송은 멱등(idempotent)", () => {
+    expect(
+      decideSubmit({
+        serverRound: 4,
+        clientRound: 4,
+        existing: EXISTING,
+        body: { action_type: "combat", target_monster_id: "m-1", used_card_slot: 2 },
+      }),
+    ).toEqual({ kind: "idempotent" });
+  });
+  it("isSameSubmission — 훈련·휴식은 제출 직전 스냅샷의 칸 → 값으로 비교", () => {
+    const training = { id: 2, action_type: "training", cards_before: CARDS, training_from: 1, training_to: 4 };
+    expect(isSameSubmission(training, { action_type: "training", training_from_slot: 1, training_to_slot: 4 })).toBe(true);
+    expect(isSameSubmission(training, { action_type: "training", training_from_slot: 2, training_to_slot: 4 })).toBe(false);
+    const rest = { id: 3, action_type: "rest", cards_before: CARDS, rest_card: "3" };
+    expect(isSameSubmission(rest, { action_type: "rest", rest_slots: [3] })).toBe(true);
+    expect(isSameSubmission(rest, { action_type: "rest", rest_slots: [1] })).toBe(false);
   });
 });
 

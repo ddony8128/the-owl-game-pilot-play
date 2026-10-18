@@ -53,11 +53,10 @@ type Step =
   | "combatChooseMonster"
   | "combatChooseCard";
 
-// 행동 탭 — 계약(ITER5): 라운드 진행 전까지 "다시 고르기"로 행동을 바꿀 수 있다(마지막 선택만 반영).
-//  - 제출됨 상태: 요약 + 「제출됨 · 바꾸려면 다시 고르세요」 + [다시 고르기]
-//  - 다시 고르기: 같은 선택 흐름(선택 → 확정 버튼)으로 진행, 확정 전까지는 이전 선택이 유지된다
+// 행동 탭 — 계약(ITER6, 2026-10-18 또니 — 낙장불입): 제출한 행동은 그 라운드에 바꿀 수 없다.
+//  - 제출됨 상태: 요약 + 「제출됨」만 보여 준다(다시 고르기 없음, 서버도 두 번째 제출을 409 already_submitted로 거부)
 //  - 라운드가 바뀌면 부모가 key 를 바꿔 이 컴포넌트가 새로 마운트된다(단계 초기화)
-//  - 소프트 타이머: 폰에는 시간을 표시하지 않고, GM이 라운드를 넘기기 전까지는 제출/변경할 수 있다(서버도 막지 않음)
+//  - 소프트 타이머: 폰에는 시간을 표시하지 않고, GM이 라운드를 넘기기 전까지는 제출할 수 있다(서버도 막지 않음)
 export function DefenseActionTab({
   state,
   nickname,
@@ -81,14 +80,10 @@ export function DefenseActionTab({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedRestSlots, setSelectedRestSlots] = useState<number[]>([]);
-  const [rePicking, setRePicking] = useState(false);
-  const [justSubmitted, setJustSubmitted] = useState<"new" | "replaced" | null>(null);
 
   const hasActionThisRound =
     state.action != null && state.action.round === state.round;
 
-  // 다시 고르기 중에는 "이전 행동을 되돌린 뒤"의 카드 상태를 기준으로 고르게 해야 하지만,
-  // 폰은 스냅샷을 모르므로 현재 카드로 보여 주고, 서버가 되돌린 상태에 대해 검증한다(실패하면 이전 선택 유지).
   const activeCards = state.cards.filter((c) => c.isActive);
   const inactiveCards = state.cards.filter((c) => !c.isActive);
   const sortedMonsters = state.monsters.slice().sort((a, b) => a.slotIndex - b.slotIndex);
@@ -133,15 +128,14 @@ export function DefenseActionTab({
       status = res.status;
       const json = (await res.json().catch(() => null)) as {
         ok?: true;
-        replaced?: boolean;
         error?: string;
         reason?: string;
       } | null;
 
       if (!res.ok || !json?.ok) {
         const message = describeSubmitFailure(status, json, "행동 처리 중 오류가 발생했습니다.");
-        // 라운드가 넘어간 경우 최신 상태를 바로 다시 읽는다
-        if (json?.reason === "round_mismatch" || json?.reason === "round_advanced") {
+        // 라운드가 넘어갔거나 이미 제출된 경우 최신 상태를 바로 다시 읽는다(제출됨 화면으로)
+        if (json?.reason === "round_mismatch" || json?.reason === "round_advanced" || json?.reason === "already_submitted") {
           await onActionCompleted();
         }
         throw new Error(message);
@@ -149,8 +143,6 @@ export function DefenseActionTab({
 
       await onActionCompleted();
       resetSelection();
-      setRePicking(false);
-      setJustSubmitted(json.replaced ? "replaced" : "new");
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "행동 처리 중 오류가 발생했습니다.";
@@ -196,8 +188,8 @@ export function DefenseActionTab({
     return "행동";
   };
 
-  // ── 제출됨 상태(다시 고르기 전) ─────────────────────────
-  if (hasActionThisRound && !rePicking) {
+  // ── 제출됨 상태(낙장불입 — 이 라운드에는 더 바꾸지 않는다) ──────────
+  if (hasActionThisRound) {
     return (
       <div className="space-y-3 text-base text-zinc-200" data-testid="action-submitted">
         {notice && (
@@ -211,28 +203,9 @@ export function DefenseActionTab({
           <p className="text-lg font-bold text-white">{actionTitle()} 제출 완료</p>
           <p className="mt-2 leading-6 text-zinc-300">{describeAction()}</p>
           <p className="mt-4 text-sm font-semibold text-emerald-300" data-testid="submitted-label">
-            {justSubmitted === "replaced" ? "변경됨" : "제출됨"} · 바꾸려면 다시 고르세요
+            제출됨 · 제출한 행동은 바꿀 수 없습니다
           </p>
         </div>
-        {roomEnded ? (
-          <p className="text-center text-sm text-zinc-500">종료된 방이라 더 바꿀 수 없습니다.</p>
-        ) : (
-          <button
-            type="button"
-            aria-label="행동 다시 고르기"
-            data-testid="repick-button"
-            className="min-h-12 w-full rounded-2xl border border-amber-400/70 bg-zinc-900 text-base font-bold text-amber-300 transition hover:bg-zinc-800 active:scale-[0.99]"
-            onClick={() => {
-              // 다시 고르기는 항상 첫 단계(전투/휴식/훈련 선택)부터 — 제출 응답이 늦거나 실패해 이전 단계가 남아 있어도 초기화한다
-              resetSelection();
-              setError(null);
-              setJustSubmitted(null);
-              setRePicking(true);
-            }}
-          >
-            다시 고르기
-          </button>
-        )}
       </div>
     );
   }
@@ -247,7 +220,7 @@ export function DefenseActionTab({
 
   const cancelButtonClass =
     "min-h-12 rounded-xl bg-zinc-800 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-50";
-  const confirmSuffix = rePicking ? "으로 변경 확정" : " 확정";
+  const confirmSuffix = " 확정";
   const cardTile = (selected: boolean, tone: "emerald" | "indigo" | "rose") => {
     const on =
       tone === "emerald"
@@ -267,25 +240,6 @@ export function DefenseActionTab({
           {notice}
         </p>
       )}
-      {rePicking && (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="repick-banner">
-          <span>이전 선택을 바꿉니다. 확정 전까지는 이전 선택이 유지됩니다.</span>
-          <button
-            type="button"
-            aria-label="다시 고르기 취소"
-            className="min-h-11 shrink-0 rounded-full bg-zinc-800 px-3 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
-            disabled={submitting}
-            onClick={() => {
-              resetSelection();
-              setRePicking(false);
-              setError(null);
-            }}
-          >
-            취소
-          </button>
-        </div>
-      )}
-
       {step === "chooseAction" && (
         <section className="space-y-4">
           <div>
