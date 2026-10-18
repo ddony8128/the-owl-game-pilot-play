@@ -78,7 +78,7 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
       ? { label: jobId, icon: null }
       : null;
 
-  const formatCoin = (value: number) => `${value.toLocaleString("ko-KR")} 코인`;
+  const formatWon = (value: number) => `${value.toLocaleString("ko-KR")}원`;
 
   return (
     <div className="flex flex-col gap-5 text-sm text-zinc-100">
@@ -110,18 +110,18 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
             <p className="text-xs text-zinc-500">보유 현금</p>
-            <p className="mt-1 text-lg font-black tabular-nums text-amber-300">{formatCoin(cash)}</p>
+            <p className="mt-1 text-lg font-black tabular-nums text-amber-300">{formatWon(cash)}</p>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-3">
             <p className="text-xs text-zinc-500">주식 평가액</p>
-            <p className="mt-1 text-lg font-black tabular-nums text-emerald-300">{formatCoin(totalStockValue)}</p>
+            <p className="mt-1 text-lg font-black tabular-nums text-emerald-300">{formatWon(totalStockValue)}</p>
           </div>
           <div className="col-span-2 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3">
             <div>
               <p className="text-xs font-semibold text-emerald-400">총 자산</p>
               <p className="text-[11px] text-zinc-600">현금 + 주식 평가액</p>
             </div>
-            <p className="text-2xl font-black tabular-nums text-white">{formatCoin(totalAsset)}</p>
+            <p className="text-2xl font-black tabular-nums text-white">{formatWon(totalAsset)}</p>
           </div>
         </div>
       </section>
@@ -145,10 +145,10 @@ export function MafiaInfoTab({ mafiaPlayer, stocks, logs }: Props) {
               <div className="min-w-0">
                 <p className="truncate font-bold text-zinc-100">{row.key}</p>
                 <p className="mt-0.5 text-xs text-zinc-500">
-                  {row.amount}주 × {row.price.toLocaleString("ko-KR")} 코인
+                  {row.amount}주 × {row.price.toLocaleString("ko-KR")}원
                 </p>
               </div>
-              <span className="font-bold tabular-nums text-emerald-300">{formatCoin(row.value)}</span>
+              <span className="font-bold tabular-nums text-emerald-300">{formatWon(row.value)}</span>
             </div>
           ))}
         </div>
