@@ -16,7 +16,8 @@ export default function JoinScreenPage() {
 
 function JoinScreen() {
   const params = useSearchParams();
-  const code = (params.get("code") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
+  // ?code= (QR 안내) — ?room= 으로 열어도 같은 화면(ITER6 C1: 참가자가 /join?room=코드 로 열어도 막히지 않게)
+  const code = (params.get("code") ?? params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
   const origin = useSyncExternalStore(
     () => () => {},
     () => window.location.origin,

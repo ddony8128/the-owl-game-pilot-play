@@ -5,19 +5,7 @@ import { useRouter } from "next/navigation";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import type { RoomGame } from "@/lib/types";
-
-function gamePath(game: RoomGame | null): string | null {
-  switch (game) {
-    case "mafia":
-      return "/mafia";
-    case "defense":
-      return "/defense";
-    case "subway":
-      return "/subway";
-    default:
-      return null;
-  }
-}
+import { gamePath } from "@/lib/gamePath";
 
 const GAME_LABEL: Record<RoomGame, string> = {
   mafia: "자본주의 마피아",
@@ -61,11 +49,13 @@ export default function EntryPage() {
     };
   }, []);
 
+  // ITER6 C1 — 방금 입장한 방의 플레이어로 확인된 뒤에만 이동한다(이전 방 세션의 player·roomGame 으로 다른 게임 화면에 가지 않게).
+  const playerInRoom = !!player && !!roomCode && player.room_code === roomCode;
   useEffect(() => {
     if (!attempted || authLoading) return;
     const path = gamePath(roomGame);
-    if (player && path) router.replace(path);
-  }, [attempted, authLoading, player, roomGame, router]);
+    if (playerInRoom && path) router.replace(path);
+  }, [attempted, authLoading, playerInRoom, roomGame, router]);
 
   const handleSubmit = () => {
     const room = inputRoom.trim();

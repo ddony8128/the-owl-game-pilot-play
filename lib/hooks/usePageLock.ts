@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
+import { guardRedirect } from "@/lib/gamePath";
 
 export type PageLockOptions = {
   requireLogin?: boolean;
@@ -22,10 +23,11 @@ export function usePageLock(options: PageLockOptions) {
 
   const canAccess = isLoggedIn && isPageActivated;
 
+  // ITER6 C1 — 막힌 화면(/locked)으로 보내지 않는다: 세션이 없으면 입장 화면, 다른 게임 방이면 그 게임 화면으로.
   useEffect(() => {
     if (isLoading) return;
-    if (!canAccess) router.replace("/locked");
-  }, [canAccess, isLoading, router]);
+    if (!canAccess) router.replace(guardRedirect({ isLoggedIn, roomGame, allowGames: options.allowGames }));
+  }, [canAccess, isLoading, isLoggedIn, roomGame, options.allowGames, router]);
 
   return {
     isLoading,

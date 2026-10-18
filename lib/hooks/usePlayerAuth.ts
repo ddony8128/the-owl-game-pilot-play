@@ -92,6 +92,15 @@ export function usePlayerAuth() {
     // 서버와 같은 규칙(NFC·제로폭 제거·공백 정리)으로 저장해, 저장된 닉네임과 서버 닉네임이 항상 같게 한다.
     const n = normalizeNickname(nick);
     if (typeof window !== "undefined") {
+      // ITER6 C1 — 다른 방/닉네임으로 들어오면 이전 방 세션(player·game)을 지운다. 남겨 두면 입장 화면이
+      // 옛 game 으로 이동하고(디펜스 세션이 남은 채 마피아 방 입장 → /defense) 가드가 막힌 화면을 띄웠다.
+      // 같은 방·같은 닉네임 재입장이면 지우지 않는다(검증 effect 가 다시 돌지 않아 player 가 비어 버린다).
+      const changed = localStorage.getItem(ROOM_KEY) !== r || localStorage.getItem(NICKNAME_KEY) !== n;
+      if (changed) {
+        localStorage.removeItem(ROOMGAME_KEY);
+        setPlayer(null);
+        setRoomGame(null);
+      }
       localStorage.setItem(ROOM_KEY, r);
       localStorage.setItem(NICKNAME_KEY, n);
     }
