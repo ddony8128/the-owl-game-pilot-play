@@ -15,7 +15,6 @@ import { MafiaLogsSection } from "./MafiaLogsSection";
 import { MafiaRoundSummarySection } from "./MafiaRoundSummarySection";
 import type { MafiaLog } from "@/lib/types";
 import { LazyDetails } from "../LazyDetails";
-import { broadcastBoardChange } from "@/lib/boardBroadcast";
 
 export default function DashboardMafiaPage() {
   // 하이드레이션 안전: room(URL)·mounted 는 서버에서 알 수 없으므로 마운트 후에만 읽는다.
@@ -50,7 +49,6 @@ export default function DashboardMafiaPage() {
       if (!res.ok || !json?.ok) {
         console.error(json?.error ?? "페이즈 전환 중 오류가 발생했습니다.");
       } else {
-        broadcastBoardChange({ room, kind: "mafia-summary" });
         reload();
       }
     } catch (e) {
@@ -93,7 +91,6 @@ export default function DashboardMafiaPage() {
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error ?? "게임을 종료하지 못했습니다.");
       }
-      broadcastBoardChange({ room, kind: "mafia-summary" });
       window.location.href = "/dashboard/x9a2k7";
     } catch (e: unknown) {
       setGameEndError(
@@ -200,7 +197,6 @@ export default function DashboardMafiaPage() {
                 json?.error ?? "라운드 변경 중 오류가 발생했습니다."
               );
             } else {
-              broadcastBoardChange({ room, kind: "mafia-summary" });
               reload();
             }
           } catch (e) {

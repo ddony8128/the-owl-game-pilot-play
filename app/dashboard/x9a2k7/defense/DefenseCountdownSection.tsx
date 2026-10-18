@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { broadcastBoardChange } from "@/lib/boardBroadcast";
 
 const ROUND_SECONDS = 5 * 60;
 type TimerResponse = { remainingSeconds?: number; isRunning?: boolean; error?: string };
@@ -88,7 +87,6 @@ export function DefenseCountdownSection({
       const json = (await res.json().catch(() => null)) as TimerResponse | null;
       if (res.ok && json) {
         apply(json);
-        broadcastBoardChange({ room, kind: "defense-timer" });
       } else {
         throw new Error(json?.error ?? "타이머 상태를 변경하지 못했습니다.");
       }

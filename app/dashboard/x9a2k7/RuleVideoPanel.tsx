@@ -11,7 +11,6 @@ import {
   type RuleVideoId,
 } from "@/lib/ruleVideos";
 import { BOARD_VIDEO_MIGRATION } from "@/lib/boardVideo";
-import { broadcastBoardChange } from "@/lib/boardBroadcast";
 
 type Remote = {
   video: RuleVideoId | null;
@@ -78,7 +77,6 @@ export function RuleVideoPanel({ room, video }: { room: string; video: RuleVideo
           columnMissing: previous?.columnMissing ?? false,
           status: previous?.status ?? "active",
         }));
-        broadcastBoardChange({ room, kind: "video" });
       }
     } finally {
       setBusy(false);

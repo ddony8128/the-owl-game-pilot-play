@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isRuleVideoId, ruleVideoOf, type RuleVideoId } from "@/lib/ruleVideos";
-import { BOARD_BROADCAST_CHANNEL, type BoardBroadcastMessage } from "@/lib/boardBroadcast";
 
 /**
  * 보드 페이지(page.tsx)에 그대로 얹는 버전 — room을 URL(?room=)에서 마운트 후에 읽는다
@@ -17,6 +16,8 @@ export function BoardVideoFromUrl() {
   return room ? <BoardVideoLayer room={room} /> : null;
 }
 
+/** 보드 폴링 주기 — GM이 [▶ 보드에서 재생]을 누른 뒤 이 안에 영상이 뜬다 */
+export const BOARD_VIDEO_POLL_MS = 2000;
 /** 영상을 못 불러오면 이만큼 안내를 보인 뒤 서버에 알려 GM 패널의 "재생 중"을 푼다 */
 export const VIDEO_FAIL_REPORT_MS = 5000;
 /** 마우스가 이만큼 멈추면 커서를 숨긴다 */
@@ -63,15 +64,10 @@ export function BoardVideoLayer({ room }: { room: string }) {
       }
     };
     void load();
-    const channel = "BroadcastChannel" in window ? new BroadcastChannel(BOARD_BROADCAST_CHANNEL) : null;
-    if (channel) {
-      channel.onmessage = (event: MessageEvent<BoardBroadcastMessage>) => {
-        if (event.data?.room === room && event.data.kind === "video") void load();
-      };
-    }
+    const id = window.setInterval(() => void load(), BOARD_VIDEO_POLL_MS);
     return () => {
       cancelled = true;
-      channel?.close();
+      window.clearInterval(id);
     };
   }, [room]);
 

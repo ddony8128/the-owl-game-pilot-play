@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { MafiaPhaseState } from "@/lib/types";
 import { getMafiaPhaseLabel } from "@/lib/labels/mafia";
-import { broadcastBoardChange } from "@/lib/boardBroadcast";
 
 type Props = {
   phase: MafiaPhaseState | null;
@@ -203,7 +202,6 @@ export function MafiaCountdownSection({ phase, room, onTimerExpired }: Props) {
       if (action === "reset") oneMinuteSyncDoneRef.current = false;
       autoAdvanceArmedRef.current = json.timerStart;
       setState(computeRemaining(json, Date.now()));
-      broadcastBoardChange({ room, kind: "mafia-timer" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "타이머 조작에 실패했습니다.");
     } finally {

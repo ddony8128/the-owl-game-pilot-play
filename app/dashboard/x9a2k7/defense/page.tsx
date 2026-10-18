@@ -12,7 +12,6 @@ import { DefenseRoundSection } from "./DefenseRoundSection";
 import { DefenseScoreSection } from "./DefenseScoreSection";
 import { DefenseRoundSummarySection } from "./DefenseRoundSummarySection";
 import { MonsterConfigSection } from "./MonsterConfigSection";
-import { DefenseBoardControlSection } from "./DefenseBoardControlSection";
 import { LazyDetails } from "../LazyDetails";
 
 export default function DashboardDefensePage() {
@@ -201,7 +200,6 @@ export default function DashboardDefensePage() {
             <MonsterConfigSection room={room} playerCount={players.length} />
           </section>
           <section className="py-6">
-            <DefenseBoardControlSection room={room} currentRound={round} />
           </section>
           <section className="pt-6">
             <h3 className="mb-3 text-base font-black text-white">룰 영상</h3>
