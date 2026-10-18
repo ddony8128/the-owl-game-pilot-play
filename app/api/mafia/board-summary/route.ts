@@ -6,7 +6,10 @@ import {
   groupPriceChanges,
   holdingsValue,
   isMafiaJob,
+  voteResultFromAbilityRows,
+  voteResultFromVotes,
   type MafiaBoardSummary,
+  type VoteResult,
   type PlayerAsset,
   type StockHistoryRow,
 } from "@/lib/mafia/boardSummary";
@@ -80,6 +83,37 @@ export async function GET(request: Request) {
   const historyRows = (historyRes.data || []) as StockHistoryRow[];
   const changes = groupPriceChanges(historyRows);
 
+  // ITER6 B4 — 라운드가 end 면 그 라운드의 경제사범 결과(지목자·마피아 여부만). 튜토리얼 포함, 결과 공개 토글과 무관.
+  let voteResult: VoteResult | null = null;
+  if (currentPhase === "end") {
+    const ab = await supabase
+      .from("mafia_ability_results")
+      .select("category, payload, message")
+      .eq("room_code", room)
+      .eq("round_number", currentRound)
+      .eq("phase", "vote")
+      .in("category", ["econ_mafia", "econ_not_mafia", "vote_no_econ"])
+      .limit(20);
+    voteResult = ab.error ? null : voteResultFromAbilityRows((ab.data || []) as { category: string | null; payload: unknown; message: string | null }[], currentRound);
+    if (!voteResult) {
+      const [votesRes, statesRes] = await Promise.all([
+        supabase.from("mafia_votes").select("target_id, vote_count").eq("room_code", room).eq("round_number", currentRound),
+        supabase.from("mafia_player_state").select("player_id, is_mafia").eq("room_code", room),
+      ]);
+      if (!votesRes.error && !statesRes.error) {
+        const mafiaIds = new Set(
+          ((statesRes.data || []) as { player_id: string; is_mafia: boolean }[]).filter((s) => s.is_mafia).map((s) => s.player_id),
+        );
+        voteResult = voteResultFromVotes(
+          (votesRes.data || []) as { target_id: string | null; vote_count: number | null }[],
+          currentRound,
+          (id) => nameById.get(id) ?? null,
+          (id) => mafiaIds.has(id),
+        );
+      }
+    }
+  }
+
   const base: MafiaBoardSummary = {
     round: currentRound,
     phase: currentPhase,
@@ -92,6 +126,7 @@ export async function GET(request: Request) {
     changes,
     rounds: [],
     final: [],
+    voteResult,
     serverNow: new Date().toISOString(),
   };
 

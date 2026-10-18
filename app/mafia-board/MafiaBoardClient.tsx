@@ -10,6 +10,7 @@ import { useMounted, useRoomParam } from "@/components/board/useBoardRoom";
 import { StockBoard } from "./StockBoard";
 import { PriceReveal } from "./PriceReveal";
 import { MafiaResult } from "./MafiaResult";
+import { VoteResultReveal } from "./VoteResultReveal";
 import { PHASE_LABEL, PHASE_TIMER_LABEL, mafiaRoundLabel } from "./labels";
 
 export function MafiaBoardClient() {
@@ -176,6 +177,10 @@ function MafiaBoard({ room }: { room: string }) {
                     : "현재 주가"}
             </p>
           )}
+          {/* ITER6 B4 — 라운드 종료면 그 라운드의 경제사범 결과(튜토리얼 포함, 결과 공개 토글과 무관) */}
+          {data.phase === "end" && data.voteResult && data.voteResult.round === data.round ? (
+            <VoteResultReveal key={`vote:${data.voteResult.round}`} result={data.voteResult} />
+          ) : null}
           <StockBoard prices={data.prices} changes={data.changes} />
           {pending ? <PriceReveal key={pending.key} group={pending} onDone={() => finishReveal(pending.key)} /> : null}
         </div>
