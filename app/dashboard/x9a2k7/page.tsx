@@ -15,8 +15,6 @@ const GAME_LABEL: Record<RoomGame, string> = {
 };
 
 const CURRENT_ROOM_KEY = "owlgm:room";
-const RECENT_ROOMS_KEY = "owlgm:recent";
-const RECENT_MAX = 20;
 
 type CurrentRoom = {
   code: string;
@@ -25,26 +23,8 @@ type CurrentRoom = {
   created_at?: string;
 };
 
-function readRecent(): CurrentRoom[] {
-  try {
-    const raw = localStorage.getItem(RECENT_ROOMS_KEY);
-    const list = raw ? (JSON.parse(raw) as CurrentRoom[]) : [];
-    return Array.isArray(list) ? list.filter((r) => r && typeof r.code === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeRecent(list: CurrentRoom[]) {
-  try {
-    localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
-  } catch {
-    /* ignore */
-  }
-}
-
-// 방 관리 — 목록(진행 가능/종료, 일괄 종료)은 bluecode674 포크 구성, 선택한 방 패널(코드·참가 QR·방 종료·참가자 명단·확인창)은 우리 것.
-//  서버는 전역 방 목록을 주지 않으므로(코드를 가진 사람만 그 방을 다룬다) 목록은 "이 브라우저에서 만들었거나 입장한 방"이다.
+// 방 관리 — 목록(진행 가능/종료, 체크박스 일괄 종료)은 bluecode674 포크 구성, 선택한 방 패널(코드·참가 QR·방 종료·참가자 명단·확인창)은 우리 것.
+//  목록은 GET /api/gm/rooms(최근 50개). 삭제 API 는 두지 않으므로 종료된 방은 보기만 한다.
 //  지금 다루는 방 1개는 localStorage 에 기억한다(새로고침해도 유지).
 export default function RoomRegistryPage() {
   const [current, setCurrent] = useState<CurrentRoom | null>(null);
@@ -54,9 +34,7 @@ export default function RoomRegistryPage() {
   const [rooms, setRooms] = useState<CurrentRoom[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(() => new Set());
-  const [selectedEndedCodes, setSelectedEndedCodes] = useState<Set<string>>(() => new Set());
-  const [bulkEnding, setBulkEnding] = useState(false);
-  const [bulkDialog, setBulkDialog] = useState<"end" | "forget" | null>(null);
+  const [bulkDialog, setBulkDialog] = useState<"end" | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -69,26 +47,18 @@ export default function RoomRegistryPage() {
     setReady(true);
   }, []);
 
-  // 최근 방 목록 — 기억해 둔 방들의 상태(active/ended)를 서버에서 다시 읽는다.
+  // 방 목록(최근 50개) — 서버에서 읽는다.
   const loadRooms = useCallback(async () => {
     setRoomsLoading(true);
     try {
-      const remembered = readRecent();
-      const refreshed = await Promise.all(
-        remembered.map(async (r) => {
-          try {
-            const res = await fetch(`/api/gm/rooms?code=${encodeURIComponent(r.code)}`, { cache: "no-store" });
-            if (res.status === 404) return null; // 삭제된 방은 목록에서 뺀다
-            const json = (await res.json().catch(() => null)) as { room?: CurrentRoom | null } | null;
-            return json?.room ? { ...r, ...json.room } : r;
-          } catch {
-            return r;
-          }
-        }),
-      );
-      const next = refreshed.filter((r): r is CurrentRoom => r != null);
-      writeRecent(next);
-      setRooms(next);
+      const res = await fetch("/api/gm/rooms", { cache: "no-store" });
+      const json = (await res.json().catch(() => null)) as { rooms?: CurrentRoom[]; error?: string } | null;
+      if (!res.ok || !json || json.error) {
+        throw new Error(json?.error ?? `방 목록 조회 실패 (서버 응답 ${res.status || "없음"})`);
+      }
+      setRooms(json.rooms ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "방 목록 조회 실패");
     } finally {
       setRoomsLoading(false);
     }
@@ -98,24 +68,16 @@ export default function RoomRegistryPage() {
     void loadRooms();
   }, [loadRooms]);
 
-  const remember = useCallback((room: CurrentRoom) => {
-    const list = readRecent().filter((r) => r.code !== room.code);
-    const next = [{ ...room }, ...list];
-    writeRecent(next);
-    setRooms(next);
-  }, []);
+  // 일괄 종료는 GM 조작 공통(잠금·배너·멱등 키)을 거친다. 끝나면 목록을 다시 읽는다.
+  const bulk = useGmAction(loadRooms);
 
-  const openRoom = useCallback(
-    (room: CurrentRoom) => {
-      setCurrent(room);
-      setError(null);
-      if (typeof window !== "undefined") {
-        localStorage.setItem(CURRENT_ROOM_KEY, JSON.stringify(room));
-      }
-      remember(room);
-    },
-    [remember],
-  );
+  const openRoom = useCallback((room: CurrentRoom) => {
+    setCurrent(room);
+    setError(null);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(CURRENT_ROOM_KEY, JSON.stringify(room));
+    }
+  }, []);
 
   const leave = useCallback(() => {
     setCurrent(null);
@@ -145,6 +107,7 @@ export default function RoomRegistryPage() {
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       openRoom({ code: json.room.code, game, status: "active", created_at: json.room.created_at });
+      void loadRooms();
     } catch (e) {
       setError(e instanceof Error ? e.message : "방 생성 실패");
     }
@@ -166,50 +129,32 @@ export default function RoomRegistryPage() {
     }
   };
 
+  // 선택한 방들을 하나씩 종료한다(useGmAction 은 요청을 한 번에 하나만 보낸다). 실패한 코드는 선택에 남긴다.
+  const [bulkEnding, setBulkEnding] = useState(false);
   const endSelectedRooms = async () => {
     const codes = [...selectedCodes];
     if (codes.length === 0) return;
     setBulkEnding(true);
-    setError(null);
+    const failed: string[] = [];
     try {
-      await Promise.all(
-        codes.map(async (code) => {
-          const res = await fetch("/api/gm/rooms", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code, status: "ended", ended_normally: true }),
-          });
-          if (!res.ok) {
-            const json = await res.json().catch(() => null);
-            throw new Error(json?.error ?? `${code} 종료 실패`);
-          }
-        }),
-      );
-      forgetRoomIfSelected(codes);
-      setSelectedCodes(new Set());
+      for (const code of codes) {
+        const r = await bulk.run("/api/gm/rooms", {
+          method: "PATCH",
+          body: { code, status: "ended", ended_normally: true },
+        });
+        if (!r?.ok) failed.push(code);
+      }
+      forgetRoomIfSelected(codes.filter((c) => !failed.includes(c)));
+      setSelectedCodes(new Set(failed));
       await loadRooms();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "선택한 방을 종료하지 못했습니다.");
     } finally {
       setBulkEnding(false);
     }
   };
 
-  // 종료된 방을 이 브라우저의 목록에서만 뺀다(서버 기록은 그대로 — 삭제 API 는 두지 않는다).
-  const forgetSelectedRooms = () => {
-    const codes = new Set(selectedEndedCodes);
-    if (codes.size === 0) return;
-    const next = readRecent().filter((r) => !codes.has(r.code));
-    writeRecent(next);
-    setRooms(next);
-    forgetRoomIfSelected([...codes]);
-    setSelectedEndedCodes(new Set());
-  };
-
   const activeRooms = rooms.filter((room) => room.status !== "ended");
   const endedRooms = rooms.filter((room) => room.status === "ended");
   const allActiveSelected = activeRooms.length > 0 && activeRooms.every((room) => selectedCodes.has(room.code));
-  const allEndedSelected = endedRooms.length > 0 && endedRooms.every((room) => selectedEndedCodes.has(room.code));
 
   const toggleAll = (
     list: CurrentRoom[],
@@ -244,7 +189,7 @@ export default function RoomRegistryPage() {
       <div>
         <h1 className="text-2xl font-bold">방 관리</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          새 방을 만들거나, 이 브라우저에서 다뤘던 방을 아래 목록에서 고르세요. 다른 기기에서 만든 방은 코드로 입장합니다.
+          새 방을 만들거나 아래 목록에서 기존 방을 선택하세요. 방 코드를 외울 필요가 없습니다.
         </p>
       </div>
 
@@ -253,6 +198,8 @@ export default function RoomRegistryPage() {
           {error}
         </div>
       )}
+      <GmErrorBanner message={bulk.error} onClose={bulk.clearError} />
+      <GmNoticeBanner message={bulk.notice} />
 
       {/* 새 방 만들기 */}
       <div className="space-y-2">
@@ -332,7 +279,7 @@ export default function RoomRegistryPage() {
           <p className="text-xs text-zinc-500">방 목록을 불러오는 중…</p>
         ) : activeRooms.length === 0 ? (
           <p className="rounded-xl border border-dashed border-zinc-700 p-5 text-center text-sm text-zinc-500">
-            진행 가능한 방이 없습니다. 위에서 새 방을 만들거나 코드로 입장하세요.
+            진행 가능한 방이 없습니다. 위에서 새 방을 만들어 주세요.
           </p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/70">
@@ -373,49 +320,21 @@ export default function RoomRegistryPage() {
         )}
       </div>
 
-      {/* 종료된 방 */}
+      {/* 종료된 방 — 기록 확인용(읽기 전용). 삭제 API 는 두지 않는다. */}
       {endedRooms.length > 0 && (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-zinc-900 px-2.5 py-2 text-xs text-zinc-400">
-                <input
-                  type="checkbox"
-                  checked={allEndedSelected}
-                  onChange={() => toggleAll(endedRooms, allEndedSelected, setSelectedEndedCodes)}
-                  className="h-4 w-4 accent-red-500"
-                />
-                전체 선택
-              </label>
-              <div>
-                <h2 className="font-semibold text-zinc-300">종료된 방</h2>
-                <p className="text-xs text-zinc-500">결과를 다시 보거나, 다 본 방은 목록에서 지울 수 있습니다(서버 기록은 남습니다).</p>
-              </div>
-            </div>
-            {selectedEndedCodes.size > 0 && (
-              <button
-                type="button"
-                onClick={() => setBulkDialog("forget")}
-                className="min-h-10 rounded-lg bg-zinc-800 px-3 text-sm font-bold text-zinc-200 hover:bg-zinc-700"
-              >
-                선택 {selectedEndedCodes.size}개 목록에서 지우기
-              </button>
-            )}
+          <div>
+            <h2 className="font-semibold text-zinc-300">종료된 방</h2>
+            <p className="text-xs text-zinc-500">결과와 기록을 다시 볼 수 있습니다(읽기 전용).</p>
           </div>
           <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50">
             {endedRooms.map((room) => (
               <div key={room.code} className="flex items-center gap-3 border-b border-zinc-800 px-3 py-3 last:border-b-0">
-                <input
-                  type="checkbox"
-                  aria-label={`${room.code} 목록 제거 선택`}
-                  checked={selectedEndedCodes.has(room.code)}
-                  onChange={() => toggleOne(room.code, setSelectedEndedCodes)}
-                  className="h-4 w-4 accent-red-500"
-                />
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
                   <span className="font-mono text-base font-bold tracking-widest text-zinc-400">{room.code}</span>
                   <span className="truncate text-sm font-semibold text-zinc-400">{GAME_LABEL[room.game]}</span>
-                  <RoomEndedBadge />
+                  {/* 목록 행의 배지는 testid 없이(선택한 방 패널의 room-ended-badge 와 구분) */}
+                  <span className="rounded bg-red-900/70 px-2 py-0.5 text-xs font-semibold text-red-200">종료됨</span>
                   {room.created_at && (
                     <span className="ml-auto hidden text-xs text-zinc-600 sm:inline">{new Date(room.created_at).toLocaleString("ko-KR")}</span>
                   )}
@@ -447,19 +366,6 @@ export default function RoomRegistryPage() {
       >
         <p className="text-zinc-300">종료된 방은 읽기 전용이 되어 아래 「종료된 방」 목록으로 이동합니다. 기록은 보존됩니다.</p>
         <p className="font-mono text-xs text-zinc-400">{[...selectedCodes].join(", ")}</p>
-      </ConfirmDialog>
-      <ConfirmDialog
-        open={bulkDialog === "forget"}
-        title={`종료된 방 ${selectedEndedCodes.size}개 목록에서 지우기`}
-        confirmLabel="목록에서 지우기"
-        onClose={() => setBulkDialog(null)}
-        onConfirm={() => {
-          setBulkDialog(null);
-          forgetSelectedRooms();
-        }}
-      >
-        <p className="text-zinc-300">이 브라우저의 목록에서만 사라집니다. 서버 기록은 그대로이며 코드로 다시 입장할 수 있습니다.</p>
-        <p className="font-mono text-xs text-zinc-400">{[...selectedEndedCodes].join(", ")}</p>
       </ConfirmDialog>
     </div>
   );
