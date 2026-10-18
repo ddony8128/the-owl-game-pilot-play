@@ -4,6 +4,8 @@ import { useState } from "react";
 import Image from "next/image";
 import type { MafiaStockState, MafiaStocksHolding, Player } from "@/lib/types";
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { describeSubmitFailure } from "@/components/PhoneNotices";
+import { newRequestId } from "@/lib/requestId";
 
 type Props = {
   // 인증은 상위(MafiaInner)에서 한 번만 확인하고 내려준다 — 탭마다 재확인하면 직후 제출이 버려진다.
@@ -13,10 +15,8 @@ type Props = {
   playerCash: number | null;
   holdings: MafiaStocksHolding | null;
   myTradesThisRound: Record<string, { bought: boolean; sold: boolean }> | null;
-  onAssetsChange: (assets: {
-    cash: number;
-    stocks: MafiaStocksHolding;
-  }) => void;
+  roomEnded?: boolean;
+  onSubmitted?: () => Promise<void> | void;
 };
 
 type TradeStep = "pickStock" | "enterAmount";
@@ -43,7 +43,8 @@ export function MafiaTradeTab({
   playerCash,
   holdings,
   myTradesThisRound,
-  onAssetsChange,
+  roomEnded = false,
+  onSubmitted,
 }: Props) {
   const [step, setStep] = useState<TradeStep>("pickStock");
   const [type, setType] = useState<"buy" | "sell">("buy");
@@ -67,54 +68,56 @@ export function MafiaTradeTab({
     if (!player?.nickname || !roomCode) return;
     if (!stockKey) return;
     const amount = Number(value);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError("종목과 양수를 모두 입력해 주세요.");
+    if (!Number.isInteger(amount) || amount <= 0) {
+      setError("수량은 1 이상의 정수로 입력해 주세요.");
       return;
     }
+    if (submitting) return;
     setSubmitting(true);
     setError(null);
 
+    // 제출 1건 = requestId 1개(응답 유실 재전송 멱등)
+    const request_id = newRequestId();
+    let status: number | null = null;
     try {
       const res = await fetch("/api/mafia/action", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        signal: AbortSignal.timeout(12000),
         body: JSON.stringify({
           room: roomCode,
           nickname: player.nickname,
           type,
           payload: { stock_key: stockKey, amount },
+          request_id,
         }),
       });
+      status = res.status;
       const json = (await res.json().catch(() => null)) as {
         ok?: true;
-        playerAssets?: {
-          cash: number;
-          stocks: MafiaStocksHolding;
-        };
         error?: string;
+        reason?: string;
       } | null;
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error ?? "거래를 기록하지 못했습니다.");
-      }
-      if (json.playerAssets) {
-        onAssetsChange(json.playerAssets);
+        throw new Error(describeSubmitFailure(status, json, "거래를 기록하지 못했습니다."));
       }
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "거래를 기록하지 못했습니다.";
-      setError(message);
+      setError(status === null ? describeSubmitFailure(null, null, message) : message);
       setSubmitting(false);
       return;
     }
 
+    await onSubmitted?.();
     setSubmitting(false);
     const label =
       stocks.find((s) => s.stock_key === stockKey)?.stock_key ?? stockKey;
     const verb = type === "buy" ? "매수" : "매도";
     setInfo(
-      `${label}을(를) ${amount}개 ${verb}했습니다. 보유 자산에 바로 반영되었습니다.`
+      `${label}을(를) ${amount}개 ${verb}했습니다. 정보 탭에서 확인해보세요.`
     );
     setValue("");
     setStep("pickStock");
@@ -135,6 +138,14 @@ export function MafiaTradeTab({
   const parsedAmount = Number(value);
   const validAmount = Number.isFinite(parsedAmount) && parsedAmount > 0;
   const totalPrice = validAmount ? parsedAmount * priceFor(stockKey) : 0;
+
+  if (roomEnded) {
+    return (
+      <div className="space-y-3 text-sm text-zinc-100">
+        <p className="rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-400">종료된 방입니다. 거래할 수 없습니다.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 text-sm text-zinc-100">
@@ -188,6 +199,8 @@ export function MafiaTradeTab({
                   <div className="flex gap-2">
                     <button
                       type="button"
+                      aria-label={`${s.stock_key} 매수`}
+                      data-testid={`buy-${s.stock_key}`}
                       className="h-12 rounded-full bg-emerald-500 px-4 text-base font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-40"
                       disabled={disabledBuy}
                       onClick={() => {
@@ -202,6 +215,8 @@ export function MafiaTradeTab({
                     </button>
                     <button
                       type="button"
+                      aria-label={`${s.stock_key} 매도`}
+                      data-testid={`sell-${s.stock_key}`}
                       className="h-12 rounded-full bg-red-500 px-4 text-base font-semibold text-zinc-950 hover:bg-red-400 disabled:opacity-40"
                       disabled={disabledSell}
                       onClick={() => {
@@ -232,7 +247,7 @@ export function MafiaTradeTab({
             <p className="text-sm text-zinc-500">
               현재 보유 현금:{" "}
               <span className="font-semibold text-amber-300">
-                {playerCash ?? 0} 코인
+                {playerCash ?? 0}원
               </span>
             </p>
           )}
@@ -245,8 +260,11 @@ export function MafiaTradeTab({
             </p>
           )}
           <input
-            className="h-10 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-400"
+            className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-400"
             placeholder="수량"
+            aria-label="거래 수량"
+            inputMode="numeric"
+            data-testid="trade-amount"
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
@@ -260,6 +278,7 @@ export function MafiaTradeTab({
             <button
               className="h-12 flex-1 rounded-full bg-zinc-800 text-base font-semibold text-zinc-100 hover:bg-zinc-700"
               type="button"
+              aria-label="거래 취소"
               onClick={() => {
                 setStep("pickStock");
                 setStockKey(null);
@@ -271,6 +290,8 @@ export function MafiaTradeTab({
             <button
               className="h-12 flex-1 rounded-full bg-amber-400 text-base font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
               type="button"
+              aria-label="거래 제출"
+              data-testid="trade-submit"
               onClick={handleSubmit}
               disabled={submitting}
             >
