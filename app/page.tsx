@@ -13,8 +13,14 @@ const GAME_LABEL: Record<RoomGame, string> = {
   subway: "이상교통",
 };
 
-// 입장 화면 — 방 코드 + 닉네임만 입력한다(셀프 입장: 로비 상태의 방이면 처음 보는 닉네임도 바로 등록된다).
-// 게임 종류는 방 코드가 정하므로 참가자가 고르지 않는다.
+const GAME_DESCRIPTION: Record<"mafia" | "defense", string> = {
+  mafia: "경매 · 주식 거래 · 직업 능력 · 최종 투표",
+  defense: "카드 선택 · 전투 · 훈련 · 휴식",
+};
+
+// 입장 화면 — bluecode674 포크 구성: 게임 카드 선택 → 방 코드 + 닉네임.
+//  방 코드(5자리)가 채워지면(QR /?code= 포함) 그 방의 게임을 조회해 카드를 자동으로 고른다.
+//  고른 게임과 방의 게임이 다르면 로그인(셀프 입장 등록) 전에 막는다 — 엉뚱한 방에 닉네임이 등록되지 않게.
 export default function EntryPage() {
   const router = useRouter();
   const {
@@ -28,6 +34,9 @@ export default function EntryPage() {
 
   const [inputRoom, setInputRoom] = useState("");
   const [inputNickname, setInputNickname] = useState("");
+  const [selectedGame, setSelectedGame] = useState<"mafia" | "defense" | null>(null);
+  const [roomGameHint, setRoomGameHint] = useState<{ code: string; game: RoomGame } | null>(null);
+  const [mismatch, setMismatch] = useState<string | null>(null);
   // 루트(/)는 자동 이동하지 않는다. 사용자가 '입장' 또는 '이 방으로 계속'을
   // 눌렀을 때(attempted)만, 방+닉네임 검증이 끝나면 해당 게임으로 이동한다.
   const [attempted, setAttempted] = useState(false);
@@ -49,6 +58,31 @@ export default function EntryPage() {
     };
   }, []);
 
+  // 방 코드가 5자리가 되면 그 방의 게임을 조회해 카드를 자동 선택한다(QR로 들어온 경우 포함).
+  useEffect(() => {
+    const code = inputRoom.trim().toUpperCase();
+    if (code.length !== 5) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/gm/rooms?code=${encodeURIComponent(code)}`, { cache: "no-store" });
+        const json = (await res.json().catch(() => null)) as { room?: { code: string; game: RoomGame } | null } | null;
+        const game = json?.room?.game;
+        if (cancelled || !game) return;
+        setRoomGameHint({ code, game });
+        if (game === "mafia" || game === "defense") {
+          setSelectedGame(game);
+          setMismatch(null);
+        }
+      } catch {
+        /* 조회 실패는 무시 — 수동 선택으로 진행 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inputRoom]);
+
   // ITER6 C1 — 방금 입장한 방의 플레이어로 확인된 뒤에만 이동한다(이전 방 세션의 player·roomGame 으로 다른 게임 화면에 가지 않게).
   const playerInRoom = !!player && !!roomCode && player.room_code === roomCode;
   useEffect(() => {
@@ -60,7 +94,13 @@ export default function EntryPage() {
   const handleSubmit = () => {
     const room = inputRoom.trim();
     const nick = inputNickname.trim();
-    if (!room || !nick) return;
+    if (!selectedGame || !room || !nick) return;
+    const known = roomGameHint && roomGameHint.code === room.toUpperCase() ? roomGameHint.game : null;
+    if (known && known !== selectedGame) {
+      setMismatch(`이 방은 ${GAME_LABEL[known]} 방입니다. 게임 선택을 확인해 주세요.`);
+      return;
+    }
+    setMismatch(null);
     setAttempted(true);
     enterRoom(room, nick);
   };
@@ -100,11 +140,42 @@ export default function EntryPage() {
         )}
 
         <h1 className="mb-1 text-xl font-semibold">
-          {hasPriorSession ? "다른 방 입장" : "입장하기"}
+          {hasPriorSession ? "다른 게임 입장" : "게임 선택"}
         </h1>
         <p className="mb-5 text-xs text-zinc-400">
-          <b>방 코드</b>와 <b>닉네임</b>을 입력하세요.
+          참여할 게임을 먼저 선택하세요.
         </p>
+
+        <div className="mb-5 grid gap-2">
+          {(["mafia", "defense"] as const).map((game) => {
+            const selected = selectedGame === game;
+            return (
+              <button
+                key={game}
+                type="button"
+                aria-pressed={selected}
+                data-testid={`entry-game-${game}`}
+                onClick={() => {
+                  setSelectedGame(game);
+                  setMismatch(null);
+                  setAttempted(false);
+                }}
+                className={`rounded-xl border p-4 text-left transition ${
+                  selected
+                    ? "border-amber-300 bg-amber-400/15 ring-1 ring-amber-300"
+                    : "border-zinc-700 bg-zinc-900 hover:border-zinc-500"
+                }`}
+              >
+                <span className="block font-semibold text-zinc-50">{GAME_LABEL[game]}</span>
+                <span className="mt-1 block text-xs text-zinc-400">{GAME_DESCRIPTION[game]}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {selectedGame && (
+          <p className="mb-3 text-sm font-semibold text-amber-300">{GAME_LABEL[selectedGame]} 입장</p>
+        )}
 
         <input
           className="mb-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm outline-none focus:border-zinc-400"
@@ -121,16 +192,16 @@ export default function EntryPage() {
           onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
         />
 
-        {attempted && authError && (
-          <p className="mb-2 text-xs text-red-400">{authError}</p>
+        {(mismatch || (attempted && authError)) && (
+          <p className="mb-2 text-xs text-red-400">{mismatch ?? authError}</p>
         )}
 
         <button
           className="mt-2 h-11 w-full rounded-lg bg-amber-400 text-sm font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-40"
           onClick={handleSubmit}
-          disabled={!inputRoom.trim() || !inputNickname.trim()}
+          disabled={!selectedGame || !inputRoom.trim() || !inputNickname.trim()}
         >
-          입장하기
+          {selectedGame ? `${GAME_LABEL[selectedGame]} 입장하기` : "게임을 선택하세요"}
         </button>
       </div>
     </div>
