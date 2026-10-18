@@ -67,9 +67,10 @@ test("마피아 방 + 디펜스 방 동시 진행 — 상태 격리", async ({ r
   );
   expect(defenseState.ok()).toBeTruthy();
 
-  // 교차 로그인 차단: 마피아 방 코드로 디펜스 닉네임 입장 불가
+  // 교차 로그인 차단: 마피아 방은 이미 경매가 시작되어 미등록 닉네임은 셀프 입장 불가(409 game_started)
   const cross = await request.post("/api/auth/login", {
     data: { room: mafiaRoom, nickname: "d가람" },
   });
-  expect(cross.status()).toBe(403);
+  expect(cross.status()).toBe(409);
+  expect((await cross.json()).reason).toBe("game_started");
 });
