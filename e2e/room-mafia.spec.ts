@@ -32,12 +32,12 @@ test.describe("마피아 방", () => {
     expect((await res.json()).error).toContain("방 코드를 확인");
   });
 
-  test("미등록 닉네임 로그인 → GM 등록 안내", async ({ request }) => {
+  test("처음 보는 닉네임 로그인 → 준비 단계면 자유 입장(참가자로 등록)", async ({ request }) => {
     const res = await request.post("/api/auth/login", {
-      data: { room, nickname: "없는사람" },
+      data: { room, nickname: "새로온사람" },
     });
-    expect(res.status()).toBe(403);
-    expect((await res.json()).error).toContain("등록하지 않은 닉네임");
+    expect(res.status()).toBe(200);
+    expect((await res.json()).player.nickname).toBe("새로온사람");
   });
 
   test("정상 로그인", async ({ request }) => {

@@ -31,7 +31,6 @@ export function JoinQr({ code, size = 360 }: { code: string; size?: number }) {
           <div style={{ width: size, height: size }} className="animate-pulse bg-zinc-200" />
         )}
       </div>
-      <p className="text-xl text-zinc-400">QR을 찍으면 방 코드가 채워진 입장 화면이 열립니다</p>
       {qr && <p className="sr-only">{qr.href}</p>}
     </div>
   );

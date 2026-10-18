@@ -1,6 +1,5 @@
 "use client";
 
-import { RulesheetLink } from "@/components/PhoneNotices";
 
 export function MafiaRulesTab() {
   return (
@@ -119,7 +118,6 @@ export function MafiaRulesTab() {
           남의 직업·남의 표는 보이지 않습니다. 최종 결과는 GM이 공개한 뒤에 보입니다.
         </p>
       </div>
-      <RulesheetLink game="mafia" />
     </div>
   );
 }

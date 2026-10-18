@@ -111,7 +111,7 @@ export default function DashboardDefensePage() {
           rel="noopener noreferrer"
           className="rounded bg-zinc-800 px-3 py-1.5 text-amber-300 hover:bg-zinc-700"
         >
-          결과 페이지 ↗
+          보드 ↗
         </a>
       </div>
       <div className="sticky top-0 z-40 space-y-2 bg-zinc-950/95 py-1 empty:hidden">

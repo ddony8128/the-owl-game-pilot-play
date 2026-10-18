@@ -40,7 +40,7 @@ function RoomPrompt() {
   };
   return (
     <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-zinc-950 px-4 text-zinc-50">
-      <p className="text-xl">결과 페이지 — 방 코드가 필요합니다.</p>
+      <p className="text-xl">보드 — 방 코드가 필요합니다.</p>
       <div className="flex items-center gap-2">
         <input
           value={roomInput}
@@ -202,7 +202,6 @@ function DefenseBoard({ room }: { room: string }) {
           code={room}
           playerCount={phase.data?.playerCount ?? null}
           heading="곧 디펜스 딜레마가 시작됩니다"
-          hint="QR을 찍어 입장하세요. 닉네임은 진행자가 등록한 이름과 같아야 합니다. 접속이 끊겼으면 같은 닉네임으로 다시 들어오면 됩니다."
         />
       ) : stage.kind === "score" ? (
         scoreData ? (

@@ -7,6 +7,7 @@ import type {
 import type { createServerSupabaseClient } from "@/lib/supabase/server";
 import { DEFENSE_MONSTERS } from "@/lib/defense/monsters";
 import { computeQueueSize } from "@/lib/defense/queue";
+import { recommendedMonsterCounts } from "@/lib/defense/composition";
 import { randomUUID } from "crypto";
 
 export async function handleDefenseInitRound(
@@ -15,7 +16,31 @@ export async function handleDefenseInitRound(
   nextRound: number,
   room: string
 ) {
-  // 몬스터 카운트 초기화 — 그 방의 GM 기준값(base_count)으로 풀(count)을 리셋한다.
+  // 튜토리얼 시작(0→1): 입장한 인원 기준으로 몬스터 구성(base_count)을 자동으로 맞춘다(또니 10-18 — 자유 입장 대응).
+  //  본게임 시작(3→4)은 이때 정한 base_count 로 풀을 리셋한다(튜토리얼 뒤 인원은 바뀌지 않는다).
+  //  단, GM이 시작 전에 [몬스터 수 조절]로 직접 저장한 구성(기본 시드와 다름)은 그대로 둔다.
+  const { data: seedRows } = await supabase
+    .from("defense_monster_count")
+    .select("id, base_count")
+    .eq("room_code", room);
+  const untouched = DEFENSE_MONSTERS.every((m) => {
+    const row = ((seedRows ?? []) as { id: number; base_count: number | null }[]).find((r) => r.id === m.id);
+    return !row || row.base_count == null || row.base_count === m.baseCount;
+  });
+  if (current.round === 0 && nextRound === 1 && untouched) {
+    const { count: headcount } = await supabase
+      .from("players")
+      .select("id", { count: "exact", head: true })
+      .eq("room_code", room);
+    const rec = recommendedMonsterCounts(headcount ?? 0);
+    const { error: recError } = await supabase.from("defense_monster_count").upsert(
+      DEFENSE_MONSTERS.map((m) => ({ room_code: room, id: m.id, count: rec[m.id] ?? 0, base_count: rec[m.id] ?? 0 })),
+      { onConflict: "room_code,id" },
+    );
+    if (recError) throw new Error(recError.message);
+  }
+
+  // 몬스터 카운트 초기화 — 그 방의 기준값(base_count)으로 풀(count)을 리셋한다.
   // (base_count 가 없으면 코드 기본값 baseCount 로 폴백)
   const { data: cfgRows } = await supabase
     .from("defense_monster_count")

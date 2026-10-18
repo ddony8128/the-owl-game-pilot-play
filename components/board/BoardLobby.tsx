@@ -37,11 +37,9 @@ export function BoardLobby({
           </p>
         </div>
         <p className="text-[clamp(1rem,2.6vh,1.8rem)] text-zinc-200" data-testid="board-player-count">
-          등록 인원 <b className="text-zinc-50">{playerCount ?? "-"}</b>명
+          입장 인원 <b className="text-zinc-50">{playerCount ?? "-"}</b>명
         </p>
-        <p className="max-w-[34vw] text-[clamp(0.8rem,1.9vh,1.2rem)] leading-relaxed text-zinc-400">
-          {hint ?? "QR을 찍거나 접속 주소에 방 코드와 닉네임을 입력하세요. 접속이 끊겼으면 같은 닉네임으로 다시 들어오면 됩니다."}
-        </p>
+        {hint && <p className="max-w-[34vw] text-[clamp(0.8rem,1.9vh,1.2rem)] leading-relaxed text-zinc-400">{hint}</p>}
       </div>
     </div>
   );

@@ -45,10 +45,6 @@ function JoinScreen() {
       <p className="font-mono text-2xl text-zinc-200" data-testid="join-screen-origin">
         {origin}
       </p>
-      <p className="max-w-xl text-xl leading-relaxed text-zinc-400">
-        QR을 찍거나 주소로 들어가 방 코드와 닉네임을 입력하세요. 접속이 끊겼으면 같은 닉네임으로 다시 들어오면
-        됩니다.
-      </p>
     </main>
   );
 }

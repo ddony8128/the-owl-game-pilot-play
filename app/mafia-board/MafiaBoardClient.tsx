@@ -24,7 +24,7 @@ function RoomPrompt() {
   const [roomInput, setRoomInput] = useState("");
   return (
     <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-zinc-950 px-8 text-zinc-50">
-      <p className="text-2xl">결과 페이지 — 방 코드가 필요합니다.</p>
+      <p className="text-2xl">보드 — 방 코드가 필요합니다.</p>
       <form
         className="flex items-center gap-2"
         onSubmit={(e) => {
@@ -155,7 +155,6 @@ function MafiaBoard({ room }: { room: string }) {
           code={room}
           playerCount={data.playerCount}
           heading="곧 자본주의 마피아가 시작됩니다"
-          hint="QR을 찍어 입장하세요. 닉네임은 진행자가 등록한 이름과 같아야 합니다. 권장 인원 6~12명."
         />
       ) : view === "result" ? (
         <MafiaResult data={data} />

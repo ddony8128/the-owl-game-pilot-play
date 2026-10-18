@@ -32,30 +32,25 @@ test("/rules 는 공개 토글 없이 두 룰지 링크를 항상 보여 준다(
   await expect(page.getByText("아직 공개된 규칙이 없습니다.")).toHaveCount(0);
 });
 
-test("디펜스 규칙 탭: 변경 가능 문구 + 룰지 링크", async ({ page, request }) => {
+test("디펜스 규칙 탭: 룰지 PDF 버튼 없음(규칙 탭만으로 충분)", async ({ page, request }) => {
   const room = await createRoom(request, "defense");
   rooms.push(room);
   await addPlayers(request, room, ["r1"]);
   await primePhone(page, room, "r1", "defense");
   await page.goto("/defense");
   await page.getByTestId("tab-rules").click();
-  await expect(page.getByTestId("rules-change-note")).toContainText("다시 고르기");
-  const link = page.getByTestId("rulesheet-link");
-  await expect(link).toHaveAttribute("href", DEFENSE_PDF);
-  await expect(link).toHaveAttribute("target", "_blank");
-  await expect(link).toHaveAttribute("rel", /noopener/);
-  // (헤드리스 크로미엄은 PDF 를 새 탭에 렌더하지 않아 팝업 URL 을 볼 수 없다 — PDF 서빙은 위 테스트에서 200 으로 확인)
+  await expect(page.getByText("순위 결정", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("rulesheet-link")).toHaveCount(0);
+  await expect(page.getByText("정식 규칙은 룰지")).toHaveCount(0);
 });
 
-test("마피아 규칙 탭: 룰지 링크 + 로그 탭 안내", async ({ page, request }) => {
+test("마피아 규칙 탭: 룰지 PDF 버튼 없음 + 로그 탭 안내", async ({ page, request }) => {
   const room = await createRoom(request, "mafia");
   rooms.push(room);
   await addPlayers(request, room, ["r1"]);
   await primePhone(page, room, "r1", "mafia");
   await page.goto("/mafia");
   await page.getByTestId("tab-rules").click();
-  const link = page.getByTestId("rulesheet-link");
-  await expect(link).toHaveAttribute("href", MAFIA_PDF);
-  await expect(link).toHaveAttribute("target", "_blank");
   await expect(page.getByText("내 기록")).toBeVisible();
+  await expect(page.getByTestId("rulesheet-link")).toHaveCount(0);
 });

@@ -1,4 +1,3 @@
-import { RulesheetLink } from "@/components/PhoneNotices";
 
 export function DefenseRulesTab() {
   return (
@@ -30,9 +29,6 @@ export function DefenseRulesTab() {
             (인원이 많을수록 몬스터도 많아집니다).
           </li>
         </ul>
-        <p className="text-sm text-zinc-400">
-          인원이 많을수록 한 마리를 나눠 갖는 사람이 늘어 <span className="font-semibold">1인당 점수는 작아질 수</span> 있으니, 어디에 카드를 낼지가 더 중요해집니다.
-        </p>
       </div>
       <br />
 
@@ -124,10 +120,6 @@ export function DefenseRulesTab() {
           <p className="text-zinc-100">
             각 플레이어는 아래 행동 중 하나를 선택합니다.
           </p>
-          <p className="text-sm text-amber-200" data-testid="rules-change-note">
-            확정한 뒤에도 GM이 라운드를 넘기기 전까지는 행동 탭의 [다시 고르기]로 바꿀 수 있습니다(마지막
-            선택만 반영). 타이머가 0이 되어도 라운드를 넘기기 전까지는 제출·변경이 됩니다.
-          </p>
           <ul className="list-disc pl-4">
             <li>
               <span className="font-semibold">전투</span>
@@ -215,7 +207,6 @@ export function DefenseRulesTab() {
           </ul>
         </div>
       </div>
-      <RulesheetLink game="defense" />
     </div>
   );
 }
