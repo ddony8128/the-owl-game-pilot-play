@@ -74,6 +74,8 @@ export function MafiaRoundSummarySection({ currentRound, room }: Props) {
     }
   }, [currentRound, selectedRound]);
 
+  // 진행 중 제출이 보이도록 대시보드 상태 폴링(4초)과 같은 주기로 조용히 다시 불러온다.
+  // silent 갱신은 로딩 표시·에러 초기화를 하지 않고, 라운드를 바꾼 뒤 늦게 온 응답은 버린다.
   const selectedRoundRef = useRef<number | null>(null);
   selectedRoundRef.current = selectedRound;
 
@@ -121,6 +123,13 @@ export function MafiaRoundSummarySection({ currentRound, room }: Props) {
 
   useEffect(() => {
     if (selectedRound == null) return;
+    const id = setInterval(() => void load(selectedRound, true), 4000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRound, room]);
+
+  useEffect(() => {
+    if (selectedRound == null) return;
     void load(selectedRound);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRound, room]);
@@ -152,14 +161,6 @@ export function MafiaRoundSummarySection({ currentRound, room }: Props) {
               {round === 0 ? "튜토리얼" : `${round}라운드`}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => selectedRound != null && void load(selectedRound)}
-            disabled={loading || selectedRound == null}
-            className="rounded-full bg-zinc-800 px-3 py-1 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-          >
-            ↻ 새로고침
-          </button>
         </div>
       </div>
 

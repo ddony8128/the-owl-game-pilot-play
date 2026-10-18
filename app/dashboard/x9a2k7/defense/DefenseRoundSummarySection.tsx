@@ -112,8 +112,18 @@ export function DefenseRoundSummarySection({
     }
   };
 
+  // 진행 중 제출이 보이도록 대시보드 상태 폴링(4초)과 같은 주기로 조용히 다시 불러온다.
+  // silent 갱신은 로딩 표시·에러 초기화를 하지 않고, 라운드를 바꾼 뒤 늦게 온 응답은 버린다.
+  useEffect(() => {
+    if (selectedRound == null) return;
+    const id = setInterval(() => void load(selectedRound, true), 4000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRound, room]);
+
   useEffect(() => {
     void load(selectedRound);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRound]);
 
   // 대시보드의 현재 라운드가 바뀌면 자동으로 그 라운드로 따라간다.
@@ -215,7 +225,7 @@ export function DefenseRoundSummarySection({
                             ? "전투"
                             : p.action.type;
                     const actionDetail = !p.action
-                      ? "행동 기록 없음"
+                      ? "이 라운드에는 행동 기록이 없습니다."
                       : p.action.type === "rest"
                         ? p.action.restValues?.length
                           ? `카드 ${p.action.restValues.join(", ")} 활성화`

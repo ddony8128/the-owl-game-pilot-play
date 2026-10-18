@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { recommendedMonsterCounts } from "@/lib/defense/composition";
 import { computeQueueSize } from "@/lib/defense/queue";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import type { GmActionApi } from "@/lib/hooks/useGmAction";
 
 type MonsterConfig = {
   id: number;
@@ -14,17 +16,22 @@ type MonsterConfig = {
 };
 
 // 방별 몬스터 수(비율) 조절. base_count 를 수정하면 본게임 시작 시 그 값으로 풀이 리셋된다.
+// Iteration 5: [저장]은 확인창을 거치고, 실패는 페이지 배너(action)로 보여 준다.
 export function MonsterConfigSection({
   room,
   playerCount = 0,
+  action,
+  disabled = false,
 }: {
   room: string;
   playerCount?: number;
+  action: GmActionApi;
+  disabled?: boolean;
 }) {
   const [monsters, setMonsters] = useState<MonsterConfig[]>([]);
   const [draft, setDraft] = useState<Record<number, number>>({});
   const [status, setStatus] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   // 초기 로드 완료 전에는 편집 버튼을 막고, 로드가 사용자 편집(dirty)을 덮어쓰지 않게 한다.
   const [loaded, setLoaded] = useState(false);
   const dirtyRef = useRef(false);
@@ -53,7 +60,9 @@ export function MonsterConfigSection({
   }, [room]);
 
   useEffect(() => {
-    void load();
+    // 마운트 직후 한 번 읽는다(effect 안 동기 setState 를 피하기 위해 다음 틱으로).
+    const id = setTimeout(() => void load(), 0);
+    return () => clearTimeout(id);
   }, [load]);
 
   const total = Object.values(draft).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -68,28 +77,27 @@ export function MonsterConfigSection({
   };
 
   const save = async () => {
-    setSaving(true);
     setStatus(null);
-    try {
-      const res = await fetch("/api/gm/defense/monster-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ room, counts: draft }),
-      });
-      const json = await res.json();
-      if (!res.ok || json.error) throw new Error(json.error ?? "저장 실패");
-      setStatus("저장됨 — 본게임 시작 시 이 비율이 적용됩니다.");
+    const result = await action.run<{ ok?: true; applied?: string }>("/api/gm/defense/monster-config", {
+      body: { room, counts: draft },
+    });
+    if (result?.ok) {
+      setStatus(
+        result.json.applied === "next_game"
+          ? "저장됨 — 본게임이 진행 중이라 다음 본게임 시작부터 적용됩니다."
+          : "저장됨 — 본게임 시작 시 이 비율이 적용됩니다.",
+      );
       dirtyRef.current = false;
       await load();
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : "저장 실패");
-    } finally {
-      setSaving(false);
+    } else if (result) {
+      setStatus(null);
     }
   };
 
+  const changed = monsters.filter((m) => (draft[m.id] ?? 0) !== m.base_count);
+
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4" data-testid="monster-config">
       <h3 className="text-sm font-semibold text-zinc-100">몬스터 수 조절</h3>
       <p className="mt-1 text-xs text-zinc-400">
         인원에 맞춰 몬스터 종류별 마릿수를 정합니다. <b>본게임 시작(라운드 진입) 전에</b> 조절하세요.
@@ -103,7 +111,7 @@ export function MonsterConfigSection({
         </span>
         <button
           onClick={applyPreset}
-          disabled={!loaded || playerCount <= 0}
+          disabled={!loaded || playerCount <= 0 || disabled}
           className="ml-auto rounded bg-zinc-800 px-2.5 py-1 font-semibold text-amber-300 hover:bg-zinc-700 disabled:opacity-40"
         >
           인원 기준 자동 세팅
@@ -119,7 +127,9 @@ export function MonsterConfigSection({
             </span>
             <div className="ml-auto flex items-center gap-1">
               <button
-                className="h-7 w-7 rounded bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                className="h-7 w-7 rounded bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-40"
+                disabled={disabled}
+                aria-label={`${m.name} 1 줄이기`}
                 onClick={() =>
                   edit((d) => ({
                     ...d,
@@ -132,6 +142,7 @@ export function MonsterConfigSection({
               <input
                 type="number"
                 min={0}
+                disabled={disabled}
                 className="h-7 w-14 rounded border border-zinc-700 bg-zinc-950 px-2 text-center text-zinc-100"
                 value={draft[m.id] ?? 0}
                 onChange={(e) =>
@@ -142,7 +153,9 @@ export function MonsterConfigSection({
                 }
               />
               <button
-                className="h-7 w-7 rounded bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                className="h-7 w-7 rounded bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-40"
+                disabled={disabled}
+                aria-label={`${m.name} 1 늘리기`}
                 onClick={() =>
                   edit((d) => ({
                     ...d,
@@ -160,14 +173,43 @@ export function MonsterConfigSection({
       <div className="mt-3 flex items-center gap-3">
         <span className="text-xs text-zinc-400">합계: <b className="text-zinc-200">{total}</b>마리</span>
         <button
-          onClick={() => void save()}
-          disabled={saving || !loaded}
+          onClick={() => setConfirmOpen(true)}
+          disabled={action.busy || !loaded || disabled}
+          data-testid="monster-config-save"
           className="ml-auto rounded bg-amber-500 px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-amber-400 disabled:opacity-50"
         >
-          {saving ? "저장 중…" : "저장"}
+          {action.busy ? "저장 중…" : "저장"}
         </button>
       </div>
       {status && <p className="mt-2 text-xs text-amber-300">{status}</p>}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="몬스터 비율 저장"
+        confirmLabel="저장"
+        busy={action.busy}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={async () => {
+          setConfirmOpen(false);
+          await save();
+        }}
+      >
+        <p className="text-zinc-300">
+          총 <b>{total}마리</b>로 저장합니다(등록 {playerCount}명 · 권장 {playerCount * 3}마리).
+        </p>
+        {changed.length > 0 ? (
+          <ul className="list-disc pl-5 text-zinc-300">
+            {changed.map((m) => (
+              <li key={m.id}>
+                {m.name}: {m.base_count} → <b>{draft[m.id] ?? 0}</b>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-zinc-500">바뀐 값이 없습니다.</p>
+        )}
+        <p className="text-xs text-zinc-500">본게임이 이미 시작됐으면 다음 본게임 시작부터 적용됩니다.</p>
+      </ConfirmDialog>
     </section>
   );
 }

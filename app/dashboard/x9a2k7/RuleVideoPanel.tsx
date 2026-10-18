@@ -12,6 +12,8 @@ import {
 } from "@/lib/ruleVideos";
 import { BOARD_VIDEO_MIGRATION } from "@/lib/boardVideo";
 
+const POLL_MS = 3000;
+
 type Remote = {
   video: RuleVideoId | null;
   seekSec: number | null;
@@ -53,6 +55,8 @@ export function RuleVideoPanel({ room, video }: { room: string; video: RuleVideo
 
   useEffect(() => {
     void load();
+    const id = window.setInterval(() => void load(), POLL_MS);
+    return () => window.clearInterval(id);
   }, [load]);
 
   const send = async (next: RuleVideoId | null, seekSec?: number) => {
@@ -64,20 +68,9 @@ export function RuleVideoPanel({ room, video }: { room: string; video: RuleVideo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: room, video: next, seekSec }),
       });
-      const json = (await res.json().catch(() => null)) as
-        | { error?: string; video?: unknown; seekSec?: unknown }
-        | null;
+      const json = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) setMsg(json?.error ?? "요청이 실패했습니다.");
-      if (res.ok) {
-        // PATCH 응답이 최신 값을 포함하므로 관리자 화면에서 같은 값을 다시 조회하지 않는다.
-        // 전광판만 변경 신호를 받고 자신의 상태를 한 번 조회한다.
-        setRemote((previous) => ({
-          video: isRuleVideoId(json?.video) ? json.video : null,
-          seekSec: typeof json?.seekSec === "number" ? json.seekSec : null,
-          columnMissing: previous?.columnMissing ?? false,
-          status: previous?.status ?? "active",
-        }));
-      }
+      await load();
     } finally {
       setBusy(false);
     }
@@ -143,7 +136,8 @@ export function RuleVideoPanel({ room, video }: { room: string; video: RuleVideo
           <button
             key={c.label}
             type="button"
-            onClick={() => void send(video, Math.floor(c.atSec))}
+            // 장 시작 초(소수)는 반올림해 보낸다 — 내림(116)은 chapterAt(116 < 116.9-0.5)에서 한 장 앞으로 표시됐다(Iteration 5 수정).
+            onClick={() => void send(video, Math.round(c.atSec))}
             disabled={disabled}
             title={`${fmtMinSec(c.atSec)}부터`}
             className={`rounded-full px-2.5 py-1 text-xs disabled:opacity-40 ${

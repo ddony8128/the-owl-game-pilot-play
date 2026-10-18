@@ -1,11 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
 import type { MafiaPhaseState } from "@/lib/types";
 import { getMafiaPhaseLabel } from "@/lib/labels/mafia";
+import { TimerAdjustPanel } from "@/components/TimerAdjustPanel";
+import { MAFIA_TIMED_PHASES } from "@/lib/admin/timerDefaults";
+import type { GmActionApi } from "@/lib/hooks/useGmAction";
 
 type Props = {
   phase: MafiaPhaseState | null;
   room: string;
-  onTimerExpired: () => Promise<void>;
+  action: GmActionApi;
+  disabled?: boolean;
 };
 
 type ApiTimer = {
@@ -14,48 +20,16 @@ type ApiTimer = {
   timerStartAt: string | null;
   pauseAt: string | null;
   totalSeconds: number;
-  remainingSeconds?: number;
-  isRunning?: boolean;
+  pendingTotalSeconds?: number | null;
+  durations?: Record<string, { totalSeconds: number; defaultSeconds: number; pendingTotalSeconds: number | null }>;
+  configurable?: boolean;
+  serverNow?: string;
 };
 
 type TimerState = {
   remainingSeconds: number;
   isRunning: boolean;
 };
-
-type TimerCacheEntry = {
-  data?: ApiTimer;
-  fetchedAt?: number;
-  request?: Promise<ApiTimer>;
-};
-
-const timerCache = new Map<string, TimerCacheEntry>();
-
-async function fetchTimer(room: string): Promise<ApiTimer> {
-  const cached = timerCache.get(room);
-  if (cached?.request) return cached.request;
-  if (cached?.data && cached.fetchedAt && Date.now() - cached.fetchedAt < 1500) {
-    return cached.data;
-  }
-
-  const request = (async () => {
-    const res = await fetch(`/api/gm/timers/mafia?room=${encodeURIComponent(room)}`);
-    const json = (await res.json().catch(() => null)) as (ApiTimer & { error?: string }) | null;
-    if (!res.ok || !json) throw new Error(json?.error ?? "타이머를 불러오지 못했습니다.");
-    timerCache.set(room, { data: json, fetchedAt: Date.now() });
-    return json;
-  })();
-
-  timerCache.set(room, { ...cached, request });
-  try {
-    return await request;
-  } finally {
-    const latest = timerCache.get(room);
-    if (latest?.request === request) {
-      timerCache.set(room, { data: latest.data, fetchedAt: latest.fetchedAt });
-    }
-  }
-}
 
 function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
   if (!api || !api.phase) {
@@ -65,13 +39,6 @@ function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
   const total = api.totalSeconds || 0;
   if (total <= 0) {
     return { remainingSeconds: 0, isRunning: false };
-  }
-
-  if (typeof api.remainingSeconds === "number") {
-    return {
-      remainingSeconds: Math.max(0, api.remainingSeconds),
-      isRunning: api.isRunning === true && api.remainingSeconds > 0,
-    };
   }
 
   if (!api.timerStart && !api.pauseAt) {
@@ -102,111 +69,60 @@ function computeRemaining(api: ApiTimer | null, nowMs: number): TimerState {
   return { remainingSeconds: total, isRunning: false };
 }
 
-export function MafiaCountdownSection({ phase, room, onTimerExpired }: Props) {
+// 마피아 카운트다운 — 시작/일시정지/리셋 + 단계별 시간 조정(경매·거래·투표, 즉시/다음 라운드).
+// 남은 시간은 서버 시각 기준으로 계산하고 5초마다 다시 맞춘다. 큰 숫자판·3분할 버튼은 bluecode674 포크 구성.
+// 타이머가 0이 되어도 단계는 자동으로 넘어가지 않는다(GM이 확인창을 거쳐 넘긴다 — 포크의 자동 전환은 들이지 않음).
+export function MafiaCountdownSection({ phase, room, action, disabled = false }: Props) {
   const [state, setState] = useState<TimerState>({
     remainingSeconds: 0,
     isRunning: false,
   });
-  const [busy, setBusy] = useState(false);
-  const [autoAdvancing, setAutoAdvancing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const autoAdvanceArmedRef = useRef(false);
-  const autoAdvanceKeyRef = useRef<string | null>(null);
-  const oneMinuteSyncDoneRef = useRef(false);
+  const [api, setApi] = useState<ApiTimer | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     try {
-      const json = await fetchTimer(room);
-      autoAdvanceArmedRef.current = json.timerStart;
-      setState(computeRemaining(json, Date.now()));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "타이머를 불러오지 못했습니다.");
+      const res = await fetch(`/api/gm/timers/mafia?room=${encodeURIComponent(room)}`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      });
+      const json = (await res.json().catch(() => null)) as ApiTimer | null;
+      if (!res.ok || !json) return;
+      const now = json.serverNow ? new Date(json.serverNow).getTime() : Date.now();
+      setApi(json);
+      setState(computeRemaining(json, Number.isNaN(now) ? Date.now() : now));
+    } catch {
+      setState((prev) => ({ ...prev, isRunning: false }));
     }
-  };
+  }, [room]);
 
   useEffect(() => {
-    autoAdvanceArmedRef.current = false;
-    autoAdvanceKeyRef.current = null;
-    oneMinuteSyncDoneRef.current = false;
-    setAutoAdvancing(false);
-    void reload();
+    const initialId = setTimeout(() => void reload(), 0);
     const tickId = setInterval(() => {
-      setState((prev) => {
-        const remainingSeconds = Math.max(
+      setState((prev) => ({
+        ...prev,
+        remainingSeconds: Math.max(
           0,
           prev.isRunning ? prev.remainingSeconds - 1 : prev.remainingSeconds
-        );
-        return {
-          remainingSeconds,
-          isRunning: prev.isRunning && remainingSeconds > 0,
-        };
-      });
+        ),
+      }));
     }, 1000);
+    // 주기적으로 서버 상태를 다시 불러와 드리프트를 보정한다.
+    const syncId = setInterval(() => {
+      void reload();
+    }, 5000);
+
     return () => {
+      clearTimeout(initialId);
       clearInterval(tickId);
+      clearInterval(syncId);
     };
     // 페이즈가 바뀔 때마다 서버 기준으로 다시 초기화
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase?.phase, room]);
+  }, [phase?.phase, room, reload]);
 
-  useEffect(() => {
-    if (state.remainingSeconds > 60) {
-      oneMinuteSyncDoneRef.current = false;
-      return;
-    }
-    if (
-      !state.isRunning ||
-      state.remainingSeconds <= 0 ||
-      oneMinuteSyncDoneRef.current
-    ) {
-      return;
-    }
-    oneMinuteSyncDoneRef.current = true;
+  const send = async (body: Record<string, unknown>) => {
+    await action.run("/api/gm/timers/mafia", { body: { ...body, room } });
     void reload();
-    // 01:00 이하에 처음 진입했을 때 서버 기준으로 한 번만 동기화한다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.isRunning, state.remainingSeconds]);
-
-  useEffect(() => {
-    const phaseKey = phase?.phase;
-    if (
-      !phaseKey ||
-      !["auction", "trade", "vote"].includes(phaseKey) ||
-      state.remainingSeconds > 0 ||
-      !autoAdvanceArmedRef.current
-    ) {
-      return;
-    }
-
-    const transitionKey = `${phase?.round_number ?? 0}:${phaseKey}`;
-    if (autoAdvanceKeyRef.current === transitionKey) return;
-    autoAdvanceKeyRef.current = transitionKey;
-    autoAdvanceArmedRef.current = false;
-    setAutoAdvancing(true);
-    void onTimerExpired().finally(() => setAutoAdvancing(false));
-  }, [onTimerExpired, phase?.phase, phase?.round_number, state.remainingSeconds]);
-
-  const sendAction = async (action: "start" | "pause" | "reset") => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/gm/timers/mafia", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, room }),
-      });
-      const json = (await res.json().catch(() => null)) as (ApiTimer & { error?: string }) | null;
-      if (!res.ok || !json) throw new Error(json?.error ?? "타이머 조작에 실패했습니다.");
-      timerCache.set(room, { data: json, fetchedAt: Date.now() });
-      if (action === "reset") oneMinuteSyncDoneRef.current = false;
-      autoAdvanceArmedRef.current = json.timerStart;
-      setState(computeRemaining(json, Date.now()));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "타이머 조작에 실패했습니다.");
-    } finally {
-      setBusy(false);
-    }
   };
 
   const minutes = Math.floor(state.remainingSeconds / 60)
@@ -215,10 +131,6 @@ export function MafiaCountdownSection({ phase, room, onTimerExpired }: Props) {
   const seconds = (state.remainingSeconds % 60).toString().padStart(2, "0");
 
   const phaseLabel = getMafiaPhaseLabel(phase?.phase ?? null);
-  const timerAvailable =
-    phase?.phase === "auction" ||
-    phase?.phase === "trade" ||
-    phase?.phase === "vote";
   const roundLabel =
     typeof phase?.round_number === "number"
       ? phase.round_number === 0
@@ -226,53 +138,91 @@ export function MafiaCountdownSection({ phase, room, onTimerExpired }: Props) {
         : `${phase.round_number}라운드`
       : "-";
 
+  // 조정 대상 단계: 현재 단계에 타이머가 있으면 그것, 아니면 GM이 고른 단계(기본 거래)
+  const currentTimed = (MAFIA_TIMED_PHASES as readonly string[]).includes(phase?.phase ?? "");
+  const adjustTarget = target ?? (currentTimed ? (phase?.phase as string) : "trade");
+  const targetInfo = api?.durations?.[adjustTarget];
+  const urgent = state.remainingSeconds <= 30 && state.isRunning;
+
   return (
-    <section className="flex h-full flex-col gap-3 text-sm">
+    <section className="flex h-full flex-col gap-3 text-sm" data-testid="mafia-countdown">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">진행 타이머</h2>
-        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${state.isRunning ? "bg-emerald-500/15 text-emerald-300" : "bg-zinc-800 text-zinc-400"}`}>
-          {!timerAvailable
-            ? "타이머 없음"
-            : autoAdvancing
-              ? "단계 전환 중"
-              : state.isRunning
-                ? "진행 중"
-                : "대기"}
+        <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">카운트다운</h2>
+        <span
+          className={`rounded-full px-2 py-1 text-xs font-semibold ${
+            state.isRunning ? "bg-emerald-500/15 text-emerald-300" : "bg-zinc-800 text-zinc-400"
+          }`}
+        >
+          {!currentTimed ? "타이머 없는 단계" : state.isRunning ? "진행 중" : "대기"}
         </span>
       </div>
       <p className="text-sm text-zinc-400">
         {roundLabel} / {phaseLabel}
       </p>
-      <div className={`rounded-2xl border px-4 py-5 text-center ${state.remainingSeconds <= 30 && state.isRunning ? "border-red-500 bg-red-500/10" : "border-zinc-700 bg-zinc-950"}`}>
-        <span className={`font-mono text-6xl font-black tabular-nums sm:text-7xl ${state.remainingSeconds <= 30 && state.isRunning ? "text-red-300" : "text-white"}`}>
-          {timerAvailable ? `${minutes}:${seconds}` : "--:--"}
+      <div
+        className={`rounded-2xl border px-4 py-5 text-center ${
+          urgent ? "border-red-500 bg-red-500/10" : "border-zinc-700 bg-zinc-950"
+        }`}
+      >
+        <span
+          className={`font-mono text-6xl font-black tabular-nums sm:text-7xl ${urgent ? "text-red-300" : "text-white"}`}
+          data-testid="countdown-remaining"
+        >
+          {currentTimed ? `${minutes}:${seconds}` : "--:--"}
         </span>
       </div>
-      <div className="mt-auto grid grid-cols-3 gap-2 text-sm">
+      <div className="grid grid-cols-3 gap-2 text-sm">
         <button
+          type="button"
           className="min-h-12 rounded-xl bg-emerald-500 px-3 text-sm font-black text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
-          onClick={() => sendAction("start")}
-          disabled={busy || autoAdvancing || !timerAvailable || state.isRunning}
+          disabled={disabled || action.busy}
+          onClick={() => void send({ action: "start" })}
         >
           ▶ 시작
         </button>
         <button
+          type="button"
           className="min-h-12 rounded-xl bg-zinc-700 px-3 text-sm font-bold text-zinc-100 hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
-          onClick={() => sendAction("pause")}
-          disabled={busy || autoAdvancing || !timerAvailable || !state.isRunning}
+          disabled={disabled || action.busy}
+          onClick={() => void send({ action: "pause" })}
         >
-          Ⅱ 정지
+          Ⅱ 일시정지
         </button>
         <button
+          type="button"
           className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm font-bold text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
-          onClick={() => sendAction("reset")}
-          disabled={busy || autoAdvancing || !timerAvailable}
+          disabled={disabled || action.busy}
+          onClick={() => void send({ action: "reset" })}
         >
-          ↺ 초기화
+          ↺ 리셋
         </button>
       </div>
-      {!timerAvailable && <p className="text-center text-xs text-zinc-500">경매·주식 거래·투표 단계에서만 타이머를 사용합니다.</p>}
-      {error && <p className="rounded-lg bg-red-950/60 p-2 text-xs text-red-200">{error}</p>}
+      {!currentTimed && <p className="text-center text-xs text-zinc-500">경매·주식 거래·투표 단계에서만 타이머가 돕니다.</p>}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="text-zinc-500">조정할 단계:</span>
+        {MAFIA_TIMED_PHASES.map((p) => (
+          <button
+            key={p}
+            type="button"
+            data-testid={`timer-target-${p}`}
+            disabled={disabled}
+            className={`rounded px-2 py-0.5 ${
+              adjustTarget === p ? "bg-amber-500 font-semibold text-zinc-950" : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+            } disabled:opacity-40`}
+            onClick={() => setTarget(p)}
+          >
+            {getMafiaPhaseLabel(p)} {api?.durations?.[p] ? `${Math.round(api.durations[p].totalSeconds / 60)}분` : ""}
+          </button>
+        ))}
+      </div>
+      <TimerAdjustPanel
+        totalSeconds={targetInfo?.totalSeconds ?? api?.totalSeconds ?? 0}
+        pendingTotalSeconds={targetInfo?.pendingTotalSeconds ?? null}
+        configurable={api?.configurable ?? true}
+        disabled={disabled || action.busy}
+        targetLabel={`${getMafiaPhaseLabel(adjustTarget as MafiaPhaseState["phase"])} 단계`}
+        onSet={(body) => send({ action: "set", phase: adjustTarget, ...body })}
+      />
     </section>
   );
 }
