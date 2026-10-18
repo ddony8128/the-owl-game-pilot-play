@@ -112,7 +112,7 @@ function MafiaInner() {
   const roomEnded = data?.roomStatus === "ended";
 
   const availableTabs = useMemo(() => {
-    const base: TabKey[] = ["info", "rules", "stocks", "result", "log"];
+    const base: TabKey[] = ["info", "result", "stocks", "log", "rules"];
     const phaseKey = phase?.phase;
     if (phaseKey === "auction") base.push("auction");
     if (phaseKey === "trade") {
@@ -126,14 +126,14 @@ function MafiaInner() {
     () =>
       [
         { key: "info", label: "정보" },
-        { key: "rules", label: "규칙" },
-        { key: "stocks", label: "주가" },
         { key: "auction", label: "경매" },
         { key: "trade", label: "거래" },
         { key: "ability", label: "능력" },
         { key: "result", label: "능력/투표결과" },
         { key: "vote", label: "투표" },
+        { key: "stocks", label: "주가" },
         { key: "log", label: "로그" },
+        { key: "rules", label: "규칙" },
       ].filter((t) => availableTabs.includes(t.key)),
     [availableTabs]
   );
