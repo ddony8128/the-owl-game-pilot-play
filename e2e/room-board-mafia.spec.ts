@@ -277,9 +277,17 @@ test("[마피아보드4] 넘침 0 — 12명 × 3해상도 × 로비·진행·주
     await expect(page.getByTestId("board-player-count")).toContainText("12");
     await forEachViewport(page, "12명 로비", { 720: "iter5-c-mafia-lobby-720" });
 
-    await runRound(request, room, 0);
-    // 튜토리얼 변동 공개(보드가 열려 있는 동안 생긴 새 묶음)가 끝날 때까지 기다린 뒤 1라운드로
-    await expect(page.locator('[data-testid="board-price-reveal"][data-key="0:apply"]')).toBeVisible({ timeout: 15_000 });
+    // 튜토리얼 라운드는 GM 처럼 단계별로 넘긴다. runRound 로 한 번에 돌리면 vote→end→다음 라운드가 1초 안에 지나가서,
+    // 보드가 그 사이에 한 번도 polling 하지 못하면(전체 스위트 실행으로 응답이 느릴 때) 0:apply 묶음은 "지난 라운드" 가 되어
+    // 규칙대로 공개하지 않는다 → 2026-10-18 전체 실행에서 1회 flaky. 실제 운영에서는 GM 이 단계마다 멈추므로 재현되지 않는다.
+    for (const p of ["auction", "trade", "apply"] as const) await mafiaAdvance(request, room, p);
+    const reveal0 = page.locator('[data-testid="board-price-reveal"][data-key="0:apply"]');
+    await expect(reveal0).toBeVisible({ timeout: 15_000 });
+    await expect(reveal0).toHaveAttribute("data-done", "true", { timeout: 20_000 });
+    await mafiaAdvance(request, room, "vote");
+    await mafiaAdvance(request, room, "end");
+    await mafiaNextRound(request, room, 1);
+    // 다음 라운드로 넘어가면 지난 라운드 묶음은 더 틀지 않는다
     await expect(page.getByTestId("board-price-reveal")).toHaveCount(0, { timeout: 40_000 });
     await mafiaAdvance(request, room, "auction");
     for (const n of nicks.slice(0, 3)) await bet(request, room, n, "robber", 2);
