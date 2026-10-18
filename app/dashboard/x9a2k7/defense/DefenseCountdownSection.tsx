@@ -151,9 +151,6 @@ export function DefenseCountdownSection({
           {state.isRunning ? "진행 중" : inAction ? "정지" : "행동 단계 아님"}
         </span>
       </div>
-      <p className="text-sm text-zinc-400">
-        {inAction ? "라운드 행동 시간. 보드와 같은 시간을 표시합니다." : "타이머는 라운드 행동 단계에 들어갈 때 서버가 다시 시작합니다."}
-      </p>
       <div
         className={`rounded-2xl border px-4 py-5 text-center ${
           urgent ? "border-red-500 bg-red-500/10" : "border-zinc-700 bg-zinc-950"

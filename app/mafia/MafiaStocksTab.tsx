@@ -66,9 +66,6 @@ export function MafiaStocksTab({ stocks, stockHistory }: Props) {
       </section>
 
       <section className="space-y-2">
-        <p className="text-sm text-zinc-400">
-          각 종목의 라운드별 주가 변동 히스토리입니다.
-        </p>
         <div className="space-y-2 text-base text-zinc-300">
           {stocks.map((s) => {
             const history = stockHistory?.[s.stock_key] ?? [];

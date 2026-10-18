@@ -103,15 +103,7 @@ export default function PlayersPage() {
           <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-400">{players.length}명</span>
         </div>
         <PlayerRosterSection
-          room={room}
           players={players}
-          onAdded={(player) =>
-            setPlayers((current) =>
-              current.some((item) => item.id === player.id)
-                ? current
-                : [...current, player].sort((a, b) => a.nickname.localeCompare(b.nickname, "ko"))
-            )
-          }
           onRemoved={(id) => setPlayers((current) => current.filter((player) => player.id !== id))}
         />
       </section>

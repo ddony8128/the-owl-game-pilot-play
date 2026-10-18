@@ -521,7 +521,6 @@ export function DefenseActionTab({
           <div>
             <p className="text-sm font-bold text-rose-300">전투 1/2</p>
             <p className="mt-1 text-xl font-black text-white">공격할 몬스터 선택</p>
-            <p className="mt-1 text-sm text-zinc-400">대기열 순서대로 표시됩니다.</p>
           </div>
           {sortedMonsters.length === 0 ? (
             <p className="text-sm text-zinc-500">대기열에 몬스터가 없습니다.</p>

@@ -25,16 +25,13 @@ export function MafiaLogTab({ log }: Props) {
   if (log.length === 0) {
     return (
       <div className="text-base text-zinc-400" data-testid="mafia-log-empty">
-        아직 기록이 없습니다. 경매·거래·투표를 하면 라운드별로 여기에 쌓입니다.
+        아직 기록이 없습니다.
       </div>
     );
   }
 
   return (
     <div className="space-y-3 text-base text-zinc-200" data-testid="mafia-log">
-      <p className="text-sm text-zinc-400">
-        내 기록만 보입니다(남의 직업·표는 보이지 않습니다). 최근 라운드부터.
-      </p>
       {log.map((r) => (
         <section
           key={r.round}

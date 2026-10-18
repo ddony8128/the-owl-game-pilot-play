@@ -146,10 +146,14 @@ export default function DashboardDefensePage() {
         </div>
       </section>
 
+      <div className={panelClass}>
+        <PhoneTogglesSection game="defense" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
+      </div>
+
       {/* ITER6 A — 저쪽 UI 배치: 진행 아래 패널은 접어 두고 필요할 때 펼친다(제출 현황 → 점수 보정 → 설정 및 수동 관리) */}
       <details className={panelClass} data-testid="panel-round-summary">
         <summary className="cursor-pointer text-lg font-black text-white">
-          현재 라운드 제출·몬스터 현황 <span className="ml-2 text-sm font-normal text-zinc-500">필요할 때 펼치기</span>
+          현재 라운드 제출·몬스터 현황
         </summary>
         <div className="mt-4">
           <DefenseRoundSummarySection room={room} currentRound={round} />
@@ -158,7 +162,7 @@ export default function DashboardDefensePage() {
 
       <details className={panelClass}>
         <summary className="cursor-pointer text-lg font-black text-white">
-          점수 보정 <span className="ml-2 text-sm font-normal text-zinc-500">필요할 때만</span>
+          점수 보정
         </summary>
         <div className="mt-4">
           <DefenseScoreSection players={players} onChangeScore={changeScore} disabled={ended || action.busy} />
@@ -167,16 +171,12 @@ export default function DashboardDefensePage() {
 
       <details className={panelClass} data-testid="panel-settings">
         <summary className="cursor-pointer text-lg font-bold text-white">
-          설정 및 수동 관리 <span className="ml-2 text-sm font-normal text-zinc-500">몬스터 · 참가자 폰 · 영상</span>
+          설정 및 수동 관리
         </summary>
         <div className="mt-4 divide-y divide-zinc-800">
           <div className="pb-6">
             <h3 className="mb-1 text-base font-black text-white">몬스터 구성</h3>
-            <p className="mb-3 text-xs text-zinc-500">튜토리얼 시작 때 인원에 맞춰 자동 세팅 · 직접 바꿀 때만</p>
             <MonsterConfigSection room={room} playerCount={players.length} action={action} disabled={ended} />
-          </div>
-          <div className="py-6">
-            <PhoneTogglesSection game="defense" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
           </div>
           <div className="pt-6">
             <h3 className="mb-3 text-base font-black text-white">룰 영상</h3>

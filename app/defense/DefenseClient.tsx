@@ -217,11 +217,9 @@ function DefenseInner() {
           )}
           {effectiveTab === "info" && (
             <DefenseInfoTab
-              monsters={defenseState?.monsters ?? []}
               cards={defenseState?.cards ?? []}
               score={defenseState?.score ?? 0}
-              isLoading={isInitialLoading}
-              showQueue={!hideInfoAndAction}
+              isLoading={isInitialLoading}
             />
           )}
           {effectiveTab === "action" && defenseState && !hideInfoAndAction && (

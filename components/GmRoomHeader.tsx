@@ -56,7 +56,6 @@ export function GmRoomHeader({
         type="button"
         onClick={() => void onReload()}
         className="ml-auto min-h-11 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm font-bold text-zinc-200 hover:bg-zinc-800"
-        title="참가자 제출·점수·자산·기록을 지금 다시 불러옵니다(평소에도 몇 초마다 자동 갱신)."
       >
         ↻ 현황 새로고침
       </button>
@@ -64,7 +63,6 @@ export function GmRoomHeader({
         <button
           type="button"
           onClick={() => window.open(`/join?code=${room}`, "owl-join", "width=720,height=900")}
-          title="참가 QR과 방 코드를 새 창에 크게 띄웁니다 (입장·중간 합류·재접속용)"
           data-testid="join-qr-open"
           className="min-h-11 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm font-bold text-amber-300 hover:bg-zinc-800"
         >

@@ -8,31 +8,16 @@ import { useGmAction } from "@/lib/hooks/useGmAction";
 type RosterPlayer = { id: string; nickname: string };
 
 // 참가자 관리 페이지의 명단(bluecode674 포크 구성). 삭제는 우리 확인창(강퇴 안내)·useGmAction(잠금·배너·멱등 키)을 거친다.
-//  참가자는 스스로 입장하므로 이 화면은 미리 등록·오타 수정·강퇴용이다.
-export function PlayerRosterSection({
-  room,
-  players,
-  onAdded,
+//  참가자는 스스로 입장하므로 이 화면은 명단 확인·강퇴용이다(GM 추가 입력은 없다 — 또니 10-18).
+export function PlayerRosterSection({
+  players,
   onRemoved,
-}: {
-  room: string;
-  players: RosterPlayer[];
-  onAdded: (player: RosterPlayer) => void;
+}: {
+  players: RosterPlayer[];
   onRemoved: (id: string) => void;
 }) {
-  const [name, setName] = useState("");
   const [kick, setKick] = useState<RosterPlayer | null>(null);
   const action = useGmAction();
-
-  const add = async () => {
-    const nickname = name.trim();
-    if (!nickname) return;
-    const r = await action.run<{ player?: RosterPlayer }>("/api/gm/players", { body: { room, nickname } });
-    if (r?.ok && r.json.player) {
-      setName("");
-      onAdded(r.json.player);
-    }
-  };
 
   const remove = async (p: RosterPlayer) => {
     const r = await action.run("/api/gm/players", { method: "DELETE", body: { id: p.id } }, { notice: `${p.nickname} 삭제됨` });
@@ -41,30 +26,6 @@ export function PlayerRosterSection({
 
   return (
     <div className="mt-4 space-y-5">
-      <div className="rounded-xl border border-zinc-700 bg-zinc-950/70 p-3 sm:p-4">
-        <label htmlFor="player-nickname" className="mb-2 block text-xs font-bold text-zinc-400">
-          참가자 미리 등록
-        </label>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            id="player-nickname"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && void add()}
-            placeholder="닉네임을 입력하세요"
-            maxLength={24}
-            className="h-12 min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-4 text-base outline-none transition placeholder:text-zinc-600 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/10"
-          />
-          <button
-            type="button"
-            disabled={action.busy || !name.trim()}
-            onClick={() => void add()}
-            className="min-h-12 rounded-lg bg-amber-500 px-6 font-bold text-zinc-950 transition hover:bg-amber-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {action.busy ? "처리 중…" : "+ 참가자 추가"}
-          </button>
-        </div>
-      </div>
       <GmErrorBanner message={action.error} onClose={action.clearError} />
       <GmNoticeBanner message={action.notice} />
 

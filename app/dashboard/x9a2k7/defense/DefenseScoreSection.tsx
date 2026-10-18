@@ -21,7 +21,6 @@ export function DefenseScoreSection({ players, onChangeScore, disabled = false }
           <p className="text-xs font-bold tracking-[0.16em] text-amber-400">SCORE</p>
           <h2 className="mt-1 text-lg font-black text-white">현재 점수 순위</h2>
         </div>
-        <p className="text-xs text-zinc-500">− / + 1점씩 보정 · 보정 내용은 GM 조작 기록에 남습니다</p>
       </div>
       <div className="overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950">
         <div className="grid grid-cols-[64px_minmax(140px,1fr)_100px_130px] items-center gap-3 border-b border-zinc-700 bg-zinc-900 px-4 py-3 text-xs font-bold text-zinc-400">

@@ -197,7 +197,6 @@ export function MafiaCountdownSection({ phase, room, action, disabled = false }:
           ↺ 리셋
         </button>
       </div>
-      {!currentTimed && <p className="text-center text-xs text-zinc-500">경매·주식 거래·투표 단계에서만 타이머가 돕니다.</p>}
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <span className="text-zinc-500">조정할 단계:</span>
         {MAFIA_TIMED_PHASES.map((p) => (

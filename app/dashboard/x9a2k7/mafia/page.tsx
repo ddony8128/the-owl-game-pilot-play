@@ -184,6 +184,10 @@ export default function DashboardMafiaPage() {
         </div>
       </section>
 
+      <div className={panelClass}>
+        <PhoneTogglesSection game="mafia" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
+      </div>
+
       {/* ITER6 A — 저쪽 UI 배치: 진행 → 현재 주가 → 자산 현황(펼침) → (우리 기능: 결과 공개 · 참가자 폰 · GM 기록) → 접힌 상세 패널 */}
       <div className={panelClass}>
         <MafiaStocksSection stocks={stocks} />
@@ -215,16 +219,12 @@ export default function DashboardMafiaPage() {
       </div>
 
       <div className={panelClass}>
-        <PhoneTogglesSection game="mafia" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
-      </div>
-
-      <div className={panelClass}>
         <GmLogSection logs={gmLogs} warning={gmLogsWarning} />
       </div>
 
       <details className={panelClass} data-testid="panel-round-summary">
         <summary className="cursor-pointer text-lg font-black text-white">
-          라운드 상세 기록 <span className="ml-2 text-sm font-normal text-zinc-500">필요할 때 펼치기</span>
+          라운드 상세 기록
         </summary>
         <div className="mt-4">
           <MafiaRoundSummarySection currentRound={phase?.round_number} room={room} />

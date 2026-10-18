@@ -209,16 +209,11 @@ test("[5c] 종료된 방을 코드로 다시 열면 '종료됨' 배지 + 읽기 
   const room = await newRoom(request, "defense", ["e1"]);
   await endRoom(request, room);
 
+  // 방 관리(포크 구성): 종료된 방은 「종료된 방」 목록에 보이고 [결과 보기]로 읽기 전용 대시보드에 들어간다
   await page.goto("/dashboard/x9a2k7");
-  await page.evaluate(() => localStorage.removeItem("owlgm:room"));
-  await page.reload();
-  await page.getByPlaceholder("방 코드 입력").fill(room);
-  await page.getByRole("button", { name: "입장", exact: true }).click();
-  await expect(page.getByTestId("room-ended-badge")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole("link", { name: /대시보드 보기\(읽기 전용\)/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "방 종료" })).toHaveCount(0);
-
-  await page.getByRole("link", { name: /대시보드 보기/ }).click();
+  const row = page.getByText(room, { exact: true });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await page.locator(`a[href="/dashboard/x9a2k7/defense?room=${room}"]`).click();
   await expect(page.getByTestId("room-ended-notice")).toBeVisible({ timeout: 20_000 });
 
   // 진행 중인 방에는 배지가 없다

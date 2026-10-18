@@ -36,7 +36,6 @@ export function DefenseRulesTab() {
       <section className="space-y-2">
         <div className="flex items-center justify-between px-1">
           <h2 className="font-black text-white">행동 규칙</h2>
-          <span className="text-[11px] text-zinc-600">눌러서 펼치기</span>
         </div>
         {ACTIONS.map(([icon, title, description]) => (
           <details key={title} className="group overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">

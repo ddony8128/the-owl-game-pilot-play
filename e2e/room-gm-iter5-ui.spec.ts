@@ -253,42 +253,37 @@ test("[3] 마피아 되돌리기 버튼 — 경매 마감 취소(trade→auction
   await expect(phaseSection.getByTestId("rewind-phase")).toBeDisabled();
 });
 
-test("[2] 방 관리 — 방 종료·강퇴 확인창(취소하면 그대로, 확인하면 실행) · 종료 방 등록 409 배너", async ({ page, request }) => {
+test("[2] 참가자 관리·게임 종료 확인창(취소하면 그대로, 확인하면 실행) · 종료 방 등록 409", async ({ page, request }) => {
   test.setTimeout(90_000);
   const { code } = await newRoom(request, "defense", ["k1", "k2"]);
-  await page.addInitScript(
-    ({ c }) => localStorage.setItem("owlgm:room", JSON.stringify({ code: c, game: "defense" })),
-    { c: code },
-  );
-  await page.goto("/dashboard/x9a2k7");
-  const roster = page.getByTestId("roster");
-  await expect(roster).toContainText("총 2명");
-
-  // 강퇴: 취소 → 유지, 확인 → 삭제
-  await roster.getByRole("button", { name: "k1 삭제" }).click();
+  // 참가자 관리 페이지(포크 구성): 강퇴 — 취소 → 유지, 확인 → 삭제. 미리 등록 입력은 없다.
+  await page.goto(`/dashboard/x9a2k7/players?room=${code}&game=defense`);
+  await expect(page.getByRole("button", { name: "k1 삭제" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: /참가자 추가/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "k1 삭제" }).click();
   await expect(page.getByTestId("confirm-dialog")).toContainText("k1 삭제(강퇴)");
   await page.getByTestId("confirm-cancel").click();
-  await expect(roster).toContainText("총 2명");
-  await roster.getByRole("button", { name: "k1 삭제" }).click();
+  await expect(page.getByRole("button", { name: "k1 삭제" })).toBeVisible();
+  await page.getByRole("button", { name: "k1 삭제" }).click();
   await page.getByTestId("confirm-ok").click();
-  await expect(roster).toContainText("총 1명", { timeout: 10_000 });
-  await expect(roster).not.toContainText("k1 ");
+  await expect(page.getByRole("button", { name: "k1 삭제" })).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "k2 삭제" })).toBeVisible();
 
-  // 방 종료: 취소 → 패널 유지, 확인 → 떠남 + 서버 ended
-  await page.getByTestId("end-room").click();
+  // 게임 진행 화면 상단 [게임 종료]: 취소 → 유지, 확인 → 서버 ended
+  await page.goto(`/dashboard/x9a2k7/defense?room=${code}`);
+  await page.getByTestId("end-game").click();
   await expect(page.getByTestId("confirm-dialog")).toContainText(`방 ${code} 종료`);
   await page.getByTestId("confirm-cancel").click();
-  await expect(page.getByTestId("end-room")).toBeVisible();
-  await page.getByTestId("end-room").click();
+  await expect(page.getByTestId("end-game")).toBeVisible();
+  await page.getByTestId("end-game").click();
   await page.getByTestId("confirm-ok").click();
-  await expect(page.getByRole("button", { name: "+ 디펜스 방" })).toBeVisible({ timeout: 10_000 });
-  expect((await (await request.get(`/api/gm/rooms?code=${code}`)).json()).room.status).toBe("ended");
+  await expect.poll(async () => (await (await request.get(`/api/gm/rooms?code=${code}`)).json()).room.status, { timeout: 10_000 }).toBe("ended");
+  // 종료하면 방 관리로 돌아가고, 그 방은 「종료된 방」 목록에 있다
+  await expect(page).toHaveURL(/\/dashboard\/x9a2k7$/, { timeout: 15_000 });
+  await expect(page.getByText("종료된 방", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(code, { exact: true })).toBeVisible();
 
-  // 종료 방에 다시 들어가면 등록 입력이 막혀 있고, API 로 등록하면 409
-  await page.getByPlaceholder("방 코드 입력").fill(code);
-  await page.getByRole("button", { name: "입장", exact: true }).click();
-  await expect(page.getByTestId("room-ended-badge")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByPlaceholder("참가자 닉네임")).toBeDisabled();
+  // 종료 방에는 API 로도 등록 불가(409)
   const late = await request.post("/api/gm/players", { data: { room: code, nickname: "late" } });
   expect(late.status()).toBe(409);
 });

@@ -57,9 +57,6 @@ export function MafiaAssetsSection({ players, playerNames, stocks, onAdjust, dis
 
   return (
     <section className="space-y-2 text-sm" data-testid="mafia-assets">
-      {onAdjust && players.length > 0 && (
-        <p className="text-xs text-zinc-500">현금·보유 주식을 ±1 씩 수동 보정할 수 있습니다(예외 처리용). 보정 내용은 GM 조작 기록에 남습니다.</p>
-      )}
       {players.length === 0 ? (
         <div className="space-y-1 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm">
           <p className="font-semibold text-zinc-300">자산은 직업 경매가 시작될 때 생성됩니다.</p>

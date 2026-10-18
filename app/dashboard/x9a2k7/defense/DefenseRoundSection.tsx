@@ -103,7 +103,7 @@ export function DefenseRoundSection({
           {step ? `${step.label} ▶` : "게임이 끝났습니다"}
         </button>
         <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
-          <span>{step ? "버튼 이름이 다음 단계입니다." : "최종 결과까지 공개했습니다. 상단의 [게임 종료]로 마무리하세요."}</span>
+          <span>{step ? "" : "최종 결과까지 공개했습니다. 상단의 [게임 종료]로 마무리하세요."}</span>
           <button
             type="button"
             data-testid="rewind-round"

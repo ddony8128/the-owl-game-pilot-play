@@ -66,7 +66,7 @@ const JOB_RULES: readonly (readonly [string, string])[] = [
     "ceo",
     "10원의 월급을 받습니다. 자신을 제외한 한 사람을 선택해 그 사람에게 5원을 지급합니다. 선택된 사람은 누구에게서 돈을 받았는지(CEO가 누구인지) 알 수 있습니다.",
   ],
-  ["salaryman", "3원의 월급을 받는다부엉! 그것 말고는 없다부엉. 불쌍해부엉..."],
+  ["salaryman", "별도 능력 없이 매 라운드 3원의 월급을 받습니다."],
 ];
 
 const MAFIA_JOBS = ["up_manipulator", "down_manipulator", "robber"];
@@ -78,7 +78,7 @@ export function MafiaRulesTab() {
         <p className="text-[11px] font-black tracking-[0.18em] text-amber-400">QUICK GUIDE</p>
         <h2 className="mt-1 text-xl font-black text-white">게임 진행 순서</h2>
         <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-          자본주의 마피아 규칙 요약이다부엉! 총 5라운드입니다.
+          총 5라운드입니다. 처음 시작할 때 모든 플레이어는 30원으로 시작합니다.
         </p>
         <div className="mt-4 space-y-2">
           {PHASES.map((phase) => (
@@ -121,7 +121,6 @@ export function MafiaRulesTab() {
       <section className="space-y-2">
         <div className="flex items-center justify-between px-1">
           <h2 className="font-black text-white">직업 능력 요약</h2>
-          <span className="text-[11px] text-zinc-600">눌러서 펼치기</span>
         </div>
         {JOB_RULES.map(([jobId, description]) => {
           const job = JOB_META[jobId];
