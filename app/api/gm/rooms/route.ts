@@ -11,17 +11,25 @@ import { addGmLog } from "@/lib/admin/gmLog";
 
 const VALID_GAMES: RoomGame[] = ["mafia", "defense", "subway"];
 
-// GET /api/gm/rooms?code=A3F82 → 단일 방 (코드를 아는 경우에만 조회 가능)
+// GET /api/gm/rooms?code=A3F82 → 단일 방
+// GET /api/gm/rooms → 최근 50개 방 목록(GM 방 관리 화면용; 코드·게임·상태·생성 시각만)
 // 전역 목록 조회는 제공하지 않는다 — 방 관리자는 코드를 직접 가진 방만 다룰 수 있다.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
 
   if (!code) {
-    return NextResponse.json(
-      { error: "code 필요 (방 코드를 입력해야 조회할 수 있습니다)" },
-      { status: 400 },
-    );
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("code, game, status, ended_normally, created_at")
+      .in("game", VALID_GAMES)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ rooms: data ?? [] });
   }
 
   const room = await getRoom(code);
