@@ -18,16 +18,22 @@ import {
 import { normalizeNickname } from "@/lib/nickname";
 import { loadRoom } from "@/lib/player/roomGuard";
 import { isLateCombat, lateCombatLog } from "@/lib/defense/action";
+import { normalizeStage } from "@/lib/defense/steps";
 
 type DefenseGlobalStateResponse =
   | {
       round: number | null;
+      stage?: string;
+      prevRound?: number | null;
     }
   | { error: string };
 
 type DefensePlayerStateResponse =
   | {
       round: number | null;
+      /** 진행 단계 — action 일 때만 행동 탭이 열린다 */
+      stage?: string;
+      prevRound?: number | null;
       roomStatus: "active" | "ended";
       serverNow: string;
       monsters: {
@@ -98,7 +104,7 @@ export async function GET(request: Request) {
   if (!nickname) {
     const { data, error } = await supabase
       .from("defense_phase_state")
-      .select("room_code, round, updated_at")
+      .select("room_code, round, updated_at, stage, ended_early_from")
       .eq("room_code", room)
       .maybeSingle();
 
@@ -114,6 +120,13 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         round: typeof phase?.round === "number" ? phase.round : null,
+        stage: normalizeStage(phase?.round ?? 0, phase?.stage),
+        prevRound:
+          typeof phase?.round === "number"
+            ? phase.round === 16 && typeof phase.ended_early_from === "number"
+              ? phase.ended_early_from
+              : phase.round - 1
+            : null,
       } as DefenseGlobalStateResponse,
       { status: 200 }
     );
@@ -159,7 +172,7 @@ export async function GET(request: Request) {
   const [phaseRes, actionRes, logsRes] = await Promise.all([
     supabase
       .from("defense_phase_state")
-      .select("room_code, round, updated_at")
+      .select("room_code, round, updated_at, stage, ended_early_from")
       .eq("room_code", room)
       .maybeSingle(),
     supabase
@@ -352,6 +365,8 @@ export async function GET(request: Request) {
   return NextResponse.json(
     {
       round,
+      stage: normalizeStage(round ?? 0, phase?.stage),
+      prevRound: round != null ? (round === 16 && typeof phase?.ended_early_from === "number" ? phase.ended_early_from : round - 1) : null,
       roomStatus: roomRow.status === "ended" ? "ended" : "active",
       serverNow: new Date().toISOString(),
       monsters: monstersForClient,

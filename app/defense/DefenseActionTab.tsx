@@ -64,7 +64,6 @@ export function DefenseActionTab({
   room,
   onActionCompleted,
   roomEnded = false,
-  timerExpired = false,
   notice = null,
 }: Props) {
   const [step, setStep] = useState<Step>("chooseAction");
@@ -187,12 +186,6 @@ export function DefenseActionTab({
     return "";
   };
 
-  const softTimerNote = timerExpired && !roomEnded && (
-    <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="soft-timer-note">
-      행동 시간이 끝났지만 GM이 라운드를 넘기기 전까지는 제출·변경할 수 있습니다.
-    </p>
-  );
-
   // ── 제출됨 상태(다시 고르기 전) ─────────────────────────
   if (hasActionThisRound && !rePicking) {
     return (
@@ -209,7 +202,6 @@ export function DefenseActionTab({
         <p className="text-sm font-semibold text-emerald-300" data-testid="submitted-label">
           {justSubmitted === "replaced" ? "변경됨" : "제출됨"} · 바꾸려면 다시 고르세요
         </p>
-        {softTimerNote}
         {roomEnded ? (
           <p className="text-sm text-zinc-500">종료된 방이라 더 바꿀 수 없습니다.</p>
         ) : (
@@ -227,9 +219,6 @@ export function DefenseActionTab({
             >
               다시 고르기
             </button>
-            <p className="text-xs text-zinc-500">
-              GM이 라운드를 넘기기 전까지 바꿀 수 있습니다. 확정하기 전까지는 지금 선택이 그대로 유지됩니다.
-            </p>
           </>
         )}
       </div>
@@ -275,14 +264,10 @@ export function DefenseActionTab({
           </button>
         </div>
       )}
-      {softTimerNote}
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">
           전투 / 휴식 / 훈련 중 어느 것을 선택하시겠습니까?
         </h2>
-        <p className="text-base text-zinc-400">
-          라운드마다 행동은 하나입니다. 확정한 뒤에도 GM이 라운드를 넘기기 전까지는 다시 골라 바꿀 수 있습니다(마지막 선택만 반영).
-        </p>
         <div className="flex flex-col gap-2">
           <button
             type="button"

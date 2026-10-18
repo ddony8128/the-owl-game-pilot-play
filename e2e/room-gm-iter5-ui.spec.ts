@@ -59,7 +59,6 @@ test("[2] 디펜스 「다음 라운드」확인창 — 미제출 N명(이름)·
   await expect(dialog.getByTestId("pending-warning")).toContainText("미제출 2명");
   await expect(dialog.getByTestId("pending-warning")).toContainText("나래");
   await expect(dialog.getByTestId("pending-warning")).toContainText("다온");
-  await expect(dialog.getByTestId("headcount-warning")).toContainText("3명");
   await page.screenshot({ path: `${SHOT}/iter5-a-confirm-advance.png` });
   // 400ms 잠금: 열린 직후엔 확인이 비활성
   await expect(dialog.getByTestId("confirm-ok")).toBeDisabled();
@@ -70,10 +69,12 @@ test("[2] 디펜스 「다음 라운드」확인창 — 미제출 N명(이름)·
   // 다시 열고 확인(Playwright 는 활성화될 때까지 기다린다) → 2라운드
   await section.getByTestId("advance-round").click();
   await page.getByTestId("confirm-ok").click();
-  await expect(page.getByTestId("gm-notice")).toContainText("튜토리얼 2라운드", { timeout: 10_000 });
-  await expect(section).toContainText("현재 라운드: 튜토리얼 2라운드", { timeout: 10_000 });
-  const round = (await (await request.get(`/api/defense/state?room=${code}`)).json()).round;
-  expect(round).toBe(2);
+  await expect(page.getByTestId("gm-notice")).toContainText("튜토리얼 1라운드 결과 보기", { timeout: 10_000 });
+  await expect(section.getByTestId("stage-title")).toHaveText("튜토리얼 1라운드 결과", { timeout: 10_000 });
+  await expect(section.getByTestId("advance-round")).toContainText("튜토리얼 2라운드 시작");
+  const st2 = await (await request.get(`/api/defense/state?room=${code}`)).json();
+  expect(st2.round).toBe(2);
+  expect(st2.stage).toBe("result");
 });
 
 test("[1·7] 뒤처진 탭의 옛 버튼 → 409 배너(사유 구분) · 폴링 차단 시 화면 유지 + 재연결 배지", async ({ page, request }) => {
@@ -85,14 +86,14 @@ test("[1·7] 뒤처진 탭의 옛 버튼 → 409 배너(사유 구분) · 폴링
   await fastPoll(page);
   await page.goto(`/dashboard/x9a2k7/defense?room=${code}`);
   const section = page.getByTestId("defense-round-section");
-  await expect(section).toContainText("현재 라운드: 튜토리얼 2라운드");
+  await expect(section.getByTestId("stage-title")).toHaveText("튜토리얼 2라운드");
   await expect(page.getByTestId("connection-badge")).toHaveCount(0);
 
   // 폴링을 끊는다 → 화면은 남고 재연결 배지가 뜬다(1-5)
   await page.route("**/api/gm/defense/dashboard**", (route) => route.abort());
   await expect(page.getByTestId("connection-badge")).toBeVisible({ timeout: 15_000 });
-  await expect(section).toContainText("현재 라운드: 튜토리얼 2라운드");
-  await expect(page.getByText("라운드 관리")).toBeVisible();
+  await expect(section.getByTestId("stage-title")).toHaveText("튜토리얼 2라운드");
+  await expect(page.getByText("진행", { exact: true })).toBeVisible();
   await page.screenshot({ path: `${SHOT}/iter5-a-connection-badge.png` });
 
   // 그 사이 다른 창이 되돌렸다(2 → 1). 뒤처진 화면은 2를 보고 3으로 가려 한다 → 409 stale_from
@@ -111,7 +112,7 @@ test("[1·7] 뒤처진 탭의 옛 버튼 → 409 배너(사유 구분) · 폴링
   // 폴링을 복구하면 배지가 사라지고 화면이 서버와 맞는다
   await page.unroute("**/api/gm/defense/dashboard**");
   await expect(page.getByTestId("connection-badge")).toHaveCount(0, { timeout: 15_000 });
-  await expect(section).toContainText("현재 라운드: 튜토리얼 1라운드", { timeout: 10_000 });
+  await expect(section.getByTestId("stage-title")).toHaveText("튜토리얼 1라운드", { timeout: 10_000 });
   await banner.getByRole("button", { name: "닫기" }).click();
   await expect(banner).toHaveCount(0);
 });
@@ -128,14 +129,15 @@ test("[3] 디펜스 되돌리기 버튼 — 확인창 → 준비로 복원 · �
   await expect(page.getByTestId("confirm-dialog")).toContainText("되돌리기: 튜토리얼 1라운드 → 준비");
   await page.getByTestId("confirm-ok").click();
   await expect(page.getByTestId("gm-notice")).toContainText("준비로 되돌렸습니다", { timeout: 10_000 });
-  await expect(section).toContainText("현재 라운드: 준비", { timeout: 10_000 });
+  await expect(section.getByTestId("stage-title")).toHaveText("준비", { timeout: 10_000 });
   await expect(section.getByTestId("rewind-round")).toBeDisabled();
   await expect(page.getByTestId("gm-log-section")).toContainText("되돌리기", { timeout: 10_000 });
 
   // 다시 1라운드로 가서 제출을 넣으면 되돌리기는 409
   await section.getByTestId("advance-round").click();
+  await expect(page.getByTestId("confirm-dialog").getByTestId("headcount-warning")).toContainText("1명");
   await page.getByTestId("confirm-ok").click();
-  await expect(section).toContainText("현재 라운드: 튜토리얼 1라운드", { timeout: 10_000 });
+  await expect(section.getByTestId("stage-title")).toHaveText("튜토리얼 1라운드", { timeout: 10_000 });
   const st = await (await request.get(`/api/defense/state?${new URLSearchParams({ room: code, nickname: "r1" })}`)).json();
   await request.post("/api/defense/action", {
     data: { room: code, nickname: "r1", action_type: "combat", target_monster_id: st.monsters[0].instanceId, used_card_slot: 1 },

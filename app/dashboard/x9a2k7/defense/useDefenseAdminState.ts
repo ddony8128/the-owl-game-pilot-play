@@ -18,6 +18,10 @@ export type PendingInfo = {
 export type DefenseDashboardDto = {
   room: { code: string; game: string; status: "active" | "ended"; reveal_result?: boolean | null };
   round: number;
+  stage: string;
+  prevRound: number;
+  stageTitle: string;
+  nextStep: { label: string; kind: "round" | "stage"; settles: boolean } | null;
   players: DefenseAdminPlayer[];
   pending: PendingInfo;
   gmLogs: GmLogItem[];
@@ -28,6 +32,8 @@ export type DefenseDashboardDto = {
 type DefenseAdminState = {
   data: DefenseDashboardDto | null;
   round: number | null;
+  stage: string | null;
+  prevRound: number | null;
   players: DefenseAdminPlayer[];
   pending: PendingInfo | null;
   roomStatus: "active" | "ended" | null;
@@ -55,6 +61,8 @@ export function useDefenseAdminState(room: string | null): DefenseAdminState {
   return {
     data,
     round: data ? data.round : null,
+    stage: data ? data.stage : null,
+    prevRound: data ? data.prevRound : null,
     players: data?.players ?? [],
     pending: data?.pending ?? null,
     roomStatus: data?.room.status ?? null,

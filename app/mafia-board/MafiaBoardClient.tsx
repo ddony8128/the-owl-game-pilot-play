@@ -126,13 +126,7 @@ function MafiaBoard({ room }: { room: string }) {
       bg={bg}
       dim={view === "lobby" ? 0.62 : view === "live" ? 0.82 : 0.78}
       title={title}
-      subtitle={
-        <>
-          자본주의 마피아 · 방 {room}
-          {data ? ` · ${mafiaRoundLabel(data.round)} ${phaseLabel}` : ""}
-          {data?.roomStatus === "ended" ? " · 종료된 방" : ""}
-        </>
-      }
+      subtitle={data?.roomStatus === "ended" ? "종료된 방" : undefined}
       failures={failures}
       stage={{
         game: "mafia",
@@ -142,7 +136,11 @@ function MafiaBoard({ room }: { room: string }) {
         finished: data?.finished ?? false,
         revealed: data?.revealed ?? false,
       }}
-      right={<BoardCountdown state={timer.state} label={data?.phase ? PHASE_TIMER_LABEL[data.phase] : undefined} />}
+      right={
+        data?.phase === "auction" || data?.phase === "trade" || data?.phase === "vote" ? (
+          <BoardCountdown state={timer.state} label={PHASE_TIMER_LABEL[data.phase]} />
+        ) : null
+      }
     >
       {roomMissing ? (
         <p className="m-auto text-[clamp(1.2rem,3vh,2rem)] text-red-300">방 코드 {room} 을(를) 찾을 수 없습니다.</p>

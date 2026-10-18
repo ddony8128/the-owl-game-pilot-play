@@ -38,6 +38,7 @@ export type BoardScoresResponse = {
 /** /api/defense/board-phase */
 export type BoardPhaseResponse = {
   round: number;
+  stage?: string | null;
   prevRound?: number;
   endedEarlyFrom?: number | null;
   updatedAt: string | null;

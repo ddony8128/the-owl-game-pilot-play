@@ -78,7 +78,7 @@ export function DefenseRulesTab() {
             <span className="font-semibold">몬스터</span>
             <ul className="ml-4 list-disc">
               <li>
-                총 6종류. 마릿수는 참가 인원에 따라 조정됩니다(기준 24마리).
+                총 6종류. 마릿수는 참가 인원에 따라 조정됩니다.
               </li>
               <li>각 몬스터에 대한 정보는 몬스터 도감 탭에 있습니다.</li>
             </ul>
@@ -95,19 +95,6 @@ export function DefenseRulesTab() {
               </li>
             </ul>
           </li>
-        </ul>
-      </div>
-      <br />
-      {/* 3. 게임 준비 */}
-      <div className="space-y-2">
-        <p className="font-semibold text-zinc-100">게임 준비</p>
-        <ul className="list-decimal pl-5">
-          <li>
-            각 플레이어는 숫자 카드 1 / 2 / 3 / 4를 모두 활성화한 상태로
-            시작합니다.
-          </li>
-          <li>몬스터 대기열을 무작위 몬스터로 채웁니다.</li>
-          <li>1라운드를 시작합니다.</li>
         </ul>
       </div>
       <br />

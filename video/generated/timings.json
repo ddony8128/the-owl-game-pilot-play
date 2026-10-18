@@ -52,9 +52,9 @@
         "narrSec": 23.56
       },
       {
-        "frames": 420,
-        "audio": "audio/defense-10-a7497d00-x1.25.wav",
-        "narrSec": 12.39
+        "frames": 413,
+        "audio": "audio/defense-10-2312d742-x1.25.wav",
+        "narrSec": 12.14
       },
       {
         "frames": 596,
@@ -67,7 +67,7 @@
         "narrSec": 21.2
       }
     ],
-    "total": 7386
+    "total": 7379
   },
   "mafia": {
     "scenes": [
@@ -82,9 +82,9 @@
         "narrSec": 17.13
       },
       {
-        "frames": 531,
-        "audio": "audio/mafia-02-e9f05eff-x1.28.wav",
-        "narrSec": 16.09
+        "frames": 400,
+        "audio": "audio/mafia-02-7928edb4-x1.28.wav",
+        "narrSec": 11.73
       },
       {
         "frames": 986,
@@ -97,9 +97,9 @@
         "narrSec": 47.01
       },
       {
-        "frames": 1747,
-        "audio": "audio/mafia-05-012543fc-x1.28.wav",
-        "narrSec": 56.63
+        "frames": 1612,
+        "audio": "audio/mafia-05-71b571e8-x1.28.wav",
+        "narrSec": 52.1
       },
       {
         "frames": 487,
@@ -122,9 +122,9 @@
         "narrSec": 32.49
       },
       {
-        "frames": 561,
-        "audio": "audio/mafia-10-e85b105e-x1.28.wav",
-        "narrSec": 17.07
+        "frames": 594,
+        "audio": "audio/mafia-10-a6a52e6b-x1.28.wav",
+        "narrSec": 18.19
       },
       {
         "frames": 439,
@@ -137,6 +137,6 @@
         "narrSec": 27.64
       }
     ],
-    "total": 10576
+    "total": 10343
   }
 }

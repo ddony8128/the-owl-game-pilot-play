@@ -29,24 +29,25 @@ export default function DashboardDefensePage() {
     setMounted(true);
   }, []);
 
-  const { round, players, pending, roomStatus, gmLogs, gmLogsWarning, loading, error, failures, reload } =
+  const { round, stage, prevRound, players, pending, roomStatus, gmLogs, gmLogsWarning, loading, error, failures, reload } =
     useDefenseAdminState(room);
   // 모든 GM 조작은 이 하나를 거친다: 잠금·12초 제한·실패 배너·성공 후 즉시 갱신.
   const action = useGmAction(reload);
   const ended = roomStatus === "ended";
 
-  const advanceRound = async (nextRound: number, from: number) => {
+  // [다음] — 단계 하나를 넘긴다(라운드 전환·정산·타이머·보드 화면은 서버가 단계에 맞춰 처리)
+  const next = async (from: { round: number; stage: string }) => {
     if (!room) return;
-    await action.run<{ idempotent?: boolean; earlyEnd?: boolean }>(
-      "/api/gm/defense/round",
-      { body: { round: nextRound, from, room } },
+    await action.run<{ idempotent?: boolean; earlyEnd?: boolean; label?: string }>(
+      "/api/gm/defense/step",
+      { body: { room, from } },
       {
         notice: (json) =>
           json.idempotent
-            ? "이미 그 라운드입니다(다른 창에서 진행됨)."
+            ? "이미 넘어간 단계입니다(다른 창에서 진행됨)."
             : json.earlyEnd
-              ? "모든 몬스터가 처치·도망해 최종 결과로 넘어갔습니다(조기 종료)."
-              : `${getDefenseRoundLabel(nextRound)} 시작`,
+              ? "모든 몬스터가 처치·도망해 최종 결과로 넘어갑니다(조기 종료)."
+              : `${json.label ?? "다음 단계"} — 진행했습니다.`,
       },
     );
   };
@@ -123,11 +124,13 @@ export default function DashboardDefensePage() {
       <DefenseCountdownSection room={room} action={action} disabled={ended} />
       <DefenseRoundSection
         round={round}
+        stage={stage}
+        prevRound={prevRound}
         playerCount={players.length}
         pending={pending}
         disabled={ended}
         busy={action.busy}
-        onAdvanceRound={advanceRound}
+        onNext={next}
         onRewind={rewind}
       />
       <MonsterConfigSection room={room} playerCount={players.length} action={action} disabled={ended} />

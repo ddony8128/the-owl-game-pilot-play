@@ -20,6 +20,7 @@ import {
 } from "@/lib/admin/rewindRules";
 import { readFromIndex } from "@/lib/admin/advanceGuard";
 import { getDefenseRoundLabel } from "@/lib/admin/defenseLabels";
+import { stageAfterRewind } from "@/lib/defense/steps";
 
 // POST /api/gm/defense/rewind { room, from? }
 //  현재 라운드 N 의 행동 제출이 0건이면 N-1 로 되돌린다(Iteration 5 계약).
@@ -237,6 +238,8 @@ export async function POST(request: Request) {
     return gmError(status, result?.error ?? "되돌리기 실패", (result?.reason ?? undefined) as Parameters<typeof gmError>[2]);
   }
   const restoredMonsters = result.restored_monsters;
+  // 되돌린 라운드의 단계는 "행동"(정산 직전) — 보드·폰·[다음] 버튼이 그 단계를 본다.
+  await supabase.from("defense_phase_state").update({ stage: stageAfterRewind(M) }).eq("room_code", room).eq("round", M);
 
   const { data: afterRow } = await supabase
     .from("defense_phase_state")

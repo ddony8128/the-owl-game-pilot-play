@@ -45,7 +45,7 @@ export function MafiaRulesTab() {
             뽑히지 않으면(동점/무투표 포함), 모든 마피아는 그 시점에서 가장 비싼
             주식 1주를 받습니다. 가장 비싼 주식이 여러 종류라면 각 마피아에게
             랜덤으로 지급됩니다. 마피아 여부와 상관 없이 경제사범은 국채 가격만큼
-            벌금을 냅니다. 다음 라운드로 넘어가거나 게임을 종료합니다. 총
+            벌금을 냅니다. 총
             5라운드입니다.
           </li>
         </ul>
@@ -109,14 +109,6 @@ export function MafiaRulesTab() {
             받는다부엉! 그것 말고는 없다부엉. 불쌍해부엉...
           </li>
         </ul>
-      </div>
-
-      <div className="space-y-1">
-        <p className="font-semibold text-zinc-100">내 기록</p>
-        <p className="text-sm">
-          <span className="font-semibold">로그</span> 탭에서 라운드별 내 경매·거래·정산·투표 기록을 볼 수 있습니다(게임이 끝난 뒤에도).
-          남의 직업·남의 표는 보이지 않습니다. 최종 결과는 GM이 공개한 뒤에 보입니다.
-        </p>
       </div>
     </div>
   );

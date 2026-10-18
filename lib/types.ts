@@ -218,6 +218,8 @@ export type DefensePhaseState = {
   updated_at: string;
   /** 조기 종료(모든 몬스터 처치·도망)로 16에 도달했을 때, 마지막으로 정산된 DB round. 보통은 null. */
   ended_early_from?: number | null;
+  /** 진행 단계(ready·action·result·score·prep) — lib/defense/steps.ts */
+  stage?: string | null;
 };
 
 export type DefenseMonsterCount = {

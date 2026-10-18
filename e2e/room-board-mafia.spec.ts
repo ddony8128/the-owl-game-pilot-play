@@ -79,7 +79,7 @@ test("[마피아보드1] 로비 QR·카운트다운 → 진행 중 시세판, �
     expect(await img.getAttribute("src")).toMatch(/^data:image\/png/);
     await expect(page.getByTestId("board-player-count")).toContainText("6");
     await expect(page.getByTestId("board-bg")).toHaveAttribute("data-bg", "hall-mafia");
-    await expect(page.getByTestId("board-countdown")).toHaveAttribute("data-has-timer", "false", { timeout: 10_000 }); // 준비 단계엔 타이머 없음
+    await expect(page.getByTestId("board-countdown")).toHaveCount(0); // 준비 단계엔 타이머가 아예 없다
     await assertFits(page, "마피아 로비 1920");
     await page.screenshot({ path: `${SHOTS}/iter5-c-mafia-lobby.png` });
 

@@ -7,6 +7,7 @@ import { gmError, loadRoomForWrite } from "@/lib/admin/gmResponse";
 import { promoteDefenseTimerPending } from "@/lib/admin/timerStore";
 import { getDefenseRoundLabel } from "@/lib/admin/defenseLabels";
 import { addGmLog } from "@/lib/admin/gmLog";
+import { isDefenseStage, normalizeStage } from "@/lib/defense/steps";
 import { handleDefenseInitRound } from "./initGame";
 import { handleDefenseAdvanceRound } from "./advanceRound";
 
@@ -15,6 +16,8 @@ type Body = {
   round?: number;
   /** 화면이 보고 있던 라운드(Iteration 5 — 뒤처진 탭 보호). 없으면 옛 요청으로 취급. */
   from?: unknown;
+  /** 전환 뒤 단계(step API 가 넘김). 없으면 round 변화로 추정 */
+  stage?: unknown;
 };
 
 type ResponseBody =
@@ -144,7 +147,12 @@ export async function POST(request: Request) {
   const finalRound = earlyEnd ? 16 : nextRound;
   const { data: claimed, error: advanceError } = await supabase
     .from("defense_phase_state")
-    .update({ round: finalRound, ended_early_from: earlyEnd ? current.round : null })
+    .update({
+      round: finalRound,
+      ended_early_from: earlyEnd ? current.round : null,
+      // step API 는 stage 를 넘긴다. 직접 호출(옛 호출자·테스트)은 라운드 번호로 추정(전투 라운드 = 행동).
+      stage: earlyEnd ? "result" : isDefenseStage(body.stage) ? body.stage : normalizeStage(finalRound, null),
+    })
     .eq("room_code", room)
     .eq("round", current.round)
     .select("room_code, round, updated_at")

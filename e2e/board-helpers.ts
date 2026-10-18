@@ -33,6 +33,17 @@ export async function endRoom(req: APIRequestContext, room: string) {
 
 export const defenseRound = (req: APIRequestContext, room: string, round: number) =>
   post(req, "/api/gm/defense/round", { room, round });
+/** GM [다음] 한 번 — 응답 { label, round, stage, prevRound, earlyEnd } */
+export const defenseStep = (req: APIRequestContext, room: string) =>
+  post(req, "/api/gm/defense/step", { room }) as Promise<{ label: string; round: number; stage: string; prevRound: number; earlyEnd: boolean }>;
+/** [다음]을 (round, stage) 에 도달할 때까지 누른다(최대 40회) */
+export async function defenseStepTo(req: APIRequestContext, room: string, round: number, stage: string) {
+  for (let i = 0; i < 40; i += 1) {
+    const r = await defenseStep(req, room);
+    if (r.round === round && r.stage === stage) return r;
+  }
+  throw new Error(`defenseStepTo: (${round}, ${stage}) 에 도달하지 못함`);
+}
 export const mafiaAdvance = (req: APIRequestContext, room: string, to: string) =>
   post(req, "/api/gm/mafia/advance-phase", { room, to });
 export const mafiaNextRound = (req: APIRequestContext, room: string, round: number) =>

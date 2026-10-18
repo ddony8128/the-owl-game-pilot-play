@@ -22,3 +22,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS gm_logs_room_request_key ON gm_logs (room_code
 
 -- 2026-10-17 (후속) 디펜스 조기 종료 — 모든 몬스터 처치·도망 시 round 16 으로 가며 마지막 정산 라운드를 기록(보드 결과 단계·최종 점수·되돌리기 판정용). 운영 DB 적용됨.
 ALTER TABLE defense_phase_state ADD COLUMN IF NOT EXISTS ended_early_from INTEGER NULL;
+
+-- 2026-10-18 진행 단계(또니 — GM [다음] 버튼 하나): defense_phase_state.stage = ready | action | result | score | prep. 운영 DB 적용됨.
+ALTER TABLE defense_phase_state ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'action';
+UPDATE defense_phase_state SET stage='ready' WHERE round=0;

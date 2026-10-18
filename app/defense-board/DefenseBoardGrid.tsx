@@ -40,7 +40,7 @@ function outcomeOf(m: BoardMonster): Outcome {
 
 const CUE_STYLE: Record<Outcome["cue"], { badge: string; card: string; img: string }> = {
   defeated: { badge: "bg-amber-400 text-zinc-950", card: "border-amber-300/80 board-flash", img: "" },
-  expired: { badge: "bg-red-600 text-white", card: "border-red-500/70", img: "board-flee" },
+  expired: { badge: "bg-red-600 text-white", card: "border-red-500/70", img: "" }, // 도망: 이미지 교체만(움직임 없음, 또니 10-18)
   damaged: { badge: "bg-orange-500 text-white", card: "border-orange-400/70", img: "board-shake" },
   untouched: { badge: "bg-zinc-700 text-zinc-200", card: "border-white/10", img: "" },
 };

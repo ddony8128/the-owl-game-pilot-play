@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
+import { normalizeStage } from "@/lib/defense/steps";
 
 /**
  * 디펜스 보드(빔) GM 자동 추종용 공개 상태 — Iteration 5 WS-C.
@@ -9,6 +10,8 @@ import { normalizeRoomCode } from "@/lib/rooms";
  */
 type DefenseBoardPhase = {
   round: number;
+  /** 진행 단계(ready·action·result·score·prep) — 보드는 이 단계 화면에 머문다 */
+  stage: string;
   /** 이 라운드 화면이 "결과"로 보여 줄 직전 전투 라운드. 보통 round-1, 조기 종료(16)면 마지막으로 정산된 라운드. */
   prevRound: number;
   endedEarlyFrom: number | null;
@@ -27,7 +30,7 @@ export async function GET(request: Request) {
 
   const [roomRes, phaseRes, playersRes] = await Promise.all([
     supabase.from("rooms").select("code, status, game").eq("code", room).maybeSingle(),
-    supabase.from("defense_phase_state").select("round, updated_at, ended_early_from").eq("room_code", room).maybeSingle(),
+    supabase.from("defense_phase_state").select("round, updated_at, ended_early_from, stage").eq("room_code", room).maybeSingle(),
     supabase.from("players").select("id", { count: "exact", head: true }).eq("room_code", room),
   ]);
 
@@ -48,6 +51,7 @@ export async function GET(request: Request) {
       : null;
   const body: DefenseBoardPhase = {
     round,
+    stage: normalizeStage(round, (phaseRes.data as { stage?: string | null } | null)?.stage),
     prevRound: round === 16 && endedEarlyFrom != null ? endedEarlyFrom : round - 1,
     endedEarlyFrom,
     updatedAt: (phaseRes.data?.updated_at as string | null) ?? null,

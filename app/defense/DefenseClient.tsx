@@ -6,6 +6,7 @@ import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
+import { defenseStageTitle } from "@/lib/defense/steps";
 import { KickedScreen, RoomEndedBanner, RoomGoneScreen } from "@/components/PhoneNotices";
 import { TabLayout, type TabKey } from "@/components/TabLayout";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
@@ -69,6 +70,8 @@ type DefenseLogEntry = {
 type DefenseState = {
   round: number | null;
   roomStatus?: "active" | "ended";
+  stage?: string | null;
+  prevRound?: number | null;
   monsters: DefenseMonsterClient[];
   cards: DefenseCardClient[];
   score: number;
@@ -244,11 +247,16 @@ function DefenseInner() {
   const seconds = totalSeconds != null ? totalSeconds % 60 : null;
   const timerExpired = timerState != null && timerState.started && timerState.remainingSeconds <= 0;
 
-  const roundLabel = getRoundLabel(roundNumber);
+  const stageNow = defenseState?.stage ?? null;
+  const roundLabel =
+    stageNow && stageNow !== "action" && roundNumber != null
+      ? defenseStageTitle(roundNumber, stageNow, defenseState?.prevRound ?? null)
+      : getRoundLabel(roundNumber);
   const isInitialLoading = !defenseState;
   const roomEnded = defenseState?.roomStatus === "ended";
+  // 행동 탭은 "행동" 단계에만 연다(결과·점수 발표·본게임 준비 중에는 닫힘 — GM 이 [다음]으로 열어 준다)
   const hideInfoAndAction =
-    roundNumber === 0 || roundNumber === 3 || roundNumber === 16;
+    roundNumber === 0 || roundNumber === 3 || roundNumber === 16 || (stageNow != null && stageNow !== "action");
 
   const tabsDef = useMemo(() => {
     const base: { key: TabKey; label: string }[] = [
