@@ -35,6 +35,7 @@ type DefensePlayerStateResponse =
       /** 진행 단계 — action 일 때만 행동 탭이 열린다 */
       stage?: string;
       prevRound?: number | null;
+      endedEarlyFrom?: number | null;
       roomStatus: "active" | "ended";
       phoneLogs?: boolean;
       phoneRemainingCount?: boolean;
@@ -373,6 +374,8 @@ export async function GET(request: Request) {
       round,
       stage: normalizeStage(round ?? 0, phase?.stage),
       prevRound: round != null ? (round === 16 && typeof phase?.ended_early_from === "number" ? phase.ended_early_from : round - 1) : null,
+      // ITER6 A6 — 조기 종료(모든 몬스터 처치·도망)로 16에 온 경우 마지막 정산 라운드(DB 4~15). 폰 최종 안내에 쓴다.
+      endedEarlyFrom: round === 16 && typeof phase?.ended_early_from === "number" ? phase.ended_early_from : null,
       roomStatus: roomRow.status === "ended" ? "ended" : "active",
       serverNow: new Date().toISOString(),
       // ITER6 C5 — GM 토글(기본 켜짐). 끄면 폰이 로그 탭·도감 '남은 수'를 숨긴다.

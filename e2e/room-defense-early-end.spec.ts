@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
+import { primePhone } from "./helpers/phone";
 
 // 디펜스 조기 종료(룰지 §7): 본게임에서 모든 몬스터가 처치·도망해 대기열과 풀이 비면 [다음 라운드]가 다음 라운드 대신
 // 16(최종 결과)으로 간다. 보드 phase 는 prevRound=마지막 정산 라운드, 최종 점수는 그 라운드 스냅샷, 되돌리기는 409.
@@ -18,7 +19,7 @@ const adv = (request: APIRequestContext, room: string, round: number, from: numb
 const state = async (request: APIRequestContext, room: string, nickname: string) =>
   (await request.get(`/api/defense/state?${new URLSearchParams({ room, nickname })}`)).json();
 
-test("[조기 종료] 스컬 스파이더 1마리만 있는 방: 본게임 1라운드에 처치 → 다음 라운드가 16(최종 결과)로", async ({ request }) => {
+test("[조기 종료] 스컬 스파이더 1마리만 있는 방: 본게임 1라운드에 처치 → 다음 라운드가 16(최종 결과)로", async ({ request, page }) => {
   test.setTimeout(120_000);
   const nicks = ["끝1", "끝2", "끝3", "끝4", "끝5", "끝6"];
   const room = await newRoom(request, nicks);
@@ -65,6 +66,17 @@ test("[조기 종료] 스컬 스파이더 1마리만 있는 방: 본게임 1라�
   // GM 로그
   const dash = await (await request.get(`/api/gm/defense/dashboard?room=${room}`)).json();
   expect(dash.gmLogs.some((l: { content: string }) => l.content.includes("조기 종료"))).toBe(true);
+
+  // ITER6 A6 — 폰 정보 탭: 최종 결과 카드(내 점수 2점 · 1위) + 조기 종료 문장(본게임 1라운드)
+  expect(s16.endedEarlyFrom).toBe(4);
+  await primePhone(page, room, "끝1", "defense");
+  await page.goto("/defense");
+  const card = page.getByTestId("final-result");
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("final-points")).toContainText("2", { timeout: 15_000 });
+  await expect(page.getByTestId("final-rank")).toHaveText("1위");
+  await expect(page.getByTestId("final-early")).toContainText("본게임 1라운드");
+  // 조기 종료가 아닌 16(정상 종료)에서는 조기 문장이 없다 — 아래 두 번째 테스트 방으로는 16에 가지 않으므로 여기서만 검사
 });
 
 test("[조기 종료 아님] 풀이 남아 있으면 평소처럼 다음 라운드로 간다", async ({ request }) => {

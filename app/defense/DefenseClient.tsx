@@ -18,6 +18,7 @@ import { DefenseInfoTab } from "./DefenseInfoTab";
 import { DefenseActionTab } from "./DefenseActionTab";
 import { DefenseDexTab } from "./DefenseDexTab";
 import { DefenseLogsTab } from "./DefenseLogsTab";
+import { DefenseFinalResult } from "./DefenseFinalResult";
 
 type DefenseMonsterClient = {
   instanceId: string;
@@ -72,6 +73,7 @@ type DefenseState = {
   roomStatus?: "active" | "ended";
   stage?: string | null;
   prevRound?: number | null;
+  endedEarlyFrom?: number | null;
   monsters: DefenseMonsterClient[];
   cards: DefenseCardClient[];
   score: number;
@@ -205,6 +207,13 @@ function DefenseInner() {
 
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
         <TabLayout tabs={tabsDef} activeKey={effectiveTab} onChange={setActiveTab}>
+          {effectiveTab === "info" && roundNumber === 16 && (
+            <DefenseFinalResult
+              room={player.room_code}
+              playerId={player.id}
+              endedEarlyFrom={defenseState?.endedEarlyFrom ?? null}
+            />
+          )}
           {effectiveTab === "info" && (
             <DefenseInfoTab
               monsters={defenseState?.monsters ?? []}
