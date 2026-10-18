@@ -8,6 +8,8 @@ import {
 } from "@/lib/rooms";
 import { gmError } from "@/lib/admin/gmResponse";
 import { addGmLog } from "@/lib/admin/gmLog";
+import { isMissingColumnError } from "@/lib/boardVideo";
+import { PHONE_TOGGLES_MIGRATION, readPhoneToggles } from "@/lib/phoneToggles";
 
 const VALID_GAMES: RoomGame[] = ["mafia", "defense", "subway"];
 
@@ -91,12 +93,47 @@ export async function PATCH(request: Request) {
     }
     patch.reveal_result = body.reveal_result;
   }
-  if (Object.keys(patch).length === 0) {
+  // ITER6 B5·C5 — 참가자 폰 편의 기능 토글. 컬럼이 없는 DB에서도 다른 변경(방 종료 등)이 깨지지 않게 따로 저장한다.
+  const togglePatch: Record<string, boolean> = {};
+  for (const key of ["phone_logs", "phone_remaining_count"] as const) {
+    if (body?.[key] !== undefined) {
+      if (typeof body[key] !== "boolean") return gmError(400, `${key} 는 boolean`, "invalid_input");
+      togglePatch[key] = body[key];
+    }
+  }
+  if (Object.keys(patch).length === 0 && Object.keys(togglePatch).length === 0) {
     return gmError(400, "변경할 필드가 없습니다.", "invalid_input");
   }
 
   const existing = await getRoom(code);
   if (!existing) return gmError(404, "방을 찾을 수 없습니다.", "room_not_found");
+
+  if (Object.keys(togglePatch).length > 0) {
+    if (existing.status === "ended") return gmError(409, "종료된 방은 바꿀 수 없습니다.", "room_ended");
+    const before = await readPhoneToggles(supabase, code);
+    const t = await supabase.from("rooms").update(togglePatch).eq("code", code);
+    if (t.error) {
+      if (isMissingColumnError(t.error) || /phone_/.test(t.error.message ?? "")) {
+        return gmError(503, `DB에 phone_logs/phone_remaining_count 컬럼이 없습니다 — ${PHONE_TOGGLES_MIGRATION} 실행`, "schema_missing");
+      }
+      return gmError(500, t.error.message);
+    }
+    const labels: Record<string, string> = { phone_logs: "참가자 폰 로그 탭", phone_remaining_count: "참가자 폰 도감 남은 수" };
+    const prev: Record<string, boolean> = { phone_logs: before.phoneLogs, phone_remaining_count: before.phoneRemainingCount };
+    for (const [k, v] of Object.entries(togglePatch)) {
+      if (prev[k] === v) continue;
+      await addGmLog(supabase, {
+        room: code,
+        game: existing.game,
+        kind: "other",
+        content: `${labels[k]} ${v ? "보이기" : "숨기기"}`,
+        meta: { [k]: v },
+      });
+    }
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ ok: true, room: existing, toggles: { ...prev, ...togglePatch } });
+    }
+  }
 
   const { data: updated, error } = await supabase
     .from("rooms")

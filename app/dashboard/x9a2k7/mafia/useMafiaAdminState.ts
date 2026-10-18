@@ -22,6 +22,7 @@ export type MafiaDashboardDto = {
   pending: PendingInfo | null;
   gmLogs: GmLogItem[];
   gmLogsWarning: string | null;
+  phoneToggles?: { phoneLogs: boolean; phoneRemainingCount: boolean; columnMissing: boolean };
   serverNow: string;
 };
 
@@ -35,6 +36,7 @@ type MafiaAdminState = {
   logs: MafiaLog[];
   pending: PendingInfo | null;
   roomStatus: "active" | "ended" | null;
+  phoneToggles: { phoneLogs: boolean; phoneRemainingCount: boolean; columnMissing: boolean } | null;
   revealResult: boolean;
   gmLogs: GmLogItem[];
   gmLogsWarning: string | null;
@@ -64,6 +66,7 @@ export function useMafiaAdminState(room: string | null): MafiaAdminState {
     logs: data?.logs ?? [],
     pending: data?.pending ?? null,
     roomStatus: data?.room.status ?? null,
+    phoneToggles: data?.phoneToggles ?? null,
     revealResult: !!data?.room.reveal_result,
     gmLogs: data?.gmLogs ?? [],
     gmLogsWarning: data?.gmLogsWarning ?? null,

@@ -8,6 +8,7 @@ import { RuleVideoPanel } from "../RuleVideoPanel";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { GmErrorBanner, GmNoticeBanner } from "@/components/GmBanners";
 import { GmLogSection } from "@/components/GmLogSection";
+import { PhoneTogglesSection } from "@/components/PhoneTogglesSection";
 import { GmRoomHeader } from "@/components/GmRoomHeader";
 import { useGmAction } from "@/lib/hooks/useGmAction";
 import { getDefenseRoundLabel } from "@/lib/admin/defenseLabels";
@@ -31,13 +32,21 @@ export default function DashboardDefensePage() {
     setMounted(true);
   }, []);
 
-  const { round, stage, prevRound, players, pending, roomStatus, gmLogs, gmLogsWarning, loading, error, failures, reload } =
+  const { round, stage, prevRound, players, pending, roomStatus, phoneToggles, gmLogs, gmLogsWarning, loading, error, failures, reload } =
     useDefenseAdminState(room);
   // 모든 GM 조작은 이 하나를 거친다: 잠금·12초 제한·실패 배너·성공 후 즉시 갱신.
   const action = useGmAction(reload);
   const ended = roomStatus === "ended";
 
   // [다음] — 단계 하나를 넘긴다(라운드 전환·정산·타이머·보드 화면은 서버가 단계에 맞춰 처리)
+  const togglePhone = async (key: "phone_logs" | "phone_remaining_count", next: boolean) => {
+    if (!room) return;
+    const what = key === "phone_logs" ? "참가자 폰 로그 탭" : "참가자 폰 도감 남은 수";
+    await action.run("/api/gm/rooms", { method: "PATCH", body: { code: room, [key]: next } }, {
+      notice: `${what}${next ? "을 보이게 했습니다." : "을 숨겼습니다."}`,
+    });
+  };
+
   const next = async (from: { round: number; stage: string }) => {
     if (!room) return;
     await action.run<{ idempotent?: boolean; earlyEnd?: boolean; label?: string }>(
@@ -136,6 +145,10 @@ export default function DashboardDefensePage() {
           </div>
         </div>
       </section>
+
+      <div className={panelClass}>
+        <PhoneTogglesSection game="defense" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
+      </div>
 
       <details className={panelClass} open>
         <summary className="cursor-pointer text-lg font-black text-white">

@@ -12,9 +12,13 @@ type Props = {
     totalCount: number;
     image: string;
   }[];
+  /** ITER6 C5 — GM 토글 '도감 남은 수'(기본 켜짐) */
+  showRemaining?: boolean;
 };
 
-export function DefenseDexTab({ dex }: Props) {
+// ITER6 C4 — '전체 n마리'는 표시하지 않는다. 그 값(totalCount)은 lib/defense/monsters.ts 의 기본 구성(8명 24마리)
+// baseCount 를 읽어, 인원 자동 구성·GM 저장으로 바뀐 이 방의 수와 달랐다(구성 4마리인데 '전체 6마리').
+export function DefenseDexTab({ dex, showRemaining = true }: Props) {
   const sorted = [...dex].sort((a, b) => a.monsterId - b.monsterId);
 
   return (
@@ -39,15 +43,16 @@ export function DefenseDexTab({ dex }: Props) {
             <div className="flex-1 space-y-1">
               <div className="flex items-center justify-between">
                 <div className="text-base font-semibold">{m.name}</div>
-                <div className="text-base text-amber-300">
-                  남은 수: {m.remainingCount}마리
-                </div>
+                {showRemaining && (
+                  <div className="text-base text-amber-300" data-testid="dex-remaining">
+                    남은 수: {m.remainingCount}마리
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-zinc-400">
                 <span className="whitespace-nowrap">HP {m.maxHp}</span>
                 <span className="whitespace-nowrap">잔여 시간 {m.baseTime}</span>
                 <span className="whitespace-nowrap">포인트 +{m.points}</span>
-                <span className="whitespace-nowrap">전체 {m.totalCount}마리</span>
               </div>
             </div>
           </div>

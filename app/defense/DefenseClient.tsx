@@ -78,6 +78,9 @@ type DefenseState = {
   action: DefenseActionClient;
   dex: DefenseDexEntry[];
   logs: DefenseLogEntry[];
+  /** ITER6 C5 — GM 토글(없으면 켜짐) */
+  phoneLogs?: boolean;
+  phoneRemainingCount?: boolean;
 };
 
 export default function DefenseClient() {
@@ -135,6 +138,7 @@ function DefenseInner() {
   const hideInfoAndAction =
     roundNumber === 0 || roundNumber === 3 || roundNumber === 16 || (stageNow != null && stageNow !== "action");
 
+  const showLogs = defenseState?.phoneLogs !== false;
   const tabsDef = useMemo(() => {
     const base: { key: TabKey; label: string }[] = [
       { key: "info", label: "정보" },
@@ -147,8 +151,9 @@ function DefenseInner() {
       base.splice(1, 0, { key: "action", label: "행동" });
     }
 
-    return base;
-  }, [hideInfoAndAction]);
+    // ITER6 C5 — GM이 로그 탭을 끄면 숨긴다(보고 있었으면 아래 effectiveTab 이 첫 탭=정보로 돌린다)
+    return showLogs ? base : base.filter((t) => t.key !== "logs");
+  }, [hideInfoAndAction, showLogs]);
 
   // 현재 라운드에 없는 탭(예: 결과 화면의 "행동")을 보고 있었다면 첫 탭으로 — effect 의 setState 대신 렌더에서 유도한다.
   const effectiveTab: TabKey = tabsDef.some((t) => t.key === activeTab) ? activeTab : tabsDef[0].key;
@@ -223,7 +228,7 @@ function DefenseInner() {
           )}
           {effectiveTab === "rules" && <DefenseRulesTab />}
           {effectiveTab === "dex" && defenseState && (
-            <DefenseDexTab dex={defenseState.dex} />
+            <DefenseDexTab dex={defenseState.dex} showRemaining={defenseState.phoneRemainingCount !== false} />
           )}
           {effectiveTab === "logs" && defenseState && (
             <DefenseLogsTab logs={defenseState.logs} />

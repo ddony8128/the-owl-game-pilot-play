@@ -20,6 +20,7 @@ import { ErrorMessage } from "@/components/ErrorMessage";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { KickedScreen, RoomEndedBanner, RoomGoneScreen } from "@/components/PhoneNotices";
 import { TabLayout, type TabKey } from "@/components/TabLayout";
+import { mafiaPhaseKey, mafiaTabForPhase } from "@/lib/mafia/phoneTabs";
 import { getMafiaPhaseLabel } from "@/lib/labels/mafia";
 import { MafiaHeader } from "./MafiaHeader";
 import { MafiaInfoTab } from "./MafiaInfoTab";
@@ -66,6 +67,8 @@ type MafiaStateResponse = {
   } | null;
   myTradesThisRound?: Record<string, { bought: boolean; sold: boolean }> | null;
   myLog?: MafiaRoundLog[];
+  /** ITER6 B5 — GM 토글 '폰 로그 탭'(없으면 켜짐) */
+  phoneLogs?: boolean;
 };
 
 export default function MafiaClient() {
@@ -110,17 +113,28 @@ function MafiaInner() {
   const myTradesThisRound = data?.myTradesThisRound ?? null;
   const myLog = data?.myLog ?? [];
   const roomEnded = data?.roomStatus === "ended";
+  const showLogs = data?.phoneLogs !== false;
+
+  // ITER6 B3 — 단계가 바뀐 순간에만 그 단계의 탭으로 이동(폴링마다 끌어오지 않음). 렌더 중 파생 상태 갱신 패턴.
+  const phaseKey = mafiaPhaseKey(phase?.round_number, phase?.phase);
+  const [seenPhaseKey, setSeenPhaseKey] = useState<string | null>(null);
+  if (phaseKey !== null && phaseKey !== seenPhaseKey) {
+    setSeenPhaseKey(phaseKey);
+    const target = mafiaTabForPhase(phase?.phase);
+    if (target) setActiveTab(target);
+  }
 
   const availableTabs = useMemo(() => {
-    const base: TabKey[] = ["info", "result", "stocks", "log", "rules"];
-    const phaseKey = phase?.phase;
-    if (phaseKey === "auction") base.push("auction");
-    if (phaseKey === "trade") {
+    const base: TabKey[] = ["info", "result", "stocks", "rules"];
+    if (showLogs) base.push("log"); // ITER6 B5 — GM이 끄면 숨김(보고 있었으면 effectiveTab 이 정보로 돌린다)
+    const current = phase?.phase;
+    if (current === "auction") base.push("auction");
+    if (current === "trade") {
       base.push("trade", "ability");
     }
-    if (phaseKey === "vote") base.push("vote");
+    if (current === "vote") base.push("vote");
     return base;
-  }, [phase?.phase]);
+  }, [phase?.phase, showLogs]);
 
   const tabsDef = useMemo(
     () =>

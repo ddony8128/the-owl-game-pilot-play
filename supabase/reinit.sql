@@ -30,6 +30,8 @@ CREATE TABLE rooms (
   created_at TIMESTAMPTZ DEFAULT now(),
   board_video TEXT NULL,                       -- 보드에서 재생 중인 룰 영상 'defense' | 'mafia' | NULL
   board_video_seek_sec INTEGER NULL,           -- 그 영상의 시작/이동 위치(초)
+  phone_logs BOOLEAN NOT NULL DEFAULT true,    -- 참가자 폰 로그 탭 보이기(ITER6 B5·C5)
+  phone_remaining_count BOOLEAN NOT NULL DEFAULT true, -- 디펜스 도감 '남은 수' 보이기(ITER6 C5)
   PRIMARY KEY (code)
 );
 

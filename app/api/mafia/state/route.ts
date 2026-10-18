@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readPhoneToggles } from "@/lib/phoneToggles";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
 import type {
@@ -34,7 +35,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "room 필요" }, { status: 400 });
   }
 
-  const { room: roomRow, error: roomError } = await loadRoom(supabase, room);
+  const [{ room: roomRow, error: roomError }, toggles] = await Promise.all([
+    loadRoom(supabase, room),
+    readPhoneToggles(supabase, room),
+  ]);
   if (roomError) {
     return NextResponse.json({ error: roomError }, { status: 500 });
   }
@@ -486,6 +490,8 @@ export async function GET(request: Request) {
     phase,
     roomStatus,
     serverNow: new Date().toISOString(),
+    // ITER6 B5 — GM 토글(기본 켜짐). 끄면 폰이 로그 탭을 숨긴다.
+    phoneLogs: toggles.phoneLogs,
     stocks,
     playerState,
     players,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readPhoneToggles } from "@/lib/phoneToggles";
 import { defenseStageTitle, nextDefenseStep, normalizeStage } from "@/lib/defense/steps";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
@@ -66,6 +67,8 @@ export async function GET(request: Request) {
     pending,
     gmLogs: gmLogs.logs,
     gmLogsWarning: gmLogs.warning ?? null,
+    // ITER6 B5·C5 — 참가자 폰 편의 기능 토글(컬럼이 없으면 기본값 + columnMissing)
+    phoneToggles: await readPhoneToggles(supabase, room),
     serverNow: new Date().toISOString(),
   });
 }

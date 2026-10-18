@@ -26,6 +26,7 @@ export type DefenseDashboardDto = {
   pending: PendingInfo;
   gmLogs: GmLogItem[];
   gmLogsWarning: string | null;
+  phoneToggles?: { phoneLogs: boolean; phoneRemainingCount: boolean; columnMissing: boolean };
   serverNow: string;
 };
 
@@ -37,6 +38,7 @@ type DefenseAdminState = {
   players: DefenseAdminPlayer[];
   pending: PendingInfo | null;
   roomStatus: "active" | "ended" | null;
+  phoneToggles: { phoneLogs: boolean; phoneRemainingCount: boolean; columnMissing: boolean } | null;
   gmLogs: GmLogItem[];
   gmLogsWarning: string | null;
   loading: boolean;
@@ -66,6 +68,7 @@ export function useDefenseAdminState(room: string | null): DefenseAdminState {
     players: data?.players ?? [],
     pending: data?.pending ?? null,
     roomStatus: data?.room.status ?? null,
+    phoneToggles: data?.phoneToggles ?? null,
     gmLogs: data?.gmLogs ?? [],
     gmLogsWarning: data?.gmLogsWarning ?? null,
     loading: !data && !error,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readPhoneToggles } from "@/lib/phoneToggles";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { normalizeRoomCode } from "@/lib/rooms";
 import type {
@@ -35,6 +36,8 @@ type DefensePlayerStateResponse =
       stage?: string;
       prevRound?: number | null;
       roomStatus: "active" | "ended";
+      phoneLogs?: boolean;
+      phoneRemainingCount?: boolean;
       serverNow: string;
       monsters: {
         instanceId: string;
@@ -133,7 +136,10 @@ export async function GET(request: Request) {
   }
 
   // 방 존재 여부(없으면 404 room_not_found — 폰은 토큰을 지우지 않고 안내만 한다)
-  const { room: roomRow, error: roomError } = await loadRoom(supabase, room);
+  const [{ room: roomRow, error: roomError }, toggles] = await Promise.all([
+    loadRoom(supabase, room),
+    readPhoneToggles(supabase, room),
+  ]);
   if (roomError) {
     return NextResponse.json({ error: roomError }, { status: 500 });
   }
@@ -369,6 +375,9 @@ export async function GET(request: Request) {
       prevRound: round != null ? (round === 16 && typeof phase?.ended_early_from === "number" ? phase.ended_early_from : round - 1) : null,
       roomStatus: roomRow.status === "ended" ? "ended" : "active",
       serverNow: new Date().toISOString(),
+      // ITER6 C5 — GM 토글(기본 켜짐). 끄면 폰이 로그 탭·도감 '남은 수'를 숨긴다.
+      phoneLogs: toggles.phoneLogs,
+      phoneRemainingCount: toggles.phoneRemainingCount,
       monsters: monstersForClient,
       cards: cardsForClient,
       score: scoreRow?.points ?? 0,

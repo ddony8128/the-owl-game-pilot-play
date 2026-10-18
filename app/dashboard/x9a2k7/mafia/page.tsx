@@ -8,6 +8,7 @@ import { RuleVideoPanel } from "../RuleVideoPanel";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { GmErrorBanner, GmNoticeBanner } from "@/components/GmBanners";
 import { GmLogSection } from "@/components/GmLogSection";
+import { PhoneTogglesSection } from "@/components/PhoneTogglesSection";
 import { GmRoomHeader } from "@/components/GmRoomHeader";
 import { useGmAction } from "@/lib/hooks/useGmAction";
 import { getMafiaPhaseLabel } from "@/lib/labels/mafia";
@@ -43,6 +44,7 @@ export default function DashboardMafiaPage() {
     logs,
     pending,
     roomStatus,
+    phoneToggles,
     revealResult,
     gmLogs,
     gmLogsWarning,
@@ -97,6 +99,13 @@ export default function DashboardMafiaPage() {
       { method: "PATCH", body: { code: room, reveal_result: next } },
       { notice: next ? "결과 공개를 켰습니다." : "결과 공개를 껐습니다." },
     );
+  };
+
+  const togglePhone = async (key: "phone_logs" | "phone_remaining_count", next: boolean) => {
+    if (!room) return;
+    await action.run("/api/gm/rooms", { method: "PATCH", body: { code: room, [key]: next } }, {
+      notice: next ? "참가자 폰 로그 탭을 보이게 했습니다." : "참가자 폰 로그 탭을 숨겼습니다.",
+    });
   };
 
   const [localLogs, setLocalLogs] = useState<MafiaLog[]>([]);
@@ -174,6 +183,10 @@ export default function DashboardMafiaPage() {
           </div>
         </div>
       </section>
+
+      <div className={panelClass}>
+        <PhoneTogglesSection game="mafia" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
+      </div>
 
       <div className={panelClass}>
         <MafiaRevealSection
