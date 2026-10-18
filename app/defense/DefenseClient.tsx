@@ -1,11 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PageGuard } from "@/components/PageGuard";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { ConnectionBadge } from "@/components/ConnectionBadge";
+import { defenseStageTitle } from "@/lib/defense/steps";
+import { KickedScreen, RoomEndedBanner, RoomGoneScreen } from "@/components/PhoneNotices";
 import { TabLayout, type TabKey } from "@/components/TabLayout";
 import { usePlayerAuth } from "@/lib/hooks/usePlayerAuth";
+import { usePolling } from "@/lib/hooks/usePolling";
+import { LATE_COMBAT_LOG_PREFIX } from "@/lib/defense/action";
 import { DefenseHeader } from "./DefenseHeader";
 import { DefenseRulesTab } from "./DefenseRulesTab";
 import { DefenseInfoTab } from "./DefenseInfoTab";
@@ -63,7 +69,9 @@ type DefenseLogEntry = {
 
 type DefenseState = {
   round: number | null;
-  resultPending: boolean;
+  roomStatus?: "active" | "ended";
+  stage?: string | null;
+  prevRound?: number | null;
   monsters: DefenseMonsterClient[];
   cards: DefenseCardClient[];
   score: number;
@@ -80,59 +88,26 @@ export default function DefenseClient() {
   );
 }
 
+// 참가자 폰 — 상태는 공용 폴링 훅으로 따라간다(GM 이 단계를 넘기면 다음 tick 에 화면이 바뀐다).
+// 폰에는 남은 시간을 표시하지 않는다(2026-10-18 또니 결정) — 타이머 폴링도 두지 않는다.
 function DefenseInner() {
-  const { player, roomCode, nickname } = usePlayerAuth();
-  const [defenseState, setDefenseState] = useState<DefenseState | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const { player, roomCode, nickname, clearNickname } = usePlayerAuth();
+  // 강퇴/방 삭제 안내에서 [입장 화면으로]: 저장된 방·닉네임을 지우고 입장 화면으로 보낸다(같은 닉네임 재입장 가능).
+  const leaveToEntrance = () => {
+    clearNickname();
+    router.replace("/");
+  };
   const [activeTab, setActiveTab] = useState<TabKey>("info");
 
-  const loadState = useCallback(async () => {
-    if (!roomCode || !nickname) return;
-    try {
-      const params = new URLSearchParams({ room: roomCode, nickname });
-      const res = await fetch(`/api/defense/state?${params.toString()}`);
-      const json = (await res.json().catch(() => null)) as
-        | DefenseState
-        | { error: string }
-        | null;
-
-      if (!res.ok || !json || "error" in json) {
-        throw new Error(
-          (json as { error?: string })?.error ??
-            "디펜스 상태를 불러오지 못했습니다."
-        );
-      }
-
-      setDefenseState(json as DefenseState);
-      setError(null);
-    } catch (e: unknown) {
-      const message =
-        e instanceof Error ? e.message : "디펜스 상태를 불러오지 못했습니다.";
-      setError(message);
-    }
-  }, [roomCode, nickname]);
-
-  // 플레이어 상태는 최초 입장 때 한 번만 조회한다.
-  // 이후에는 행동 완료 또는 사용자의 명시적 새로고침으로만 갱신한다.
-  useEffect(() => {
-    void loadState();
-  }, [loadState]);
-
-  useEffect(() => {
-    if (!roomCode) return;
-    const events = new EventSource(
-      `/api/defense/phase-events?room=${encodeURIComponent(roomCode)}`
-    );
-    events.onmessage = () => void loadState();
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void loadState();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      events.close();
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [loadState, roomCode]);
+  // 플레이어 전용 상태 폴링(공용 훅): in-flight 가드·8초 타임아웃·실패해도 마지막 화면 유지.
+  const stateUrl =
+    roomCode && nickname
+      ? `/api/defense/state?${new URLSearchParams({ room: roomCode, nickname }).toString()}`
+      : null;
+  const poll = usePolling<DefenseState>(stateUrl, 5000);
+  const defenseState = poll.data;
+  const loadState = poll.reload;
 
   const roundNumber = defenseState?.round ?? null;
   const getRoundLabel = (r: number | null) => {
@@ -149,11 +124,16 @@ function DefenseInner() {
     return `알 수 없음 (DB round ${r})`;
   };
 
-  const roundLabel = getRoundLabel(roundNumber);
+  const stageNow = defenseState?.stage ?? null;
+  const roundLabel =
+    stageNow && stageNow !== "action" && roundNumber != null
+      ? defenseStageTitle(roundNumber, stageNow, defenseState?.prevRound ?? null)
+      : getRoundLabel(roundNumber);
   const isInitialLoading = !defenseState;
+  const roomEnded = defenseState?.roomStatus === "ended";
+  // 행동 탭은 "행동" 단계에만 연다(결과·점수 발표·본게임 준비 중에는 닫힘 — GM 이 [다음]으로 열어 준다)
   const hideInfoAndAction =
-    defenseState?.resultPending === true ||
-    roundNumber === 0 || roundNumber === 3 || roundNumber === 16;
+    roundNumber === 0 || roundNumber === 3 || roundNumber === 16 || (stageNow != null && stageNow !== "action");
 
   const tabsDef = useMemo(() => {
     const base: { key: TabKey; label: string }[] = [
@@ -170,17 +150,35 @@ function DefenseInner() {
     return base;
   }, [hideInfoAndAction]);
 
-  useEffect(() => {
-    if (!tabsDef.find((t) => t.key === activeTab) && tabsDef.length > 0) {
-      setActiveTab(tabsDef[0].key);
-    }
-  }, [activeTab, tabsDef]);
+  // 현재 라운드에 없는 탭(예: 결과 화면의 "행동")을 보고 있었다면 첫 탭으로 — effect 의 setState 대신 렌더에서 유도한다.
+  const effectiveTab: TabKey = tabsDef.some((t) => t.key === activeTab) ? activeTab : tabsDef[0].key;
+
+  // 정산과 겹쳐 반영되지 않은 전투가 되돌려졌을 때 서버가 남긴 "알림:" 로그(현재 라운드)를 행동 탭 위에 띄운다.
+  const lateNotice = useMemo(() => {
+    if (!defenseState || roundNumber == null) return null;
+    const hit = defenseState.logs.find(
+      (l) => l.round === roundNumber && l.log.startsWith(LATE_COMBAT_LOG_PREFIX)
+    );
+    return hit ? hit.log.slice(LATE_COMBAT_LOG_PREFIX.length).trim() : null;
+  }, [defenseState, roundNumber]);
 
   if (!player) return <LoadingScreen />;
-  if (error) {
+
+  // 강퇴/방 삭제: 입장(로그인)은 통과한 뒤이므로, 폴링이 403(not_registered) 으로 바뀌면 GM이 명단에서 지운 것이다
+  // → 데이터가 비워지고 사유가 오면 즉시 안내(조용히 굳지 않음). 404 는 방 삭제.
+  if (poll.status === 403) {
+    return <KickedScreen onLeave={leaveToEntrance} />;
+  }
+  if (poll.status === 404 && poll.reason === "room_not_found") {
+    return <RoomGoneScreen onLeave={leaveToEntrance} />;
+  }
+
+  // 아직 한 번도 못 받았고 오류만 있는 경우: 오류 문구 + 재연결 배지(폴링은 계속된다)
+  if (!defenseState && poll.error && poll.failures > 0 && poll.status !== null && poll.status >= 500) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 px-4 text-zinc-50">
-        <ErrorMessage message={error} />
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-zinc-950 px-4 text-zinc-50">
+        <ErrorMessage message={poll.error} />
+        <ConnectionBadge failures={poll.failures} />
       </div>
     );
   }
@@ -189,42 +187,45 @@ function DefenseInner() {
     <div className="flex min-h-screen flex-col items-center bg-zinc-950 px-4 py-6 text-zinc-50">
       <DefenseHeader roundLabel={roundLabel} />
 
+      <ConnectionBadge failures={poll.failures} className="mt-2 w-full max-w-md" />
+      {roomEnded && (
+        <div className="mt-2 w-full max-w-md">
+          <RoomEndedBanner />
+        </div>
+      )}
+
       <p className="mt-2 text-base text-red-300">
         이 화면은 다른 플레이어에게 보여주면 안 됩니다.
       </p>
 
-      <p className="mt-2 text-xs text-zinc-600">
-        관리자가 다음 라운드로 넘기면 자동으로 갱신됩니다.
-      </p>
-
-      {defenseState?.resultPending ? (
-        <p className="mt-4 rounded-xl border border-sky-500/30 bg-sky-950/40 px-4 py-3 text-center text-sm font-bold text-sky-200">
-          전투 결과 확인 중입니다. 전광판을 확인해주세요.
-        </p>
-      ) : null}
-
       <main className="mt-4 flex w-full max-w-md flex-1 flex-col">
-        <TabLayout tabs={tabsDef} activeKey={activeTab} onChange={setActiveTab}>
-          {activeTab === "info" && (
+        <TabLayout tabs={tabsDef} activeKey={effectiveTab} onChange={setActiveTab}>
+          {effectiveTab === "info" && (
             <DefenseInfoTab
+              monsters={defenseState?.monsters ?? []}
               cards={defenseState?.cards ?? []}
               score={defenseState?.score ?? 0}
               isLoading={isInitialLoading}
+              showQueue={!hideInfoAndAction}
             />
           )}
-          {activeTab === "action" && defenseState && !hideInfoAndAction && (
+          {effectiveTab === "action" && defenseState && !hideInfoAndAction && (
+            // 라운드가 바뀌면 key 가 바뀌어 선택 단계가 초기화된다(effect 안 setState 없이).
             <DefenseActionTab
+              key={`action-${roundNumber ?? "x"}`}
               state={defenseState}
               nickname={player.nickname}
               room={player.room_code}
               onActionCompleted={loadState}
+              roomEnded={roomEnded}
+              notice={lateNotice}
             />
           )}
-          {activeTab === "rules" && <DefenseRulesTab />}
-          {activeTab === "dex" && defenseState && (
+          {effectiveTab === "rules" && <DefenseRulesTab />}
+          {effectiveTab === "dex" && defenseState && (
             <DefenseDexTab dex={defenseState.dex} />
           )}
-          {activeTab === "logs" && defenseState && (
+          {effectiveTab === "logs" && defenseState && (
             <DefenseLogsTab logs={defenseState.logs} />
           )}
         </TabLayout>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { describeSubmitFailure } from "@/components/PhoneNotices";
 
 type DefenseStateForAction = {
   round: number | null;
@@ -40,6 +41,8 @@ type Props = {
   nickname: string;
   room: string;
   onActionCompleted: () => Promise<void> | void;
+  roomEnded?: boolean;
+  notice?: string | null;
 };
 
 type Step =
@@ -50,11 +53,18 @@ type Step =
   | "combatChooseMonster"
   | "combatChooseCard";
 
+// 행동 탭 — 계약(ITER5): 라운드 진행 전까지 "다시 고르기"로 행동을 바꿀 수 있다(마지막 선택만 반영).
+//  - 제출됨 상태: 요약 + 「제출됨 · 바꾸려면 다시 고르세요」 + [다시 고르기]
+//  - 다시 고르기: 같은 선택 흐름(선택 → 확정 버튼)으로 진행, 확정 전까지는 이전 선택이 유지된다
+//  - 라운드가 바뀌면 부모가 key 를 바꿔 이 컴포넌트가 새로 마운트된다(단계 초기화)
+//  - 소프트 타이머: 폰에는 시간을 표시하지 않고, GM이 라운드를 넘기기 전까지는 제출/변경할 수 있다(서버도 막지 않음)
 export function DefenseActionTab({
   state,
   nickname,
   room,
   onActionCompleted,
+  roomEnded = false,
+  notice = null,
 }: Props) {
   const [step, setStep] = useState<Step>("chooseAction");
   const [pendingAction, setPendingAction] = useState<
@@ -71,11 +81,27 @@ export function DefenseActionTab({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedRestSlots, setSelectedRestSlots] = useState<number[]>([]);
+  const [rePicking, setRePicking] = useState(false);
+  const [justSubmitted, setJustSubmitted] = useState<"new" | "replaced" | null>(null);
 
   const hasActionThisRound =
     state.action != null && state.action.round === state.round;
 
+  // 다시 고르기 중에는 "이전 행동을 되돌린 뒤"의 카드 상태를 기준으로 고르게 해야 하지만,
+  // 폰은 스냅샷을 모르므로 현재 카드로 보여 주고, 서버가 되돌린 상태에 대해 검증한다(실패하면 이전 선택 유지).
   const activeCards = state.cards.filter((c) => c.isActive);
+  const inactiveCards = state.cards.filter((c) => !c.isActive);
+  const sortedMonsters = state.monsters.slice().sort((a, b) => a.slotIndex - b.slotIndex);
+
+  const resetSelection = () => {
+    setPendingAction(null);
+    setStep("chooseAction");
+    setSelectedFromSlot(null);
+    setSelectedTrainingToSlot(null);
+    setSelectedMonsterId(null);
+    setSelectedCardSlot(null);
+    setSelectedRestSlots([]);
+  };
 
   const submitAction = async (payload: {
     action_type: "rest" | "training" | "combat";
@@ -85,201 +111,295 @@ export function DefenseActionTab({
     training_to_slot?: number | null;
     rest_slots?: number[];
   }) => {
+    if (submitting) return;
     setSubmitting(true);
     setError(null);
+    let status: number | null = null;
     try {
       const res = await fetch("/api/defense/action", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        signal: AbortSignal.timeout(12000),
         body: JSON.stringify({
           room,
           nickname,
+          // 폰이 보고 있던 라운드 — 서버 라운드와 다르면 409(늦은 화면의 옛 버튼 방지)
+          round: state.round,
           ...payload,
         }),
       });
+      status = res.status;
       const json = (await res.json().catch(() => null)) as {
         ok?: true;
+        replaced?: boolean;
         error?: string;
+        reason?: string;
       } | null;
 
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error ?? "행동 처리 중 오류가 발생했습니다.");
+        const message = describeSubmitFailure(status, json, "행동 처리 중 오류가 발생했습니다.");
+        // 라운드가 넘어간 경우 최신 상태를 바로 다시 읽는다
+        if (json?.reason === "round_mismatch" || json?.reason === "round_advanced") {
+          await onActionCompleted();
+        }
+        throw new Error(message);
       }
 
       await onActionCompleted();
-      setPendingAction(null);
-      setStep("chooseAction");
-      setSelectedFromSlot(null);
-      setSelectedTrainingToSlot(null);
-      setSelectedMonsterId(null);
-      setSelectedCardSlot(null);
+      resetSelection();
+      setRePicking(false);
+      setJustSubmitted(json.replaced ? "replaced" : "new");
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : "행동 처리 중 오류가 발생했습니다.";
-      setError(message);
+      setError(status === null ? describeSubmitFailure(null, null, message) : message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (hasActionThisRound) {
-    const a = state.action!;
-    let description = "";
+  const describeAction = (): string => {
+    const a = state.action;
+    if (!a) return "";
     if (a.actionType === "rest") {
-      description = "이번 라운드에 휴식을 선택했습니다.";
-    } else if (a.actionType === "training") {
+      return "이번 라운드에 휴식을 선택했습니다.";
+    }
+    if (a.actionType === "training") {
       if (a.trainingFrom != null && a.trainingTo != null) {
-        description = `이번 라운드에 훈련을 선택했습니다. 숫자 ${
-          a.trainingFrom
-        } 카드를 비활성화하고 숫자 ${a.trainingTo} 카드를 ${
-          a.trainingTo + 1
-        }로 강화했습니다.`;
-      } else {
-        description =
-          "이번 라운드에 훈련을 선택했습니다. 카드 한 장을 비활성화하고 선택한 카드 한 장을 강화했습니다.";
+        return `이번 라운드에 훈련을 선택했습니다. 숫자 ${a.trainingFrom} 카드를 비활성화하고 숫자 ${
+          a.trainingTo
+        } 카드를 ${a.trainingTo + 1}로 강화했습니다.`;
       }
-    } else if (a.actionType === "combat") {
+      return "이번 라운드에 훈련을 선택했습니다. 한 장을 비활성화하고 다른 한 장을 강화했습니다.";
+    }
+    if (a.actionType === "combat") {
       const monster = a.targetMonsterId
         ? state.monsters.find((m) => m.instanceId === a.targetMonsterId) ?? null
         : null;
-
       if (monster && a.usedCardValue != null) {
-        description = `이번 라운드에 대기열 ${monster.slotIndex + 1}번 몬스터 ${
-          monster.name
-        }에게 숫자 ${a.usedCardValue} 카드를 사용했습니다.`;
-      } else {
-        description = "이번 라운드에 전투를 선택했습니다.";
+        return `이번 라운드에 대기열 ${monster.slotIndex + 1}번 몬스터 ${monster.name}에게 숫자 ${
+          a.usedCardValue
+        } 카드를 사용했습니다.`;
       }
+      return "이번 라운드에 전투를 선택했습니다.";
     }
+    return "";
+  };
 
+  const actionTitle = (): string => {
+    const t = state.action?.actionType;
+    if (t === "rest") return "휴식";
+    if (t === "training") return "훈련";
+    if (t === "combat") return "전투";
+    return "행동";
+  };
+
+  // ── 제출됨 상태(다시 고르기 전) ─────────────────────────
+  if (hasActionThisRound && !rePicking) {
     return (
-      <div className="space-y-3 text-base text-zinc-200">
+      <div className="space-y-3 text-base text-zinc-200" data-testid="action-submitted">
+        {notice && (
+          <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="late-notice">
+            {notice}
+          </p>
+        )}
+        {error && <ErrorMessage message={error} />}
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/30 p-5 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-400 text-2xl text-zinc-950">✓</div>
-          <p className="text-lg font-bold text-white">행동 제출 완료</p>
-          <p className="mt-2 leading-6 text-zinc-300">{description}</p>
-          <p className="mt-4 text-sm text-zinc-500">진행자가 라운드를 마칠 때까지 기다려주세요.</p>
+          <p className="text-lg font-bold text-white">{actionTitle()} 제출 완료</p>
+          <p className="mt-2 leading-6 text-zinc-300">{describeAction()}</p>
+          <p className="mt-4 text-sm font-semibold text-emerald-300" data-testid="submitted-label">
+            {justSubmitted === "replaced" ? "변경됨" : "제출됨"} · 바꾸려면 다시 고르세요
+          </p>
         </div>
+        {roomEnded ? (
+          <p className="text-center text-sm text-zinc-500">종료된 방이라 더 바꿀 수 없습니다.</p>
+        ) : (
+          <button
+            type="button"
+            aria-label="행동 다시 고르기"
+            data-testid="repick-button"
+            className="min-h-12 w-full rounded-2xl border border-amber-400/70 bg-zinc-900 text-base font-bold text-amber-300 transition hover:bg-zinc-800 active:scale-[0.99]"
+            onClick={() => {
+              // 다시 고르기는 항상 첫 단계(전투/휴식/훈련 선택)부터 — 제출 응답이 늦거나 실패해 이전 단계가 남아 있어도 초기화한다
+              resetSelection();
+              setError(null);
+              setJustSubmitted(null);
+              setRePicking(true);
+            }}
+          >
+            다시 고르기
+          </button>
+        )}
       </div>
     );
   }
 
+  if (roomEnded) {
+    return (
+      <div className="space-y-3 text-base text-zinc-200">
+        <p className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">종료된 방입니다. 행동을 제출할 수 없습니다.</p>
+      </div>
+    );
+  }
+
+  const cancelButtonClass =
+    "min-h-12 rounded-xl bg-zinc-800 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-50";
+  const confirmSuffix = rePicking ? "으로 변경 확정" : " 확정";
+  const cardTile = (selected: boolean, tone: "emerald" | "indigo" | "rose") => {
+    const on =
+      tone === "emerald"
+        ? "border-emerald-400 bg-emerald-950/50 shadow-lg shadow-emerald-950"
+        : tone === "indigo"
+          ? "border-indigo-400 bg-indigo-950/50 shadow-lg shadow-indigo-950"
+          : "border-rose-400 bg-rose-950/50 shadow-lg shadow-rose-950";
+    return `relative min-h-32 rounded-2xl border-2 px-3 py-3 text-base transition active:scale-95 disabled:opacity-40 ${
+      selected ? on : "border-zinc-700 bg-zinc-950 hover:border-zinc-500"
+    }`;
+  };
+
   return (
-    <div className="space-y-4 text-base text-zinc-200">
+    <div className="space-y-4 text-base text-zinc-200" data-testid="action-chooser">
+      {notice && !hasActionThisRound && (
+        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="late-notice">
+          {notice}
+        </p>
+      )}
+      {rePicking && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="repick-banner">
+          <span>이전 선택을 바꿉니다. 확정 전까지는 이전 선택이 유지됩니다.</span>
+          <button
+            type="button"
+            aria-label="다시 고르기 취소"
+            className="min-h-11 shrink-0 rounded-full bg-zinc-800 px-3 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
+            disabled={submitting}
+            onClick={() => {
+              resetSelection();
+              setRePicking(false);
+              setError(null);
+            }}
+          >
+            취소
+          </button>
+        </div>
+      )}
+
       {step === "chooseAction" && (
-      <section className="space-y-4">
-        <div>
-          <p className="text-sm font-bold text-amber-300">이번 라운드 행동</p>
-          <h2 className="mt-1 text-2xl font-black text-white">무엇을 할까요?</h2>
-          <p className="mt-1 text-sm text-zinc-400">한 번 제출하면 이번 라운드에는 바꿀 수 없습니다.</p>
-        </div>
-        <div className="grid gap-3">
-          <button
-            type="button"
-            className="group flex min-h-24 items-center gap-4 rounded-2xl border border-rose-400/40 bg-gradient-to-r from-rose-950/80 to-zinc-900 p-4 text-left transition active:scale-[0.98]"
-            disabled={submitting}
-            onClick={() => {
-              setPendingAction("combat");
-              setStep("combatChooseMonster");
-            }}
-          >
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-rose-500 text-3xl">⚔</span>
-            <span><b className="block text-xl text-white">전투</b><span className="mt-1 block text-sm text-rose-100/70">몬스터 하나와 사용할 숫자 카드를 선택합니다.</span></span>
-            <span className="ml-auto text-2xl text-rose-300">›</span>
-          </button>
-          <button
-            type="button"
-            className="flex min-h-24 items-center gap-4 rounded-2xl border border-emerald-400/30 bg-gradient-to-r from-emerald-950/70 to-zinc-900 p-4 text-left transition active:scale-[0.98]"
-            disabled={submitting}
-            onClick={() => {
-              setPendingAction("rest");
-              setSelectedRestSlots([]);
-              setStep("restChooseCards");
-            }}
-          >
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-3xl">✦</span>
-            <span><b className="block text-xl text-white">휴식</b><span className="mt-1 block text-sm text-emerald-100/70">비활성 카드 중 최대 3장을 되살립니다.</span></span>
-            <span className="ml-auto text-2xl text-emerald-300">›</span>
-          </button>
-          <button
-            type="button"
-            className="flex min-h-24 items-center gap-4 rounded-2xl border border-indigo-400/30 bg-gradient-to-r from-indigo-950/80 to-zinc-900 p-4 text-left transition active:scale-[0.98]"
-            disabled={submitting}
-            onClick={() => {
-              setPendingAction("training");
-              setStep("trainingChooseFrom");
-            }}
-          >
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-indigo-500 text-3xl">↑</span>
-            <span><b className="block text-xl text-white">훈련</b><span className="mt-1 block text-sm text-indigo-100/70">카드 하나를 소모해 다른 카드를 강화합니다.</span></span>
-            <span className="ml-auto text-2xl text-indigo-300">›</span>
-          </button>
-        </div>
-      </section>
+        <section className="space-y-4">
+          <div>
+            <p className="text-sm font-bold text-amber-300">이번 라운드 행동</p>
+            <h2 className="mt-1 text-2xl font-black text-white">무엇을 할까요?</h2>
+          </div>
+          <div className="grid gap-3">
+            <button
+              type="button"
+              aria-label="전투 선택"
+              className="group flex min-h-24 items-center gap-4 rounded-2xl border border-rose-400/40 bg-gradient-to-r from-rose-950/80 to-zinc-900 p-4 text-left transition active:scale-[0.98]"
+              disabled={submitting}
+              onClick={() => {
+                setPendingAction("combat");
+                setSelectedMonsterId(null);
+                setSelectedCardSlot(null);
+                setStep("combatChooseMonster");
+              }}
+            >
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-rose-500 text-3xl">⚔</span>
+              <span className="min-w-0">
+                <b className="block text-xl text-white">전투</b>
+                <span className="mt-1 block text-sm text-rose-100/70">몬스터 하나에게 숫자 카드 한 장을 사용합니다.</span>
+              </span>
+              <span className="ml-auto text-2xl text-rose-300">›</span>
+            </button>
+            <button
+              type="button"
+              aria-label="휴식 선택"
+              className="flex min-h-24 items-center gap-4 rounded-2xl border border-emerald-400/30 bg-gradient-to-r from-emerald-950/70 to-zinc-900 p-4 text-left transition active:scale-[0.98]"
+              disabled={submitting}
+              onClick={() => {
+                setPendingAction("rest");
+                setSelectedRestSlots([]);
+                setStep("restChooseCards");
+              }}
+            >
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-3xl">✦</span>
+              <span className="min-w-0">
+                <b className="block text-xl text-white">휴식</b>
+                <span className="mt-1 block text-sm text-emerald-100/70">비활성 카드 중 최대 3장을 활성화합니다.</span>
+              </span>
+              <span className="ml-auto text-2xl text-emerald-300">›</span>
+            </button>
+            <button
+              type="button"
+              aria-label="훈련 선택"
+              className="flex min-h-24 items-center gap-4 rounded-2xl border border-indigo-400/30 bg-gradient-to-r from-indigo-950/80 to-zinc-900 p-4 text-left transition active:scale-[0.98]"
+              disabled={submitting}
+              onClick={() => {
+                setPendingAction("training");
+                setSelectedFromSlot(null);
+                setSelectedTrainingToSlot(null);
+                setStep("trainingChooseFrom");
+              }}
+            >
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-indigo-500 text-3xl">↑</span>
+              <span className="min-w-0">
+                <b className="block text-xl text-white">훈련</b>
+                <span className="mt-1 block text-sm text-indigo-100/70">카드 한 장을 비활성화해 다른 카드를 강화합니다.</span>
+              </span>
+              <span className="ml-auto text-2xl text-indigo-300">›</span>
+            </button>
+          </div>
+        </section>
       )}
 
       {step === "restChooseCards" && pendingAction === "rest" && (
-        <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-base">
-          <p className="font-semibold">
-            휴식 – 다시 활성화할 카드를 선택하세요.
-          </p>
-          <p className="text-sm text-zinc-400">
-            비활성화된 숫자 카드 중 최대 3장을 선택해 활성화합니다.
-          </p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {state.cards
-              .filter((c) => !c.isActive)
-              .map((c) => {
-                const selected = selectedRestSlots.includes(c.cardSlot);
-                const disabledSelection =
-                  !selected && selectedRestSlots.length >= 3;
-                return (
-                  <button
-                    key={c.cardSlot}
-                    type="button"
-                    className={`relative min-h-32 rounded-2xl border-2 px-3 py-3 text-base transition active:scale-95 ${
-                      selected
-                        ? "border-emerald-400 bg-emerald-950/50 shadow-lg shadow-emerald-950"
-                        : "border-zinc-700 bg-zinc-950 hover:border-zinc-500"
-                    }`}
-                    disabled={submitting || disabledSelection}
-                    onClick={() => {
-                      setSelectedRestSlots((prev) => {
-                        if (prev.includes(c.cardSlot)) {
-                          return prev.filter((s) => s !== c.cardSlot);
-                        }
-                        if (prev.length >= 3) return prev;
-                        return [...prev, c.cardSlot];
-                      });
-                    }}
-                  >
-                    <div className="flex h-full flex-col items-center justify-center">
-                      <span className="text-4xl font-black text-white">
-                        {c.cardValue}
-                      </span>
-                      <span className="mt-2 rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">카드 {c.cardSlot}</span>
-                    </div>
-                    {selected && <span className="absolute right-2 top-2 text-emerald-300">✓</span>}
-                  </button>
-                );
-              })}
+        <section className="space-y-3 rounded-2xl border border-emerald-500/20 bg-zinc-900 p-4 text-base">
+          <div>
+            <p className="text-sm font-bold text-emerald-300">휴식</p>
+            <p className="mt-1 text-xl font-black text-white">다시 활성화할 카드 선택</p>
+            <p className="mt-1 text-sm text-zinc-400">비활성화된 숫자 카드 중 최대 3장을 선택합니다.</p>
           </div>
-          {state.cards.filter((c) => !c.isActive).length === 0 && (
-            <p className="mt-2 text-sm text-zinc-500">
-              비활성화된 숫자 카드가 없습니다.
-            </p>
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            {inactiveCards.map((c) => {
+              const selected = selectedRestSlots.includes(c.cardSlot);
+              const disabledSelection = !selected && selectedRestSlots.length >= 3;
+              return (
+                <button
+                  key={c.cardSlot}
+                  type="button"
+                  aria-label={`숫자 ${c.cardValue} 카드 ${selected ? "선택 해제" : "선택"}`}
+                  aria-pressed={selected}
+                  className={cardTile(selected, "emerald")}
+                  disabled={submitting || disabledSelection}
+                  onClick={() => {
+                    setSelectedRestSlots((prev) => {
+                      if (prev.includes(c.cardSlot)) {
+                        return prev.filter((s) => s !== c.cardSlot);
+                      }
+                      if (prev.length >= 3) return prev;
+                      return [...prev, c.cardSlot];
+                    });
+                  }}
+                >
+                  <div className="flex h-full flex-col items-center justify-center">
+                    <span className="text-4xl font-black text-white">{c.cardValue}</span>
+                    <span className="mt-2 rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">카드 {c.cardSlot} · 비활성</span>
+                  </div>
+                  {selected && <span className="absolute right-2 top-2 text-emerald-300">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+          {inactiveCards.length === 0 && (
+            <p className="mt-2 text-sm text-zinc-500">비활성화된 숫자 카드가 없습니다.</p>
           )}
           <div className="mt-3 flex items-center justify-between gap-2">
             <p className="text-sm text-zinc-400">
               선택한 카드:{" "}
               {selectedRestSlots.length > 0
                 ? selectedRestSlots
-                    .map(
-                      (slot) =>
-                        state.cards.find((c) => c.cardSlot === slot)?.cardValue
-                    )
+                    .map((slot) => state.cards.find((c) => c.cardSlot === slot)?.cardValue)
                     .filter((v) => v != null)
                     .join(", ")
                 : "없음"}
@@ -287,7 +407,8 @@ export function DefenseActionTab({
             <div className="flex gap-2">
               <button
                 type="button"
-                className="min-h-11 rounded-xl bg-zinc-800 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
+                aria-label="휴식 선택 취소"
+                className={cancelButtonClass}
                 disabled={submitting}
                 onClick={() => {
                   setPendingAction(null);
@@ -299,7 +420,9 @@ export function DefenseActionTab({
               </button>
               <button
                 type="button"
-                className="min-h-11 rounded-xl bg-emerald-400 px-4 text-sm font-bold text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
+                aria-label={`휴식${confirmSuffix}`}
+                data-testid="confirm-rest"
+                className="min-h-12 rounded-xl bg-emerald-400 px-4 text-sm font-bold text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
                 disabled={submitting || selectedRestSlots.length === 0}
                 onClick={() => {
                   void submitAction({
@@ -308,7 +431,7 @@ export function DefenseActionTab({
                   });
                 }}
               >
-                휴식 확정
+                {submitting ? "제출 중…" : `휴식${confirmSuffix}`}
               </button>
             </div>
           </div>
@@ -317,45 +440,42 @@ export function DefenseActionTab({
 
       {step === "trainingChooseFrom" && pendingAction === "training" && (
         <section className="space-y-3 rounded-2xl border border-indigo-500/20 bg-zinc-900 p-4 text-base">
-          <div><p className="text-sm font-bold text-indigo-300">훈련 1/2</p><p className="mt-1 text-xl font-black text-white">비활성화할 카드 선택</p><p className="mt-1 text-sm text-zinc-400">훈련 비용으로 카드 한 장을 사용할 수 없게 만듭니다.</p></div>
-          <div className="mt-2 grid grid-cols-2 gap-3">
-            {state.cards
-              .filter((c) => c.isActive)
-              .map((c) => (
-                <button
-                  key={c.cardSlot}
-                  type="button"
-                  className={`min-h-32 rounded-2xl border-2 px-3 py-3 text-base transition active:scale-95 ${
-                    selectedFromSlot === c.cardSlot
-                      ? "border-indigo-400 bg-indigo-950/50"
-                      : "border-zinc-700 bg-zinc-950"
-                  }`}
-                  disabled={submitting}
-                  onClick={() => {
-                    setSelectedFromSlot(c.cardSlot);
-                    setSelectedTrainingToSlot(null);
-                    setStep("trainingChooseTo");
-                  }}
-                >
-                  <div className="flex h-full flex-col items-center justify-center">
-                    <span className="text-4xl font-black text-white">
-                      {c.cardValue}
-                    </span>
-                    <span className="mt-2 text-xs text-zinc-500">카드 {c.cardSlot}</span>
-                  </div>
-                </button>
-              ))}
+          <div>
+            <p className="text-sm font-bold text-indigo-300">훈련 1/2</p>
+            <p className="mt-1 text-xl font-black text-white">비활성화할 카드 선택</p>
+            <p className="mt-1 text-sm text-zinc-400">활성 카드 한 장을 훈련 비용으로 비활성화합니다.</p>
           </div>
-          {state.cards.filter((c) => c.isActive).length === 0 && (
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            {activeCards.map((c) => (
+              <button
+                key={c.cardSlot}
+                type="button"
+                aria-label={`숫자 ${c.cardValue} 카드를 비활성화`}
+                className={cardTile(selectedFromSlot === c.cardSlot, "indigo")}
+                disabled={submitting}
+                onClick={() => {
+                  setSelectedFromSlot(c.cardSlot);
+                  setSelectedTrainingToSlot(null);
+                  setStep("trainingChooseTo");
+                }}
+              >
+                <div className="flex h-full flex-col items-center justify-center">
+                  <span className="text-4xl font-black text-white">{c.cardValue}</span>
+                  <span className="mt-2 text-xs text-zinc-500">카드 {c.cardSlot} · 활성</span>
+                </div>
+              </button>
+            ))}
+          </div>
+          {activeCards.length === 0 && (
             <p className="mt-2 text-sm text-zinc-500">
-              활성화된 숫자 카드가 없습니다. 훈련을 선택해도 변화가 거의 없을 수
-              있습니다.
+              활성화된 숫자 카드가 없습니다. 훈련을 선택해도 변화가 거의 없을 수 있습니다.
             </p>
           )}
           <div className="mt-3 flex justify-end">
             <button
               type="button"
-              className="min-h-11 rounded-xl bg-zinc-800 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
+              aria-label="훈련 선택 취소"
+              className={cancelButtonClass}
               disabled={submitting}
               onClick={() => {
                 setPendingAction(null);
@@ -373,17 +493,19 @@ export function DefenseActionTab({
         pendingAction === "training" &&
         selectedFromSlot != null && (
           <section className="space-y-3 rounded-2xl border border-indigo-500/20 bg-zinc-900 p-4 text-base">
-            <div><p className="text-sm font-bold text-indigo-300">훈련 2/2</p><p className="mt-1 text-xl font-black text-white">강화할 카드 선택</p><p className="mt-1 text-sm text-zinc-400">아무 카드나 +1 할 수 있습니다. 방금 비활성화할 카드도 선택할 수 있습니다.</p></div>
+            <div>
+              <p className="text-sm font-bold text-indigo-300">훈련 2/2</p>
+              <p className="mt-1 text-xl font-black text-white">강화할 카드 선택</p>
+              <p className="mt-1 text-sm text-zinc-400">아무 카드나 +1 할 수 있습니다. 방금 비활성화할 카드도 고를 수 있습니다.</p>
+            </div>
             <div className="mt-2 grid grid-cols-2 gap-3">
               {state.cards.map((c) => (
                 <button
                   key={c.cardSlot}
                   type="button"
-                  className={`min-h-32 rounded-2xl border-2 px-3 py-3 text-base transition active:scale-95 ${
-                    selectedTrainingToSlot === c.cardSlot
-                      ? "border-indigo-400 bg-indigo-950/50"
-                      : "border-zinc-700 bg-zinc-950 hover:bg-zinc-900"
-                  }`}
+                  aria-label={`숫자 ${c.cardValue} 카드를 ${c.cardValue + 1}로 강화`}
+                  aria-pressed={selectedTrainingToSlot === c.cardSlot}
+                  className={cardTile(selectedTrainingToSlot === c.cardSlot, "indigo")}
                   disabled={submitting}
                   onClick={() => {
                     setSelectedTrainingToSlot(c.cardSlot);
@@ -393,7 +515,9 @@ export function DefenseActionTab({
                     <span className="text-3xl font-black text-white">
                       {c.cardValue} → {c.cardValue + 1}
                     </span>
-                    <span className="mt-2 text-xs text-zinc-500">카드 {c.cardSlot}</span>
+                    <span className="mt-2 text-xs text-zinc-500">
+                      카드 {c.cardSlot} · {c.isActive ? "활성" : "비활성"}
+                    </span>
                     {c.cardSlot === selectedFromSlot && (
                       <span className="mt-1 text-xs font-bold text-indigo-300">강화 후에도 비활성</span>
                     )}
@@ -404,7 +528,8 @@ export function DefenseActionTab({
             <div className="mt-3 flex justify-between gap-2">
               <button
                 type="button"
-                className="min-h-12 flex-1 rounded-xl bg-zinc-800 px-3 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
+                aria-label="훈련 선택 취소"
+                className={`${cancelButtonClass} flex-1`}
                 disabled={submitting}
                 onClick={() => {
                   setPendingAction(null);
@@ -417,6 +542,8 @@ export function DefenseActionTab({
               </button>
               <button
                 type="button"
+                aria-label={`훈련${confirmSuffix}`}
+                data-testid="confirm-training"
                 className="min-h-12 flex-1 rounded-xl bg-indigo-500 px-3 text-sm font-bold text-white hover:bg-indigo-400 disabled:opacity-50"
                 disabled={submitting || selectedTrainingToSlot == null}
                 onClick={() => {
@@ -428,7 +555,7 @@ export function DefenseActionTab({
                   });
                 }}
               >
-                훈련 확정
+                {submitting ? "제출 중…" : `훈련${confirmSuffix}`}
               </button>
             </div>
           </section>
@@ -439,44 +566,59 @@ export function DefenseActionTab({
           <div>
             <p className="text-sm font-bold text-rose-300">전투 1/2</p>
             <p className="mt-1 text-xl font-black text-white">공격할 몬스터 선택</p>
-            <p className="mt-1 text-sm text-zinc-400">공용 화면과 같은 슬롯 번호를 확인하세요.</p>
+            <p className="mt-1 text-sm text-zinc-400">대기열 순서대로 표시됩니다.</p>
           </div>
-          {state.monsters.length === 0 ? (
+          {sortedMonsters.length === 0 ? (
             <p className="text-sm text-zinc-500">대기열에 몬스터가 없습니다.</p>
           ) : (
             <div className="mt-2 grid gap-3">
-              {state.monsters
-                .slice()
-                .sort((a, b) => a.slotIndex - b.slotIndex)
-                .map((m) => (
-                  <button
-                    key={m.instanceId}
-                    type="button"
-                    className="flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 p-3 text-left transition hover:border-rose-400 active:scale-[0.98]"
-                    disabled={submitting}
-                    onClick={() => {
-                      setSelectedMonsterId(m.instanceId);
-                      setStep("combatChooseCard");
-                    }}
-                  >
-                    <span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-zinc-800">
-                      {m.image ? <Image src={m.image} alt="" fill sizes="80px" className="object-cover" /> : <span className="flex h-full items-center justify-center text-3xl">👾</span>}
-                      <b className="absolute left-1 top-1 rounded-md bg-zinc-950/90 px-1.5 py-0.5 text-xs text-amber-300">#{m.slotIndex + 1}</b>
+              {sortedMonsters.map((m) => (
+                <button
+                  key={m.instanceId}
+                  type="button"
+                  aria-label={`${m.name} 공격 (HP ${m.currentHp}/${m.maxHp}, ${m.points}점)`}
+                  data-testid={`monster-${m.slotIndex}`}
+                  className="flex min-h-11 w-full items-center gap-3 overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 p-3 text-left transition hover:border-rose-400 active:scale-[0.98] disabled:opacity-50"
+                  disabled={submitting}
+                  onClick={() => {
+                    setSelectedMonsterId(m.instanceId);
+                    setStep("combatChooseCard");
+                  }}
+                >
+                  <span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-zinc-800">
+                    {m.image ? (
+                      <Image src={m.image} alt="" fill sizes="80px" className="object-cover" />
+                    ) : (
+                      <span className="flex h-full items-center justify-center text-3xl">👾</span>
+                    )}
+                    <b className="absolute left-1 top-1 rounded-md bg-zinc-950/90 px-1.5 py-0.5 text-xs text-amber-300">#{m.slotIndex + 1}</b>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <b className="truncate text-lg text-white">{m.name}</b>
+                      <b className="shrink-0 text-amber-300">{m.points}점</b>
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center justify-between gap-2"><b className="truncate text-lg text-white">{m.name}</b><b className="shrink-0 text-amber-300">{m.points}점</b></span>
-                      <span className="mt-2 block h-2 overflow-hidden rounded-full bg-zinc-800"><span className="block h-full rounded-full bg-rose-500" style={{ width: `${Math.max(0, Math.min(100, (m.currentHp / Math.max(1, m.maxHp)) * 100))}%` }} /></span>
-                      <span className="mt-1 flex justify-between text-xs text-zinc-400"><span>HP {m.currentHp}/{m.maxHp}</span><span>남은 시간 {m.remainingTime}</span></span>
+                    <span className="mt-2 block h-2 overflow-hidden rounded-full bg-zinc-800">
+                      <span
+                        className="block h-full rounded-full bg-rose-500"
+                        style={{ width: `${Math.max(0, Math.min(100, (m.currentHp / Math.max(1, m.maxHp)) * 100))}%` }}
+                      />
                     </span>
-                    <span className="text-2xl text-zinc-500">›</span>
-                  </button>
-                ))}
+                    <span className="mt-1 flex justify-between text-xs text-zinc-400">
+                      <span>HP {m.currentHp}/{m.maxHp}</span>
+                      <span>잔여 시간 {m.remainingTime}</span>
+                    </span>
+                  </span>
+                  <span className="text-2xl text-zinc-500">›</span>
+                </button>
+              ))}
             </div>
           )}
           <div className="mt-3 flex justify-end">
             <button
               type="button"
-              className="min-h-11 rounded-xl bg-zinc-800 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
+              aria-label="전투 선택 취소"
+              className={cancelButtonClass}
               disabled={submitting}
               onClick={() => {
                 setPendingAction(null);
@@ -497,11 +639,18 @@ export function DefenseActionTab({
             <div>
               <p className="text-sm font-bold text-rose-300">전투 2/2</p>
               <p className="mt-1 text-xl font-black text-white">사용할 카드 선택</p>
-              <p className="mt-1 text-sm text-zinc-400">선택한 카드는 전투 후 비활성화됩니다.</p>
+              <p className="mt-1 text-sm text-zinc-400">사용한 카드는 전투 후 비활성화됩니다.</p>
             </div>
             {(() => {
               const target = state.monsters.find((m) => m.instanceId === selectedMonsterId);
-              return target ? <div className="flex items-center justify-between rounded-xl bg-zinc-950 px-3 py-2"><span className="text-sm text-zinc-400">공격 대상</span><b className="text-white">#{target.slotIndex + 1} {target.name}</b></div> : null;
+              return target ? (
+                <div className="flex items-center justify-between rounded-xl bg-zinc-950 px-3 py-2">
+                  <span className="text-sm text-zinc-400">공격 대상</span>
+                  <b className="text-white">
+                    #{target.slotIndex + 1} {target.name}
+                  </b>
+                </div>
+              ) : null;
             })()}
             {activeCards.length === 0 ? (
               <p className="text-sm text-zinc-500">활성화된 카드가 없습니다.</p>
@@ -511,11 +660,10 @@ export function DefenseActionTab({
                   <button
                     key={c.cardSlot}
                     type="button"
-                    className={`relative min-h-36 rounded-2xl border-2 px-3 py-3 text-base transition active:scale-95 ${
-                      selectedCardSlot === c.cardSlot
-                        ? "border-rose-400 bg-rose-950/50 shadow-lg shadow-rose-950"
-                        : "border-zinc-700 bg-zinc-950 hover:border-zinc-500"
-                    }`}
+                    aria-label={`숫자 ${c.cardValue} 카드 사용`}
+                    aria-pressed={selectedCardSlot === c.cardSlot}
+                    data-testid={`card-${c.cardSlot}`}
+                    className={cardTile(selectedCardSlot === c.cardSlot, "rose")}
                     disabled={submitting}
                     onClick={() => {
                       setSelectedCardSlot(c.cardSlot);
@@ -523,9 +671,7 @@ export function DefenseActionTab({
                   >
                     <div className="flex h-full flex-col items-center justify-center">
                       <span className="text-xs font-bold tracking-widest text-zinc-500">POWER</span>
-                      <span className="mt-1 text-5xl font-black text-white">
-                        {c.cardValue}
-                      </span>
+                      <span className="mt-1 text-5xl font-black text-white">{c.cardValue}</span>
                       <span className="mt-2 text-xs text-zinc-500">카드 {c.cardSlot}</span>
                     </div>
                     {selectedCardSlot === c.cardSlot && <span className="absolute right-2 top-2 text-rose-300">✓</span>}
@@ -536,17 +682,22 @@ export function DefenseActionTab({
             <div className="mt-3 flex justify-between gap-2">
               <button
                 type="button"
-                className="min-h-12 flex-1 rounded-xl bg-zinc-800 px-3 text-sm font-semibold text-zinc-100 hover:bg-zinc-700"
+                aria-label="전투 선택 취소"
+                className={`${cancelButtonClass} flex-1`}
                 disabled={submitting}
                 onClick={() => {
+                  setPendingAction(null);
+                  setSelectedMonsterId(null);
                   setSelectedCardSlot(null);
-                  setStep("combatChooseMonster");
+                  setStep("chooseAction");
                 }}
               >
-                이전
+                취소
               </button>
               <button
                 type="button"
+                aria-label={`전투${confirmSuffix}`}
+                data-testid="confirm-combat"
                 className="min-h-12 flex-1 rounded-xl bg-rose-500 px-3 text-sm font-bold text-white hover:bg-rose-400 disabled:opacity-50"
                 disabled={submitting || selectedCardSlot == null}
                 onClick={() => {
@@ -558,7 +709,7 @@ export function DefenseActionTab({
                   });
                 }}
               >
-                공격 확정
+                {submitting ? "제출 중…" : `전투${confirmSuffix}`}
               </button>
             </div>
           </section>
