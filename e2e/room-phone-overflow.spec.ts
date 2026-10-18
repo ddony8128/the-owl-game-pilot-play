@@ -109,6 +109,8 @@ for (const width of WIDTHS) {
     const room = await mafiaRoom(request);
     await primePhone(page, room, LONG_NICK, "mafia");
     await page.goto("/mafia");
+    // ITER6 B3 — 경매 단계에 열면 경매 탭으로 간다. 정보 탭을 보는 검사는 먼저 정보 탭으로.
+    await page.getByTestId("tab-info").click();
     await expect(page.getByText("보유 현금")).toBeVisible();
     await expectNoOverflow(page, `정보 ${width}`);
     await expectTouchTargets(page, `정보 ${width}`);

@@ -170,18 +170,18 @@ export default function DashboardDefensePage() {
           설정 및 수동 관리 <span className="ml-2 text-sm font-normal text-zinc-500">몬스터 · 참가자 폰 · 영상</span>
         </summary>
         <div className="mt-4 divide-y divide-zinc-800">
-          <section className="pb-6">
+          <div className="pb-6">
             <h3 className="mb-1 text-base font-black text-white">몬스터 구성</h3>
             <p className="mb-3 text-xs text-zinc-500">튜토리얼 시작 때 인원에 맞춰 자동 세팅 · 직접 바꿀 때만</p>
             <MonsterConfigSection room={room} playerCount={players.length} action={action} disabled={ended} />
-          </section>
-          <section className="py-6">
+          </div>
+          <div className="py-6">
             <PhoneTogglesSection game="defense" toggles={phoneToggles} disabled={ended} busy={action.busy} onToggle={togglePhone} />
-          </section>
-          <section className="pt-6">
+          </div>
+          <div className="pt-6">
             <h3 className="mb-3 text-base font-black text-white">룰 영상</h3>
             <RuleVideoPanel room={room} video="defense" />
-          </section>
+          </div>
         </div>
       </details>
 

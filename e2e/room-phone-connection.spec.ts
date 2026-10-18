@@ -98,6 +98,8 @@ test("[마피아] 폴링 실패 → 화면 유지 + 배지, 복구 → 소멸", 
   const { room } = await mafiaRoom(request);
   await primePhone(page, room, "m1", "mafia");
   await page.goto("/mafia");
+  // ITER6 B3 — 경매 단계에 열면 경매 탭으로 간다. 정보 탭을 보는 검사는 먼저 정보 탭으로.
+  await page.getByTestId("tab-info").click();
   await expect(page.getByText("자본주의 마피아")).toBeVisible();
   await expect(page.getByText("보유 현금")).toBeVisible();
   await page.route("**/api/mafia/state**", (route) => route.abort("connectionfailed"));
@@ -111,6 +113,8 @@ test("[마피아] 강퇴 → 즉시 안내 · 종료된 방 → 배너 + 경매 
   const { room, ids } = await mafiaRoom(request);
   await primePhone(page, room, "m3", "mafia");
   await page.goto("/mafia");
+  // ITER6 B3 — 경매 단계에 열면 경매 탭으로 간다. 정보 탭을 보는 검사는 먼저 정보 탭으로.
+  await page.getByTestId("tab-info").click();
   await expect(page.getByText("보유 현금")).toBeVisible();
   const del = await request.delete("/api/gm/players", { data: { id: ids["m3"] } });
   expect(del.ok()).toBeTruthy();
@@ -120,6 +124,7 @@ test("[마피아] 강퇴 → 즉시 안내 · 종료된 방 → 배너 + 경매 
   const page2 = await page.context().newPage();
   await primePhone(page2, room, "m1", "mafia");
   await page2.goto("/mafia");
+  await page2.getByTestId("tab-info").click(); // ITER6 B3 — 경매 단계에 열면 경매 탭이 먼저
   await expect(page2.getByText("보유 현금")).toBeVisible();
   await endRoom(request, room);
   await expect(page2.getByTestId("room-ended-banner")).toBeVisible({ timeout: 15_000 });
